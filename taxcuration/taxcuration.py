@@ -8,8 +8,8 @@ import random as rnd
 from scipy import stats
 
 # circlader_lib to be updated!!!!
-import phylophlan as circ
-import phylophlan as ppa
+import pyphlan as circ
+import pyphlan as ppa
 
 col_list = ["#0000FF","#800080","#FF0000","#800000","#FFFF00","#808000", 
             "#00FF00","#008000","#00FFFF","#008080","#C0C0C0","#000080",
@@ -257,7 +257,7 @@ class TaxCleaner:
     def comp_variability( self ):
         if self.dists is None:
             self.dists = ppa.dist_matrix( self.nTree.tree ) 
-        
+       
         self.var = {}
         for tlev in Taxon.sTaxLevs[:-1]:
             tc2t = self.nTree.get_c2t()
@@ -274,7 +274,7 @@ class TaxCleaner:
             dists = sorted(dists)
             self.var[tlev] = {}
             for i in range(100):
-                self.var[tlev][i] = dists[int(len(dists)*float(i)/100.0)]
+                self.var[tlev][i] = dists[int(len(dists)*float(i)/100.0)] if dists else None
 
     def dist_rank( self, taxon, terms ):
         if self.dists is None:
@@ -594,10 +594,10 @@ class TaxCleaner:
         for tid,taxon in self.taxa.items():
             if tid in self.to_skip:
                 continue
-            if taxon.refined:
-                loutf.write( "\t".join([tid,"refined"]+[" : ".join([k,str(v)]) for k,v in taxon.refined.items()]+[taxon.fta()])+"\n")
-            if taxon.corrected:
-                loutf.write( "\t".join([tid,"corrected"]+[" : ".join([k,str(v)]) for k,v in taxon.corrected.items()]+[taxon.fta()])+"\n")
+            #if taxon.refined:
+            #    loutf.write( "\t".join([tid,"refined"]+[" : ".join([k,str(v)]) for k,v in taxon.refined.items()]+[taxon.fta()])+"\n")
+            #if taxon.corrected:
+            #    loutf.write( "\t".join([tid,"corrected"]+[" : ".join([k,str(v)]) for k,v in taxon.corrected.items()]+[taxon.fta()])+"\n")
 
             if taxon.refined and images:
                 if int(v['val']) == 2: 
@@ -866,9 +866,6 @@ class TaxCleaner:
                 if lterms < 3 or c is None:
                     continue
                 # Find the LCA and LTCS for the taxa in the clade
-                print ids2clades
-                print len(ids2clades)
-                print 't640196212' in ids2clades
                 lca = self.nTree.lca( terms, terminals2clades = ids2clades )
                 ltcs = self.nTree.ltcs( terms, tc2t = tc2t, terminals2clades = ids2clades,
                                         lca_precomputed = lca )

@@ -106,7 +106,8 @@ def read_params(args):
          " (use --cleanall for removing general installation and database files)\n")
     arg( '--cleanall', action='store_true', help=
             "Remove all instalation and database file leaving untouched the initial compressed data \n"
-            "that is automatically extracted and formatted at the first pipeline run\n")
+            "that is automatically extracted and formatted at the first pipeline run.\n"
+            "Projects are not remove (specify a project and use -c for removing projects).\n")
    
     arg( '--nproc', metavar="N", type=int, default=1, help =
          "The number of CPUs to use for parallelizing the blasting\n"
@@ -723,7 +724,7 @@ if __name__ == '__main__':
         sys.exit(0)
     
     if pars['clean']:
-        clean_project(proj) 
+        clean_project(projn) 
         sys.exit(0)
 
     if 'v' in pars and pars['v'] or projn == None:
