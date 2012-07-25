@@ -28,7 +28,8 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord 
 
-download = "http://huttenhower.sph.harvard.edu/sites/default/files/"
+#download = "http://huttenhower.sph.harvard.edu/sites/default/files/"
+download = ""
 
 ppa_fna = "data/ppa.seeds.faa"
 ppa_aln = "data/ppafull.aln.faa"
