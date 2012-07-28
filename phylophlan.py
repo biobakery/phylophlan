@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 __author__  = 'Nicola Segata (nsegata@hsph.harvard.edu)'
-__version__ = '0.97'
-__date__    = '12 July 2012'
+__version__ = '0.98'
+__date__    = '28 July 2012'
 
 import sys
 import os
@@ -63,7 +63,7 @@ def exit( s ):
     sys.stderr.write("Exiting ... \n")
     sys.exit(1)
 
-# updatr
+# upatr
 def dep_checks():
     for prog in ["FastTree","usearch"]:
         try:
@@ -735,6 +735,10 @@ if __name__ == '__main__':
     init()
 
     inps,tax,rtax,mtdt = get_inputs(projn)
+    
+    if not tax and pars['taxonomic_analysis']:
+        exit("No taxonomy file found for the taxonomic analysis\n") 
+
     check_inp( inps )
 
     faa2ppafaa( inps, pars['nproc'], projn )
