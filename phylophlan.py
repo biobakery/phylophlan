@@ -88,7 +88,9 @@ def read_params(args):
 
     arg( 'inp', metavar='PROJECT NAME', type=str, default=None, nargs='?', help=
         "The basename of the project corresponding to the name of the input data folder inside \n"
-        "input/. If the project already exists, the already executed steps are not re-ran.\n"
+        "input/. The input data consist of a collection of multifasta files (extension .faa)\n"
+        "containing the proteins in each genomei. \n"
+        "If the project already exists, the already executed steps are not re-ran.\n"
         "The results will be stored in a folder with the project basename in output/\n"
         "Multiple project can be generated and they safetely coexists." )
 
