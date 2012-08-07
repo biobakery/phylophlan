@@ -442,11 +442,11 @@ class TaxCleaner:
                 corrected[val].append( [taxon.tid,taxon.fta(),taxon.fta(newnames=True),str(val)] )
             elif ref:
                 val = max([v['val'] for v in ref.values()])
-                sup = 0.0
-                if 'ltcs' in ref:
-                    sup += 10.0 + (1 - ref['ltcs']['r']) * ref['ltcs']['n']
-                elif 'nn' in ref:
-                    sup += (1 - ref['nn']['nnd']) * ref['nn']['n']
+                #sup = 0.0
+                #if 'ltcs' in ref:
+                #    sup += 10.0 + (1 - ref['ltcs']['r']) * ref['ltcs']['n']
+                #elif 'nn' in ref:
+                #    sup += (1 - ref['nn']['nnd']) * ref['nn']['n']
                     
                 refined[val].append( [taxon.tid,taxon.fta(),taxon.fta(newnames=True),str(val)] )
             elif rem:
@@ -571,6 +571,24 @@ class TaxCleaner:
 
         report( typ )
 
+    def write_new_taxonomy( self, outf ):
+        outt = {}
+        for tid,taxon in self.taxa.items():
+            ref,cor,rem = taxon.refined, taxon.corrected, taxon.torem
+            if cor and max([v['val'] for v in cor.values()]) == 2:
+                outt[tid] = taxon.fta(newnames=True)
+            elif ref and max([v['val'] for v in ref.values()]) == 2:
+                outt[tid] = taxon.fta(newnames=True)
+            elif rem and taxon.is_removed():
+                outt[tid] = taxon.fta(newnames=True)
+            else:
+                outt[tid] = taxon.fta()
+
+        with open( outf, "w" ) as out:
+            for k,v in sorted( outt.items(), key=lambda x:x[0]):
+                out.write( "\t".join( [str(k),v] ) + "\n" )
+
+
     def write_output( self, proj, outname = None, images = False ):
         out_fol = "output/"+proj+"/"
         out_imgs = {}
@@ -590,14 +608,9 @@ class TaxCleaner:
         nuncl_tot, nuncl = 0, dict([(t,0) for t in Taxon.sTaxLevs[:-1]])
         nred, nltcsout = 0,0
         tid2img = {}
-        #with open(logf,"w") as loutf:
         for tid,taxon in self.taxa.items():
             if tid in self.to_skip:
                 continue
-            #if taxon.refined:
-            #    loutf.write( "\t".join([tid,"refined"]+[" : ".join([k,str(v)]) for k,v in taxon.refined.items()]+[taxon.fta()])+"\n")
-            #if taxon.corrected:
-            #    loutf.write( "\t".join([tid,"corrected"]+[" : ".join([k,str(v)]) for k,v in taxon.corrected.items()]+[taxon.fta()])+"\n")
 
             if taxon.refined and images:
                 if int(v['val']) == 2: 
@@ -622,16 +635,6 @@ class TaxCleaner:
                     nred += 1
             if taxon.torem: ntorem += 1
         
-        #loutf.write("Total original suspicious tlabs: {:d}\n".format(nuncl_tot))
-        #loutf.write("Total suspicious tlabs (original+detected): {:d}\n".format(ntorem))
-        #loutf.write("Original spp. taxa: {:d}\n".format(nspp))
-        #loutf.write("Original taxa with at least one unclear taxonomic level: {:d}\n".format(nuncl_tot))
-        #for t in Taxon.sTaxLevs[:-1]:
-        #    loutf.write("Number of unclear {:s} labels: {:d}\n".format(t,nuncl[t]))
-        #loutf.write("Detected taxonomic inconsistencies: {:d}\n".format(narem))
-        #loutf.write("Detected taxonomic inconsistencies (redundant_clades only): {:d}\n".format(nred))
-        #loutf.write("Detected taxonomic inconsistencies (outside ltcs clades only)): {:d}\n".format(nltcsout))
-
         refined,corrected,removed,incompleted,newspecies = self.get_lists()
 
         for conf in [0,1,2]:
