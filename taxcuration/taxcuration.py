@@ -233,14 +233,20 @@ class TaxCleaner:
         if not node_path or len(node_path) < 2:
             return None,None,None
         # for all nodes in the path starting from the highest ones....
+        #if "cholera" in t.names['s']:
+        #    print "lcca",t.names
         for ii,p in enumerate(node_path[-parent_steps:]):
             terms = c2t[p] if c2t else list(p.get_terminals())
             
-            # extract al terminals different from t with their tax labe 
+            # extract al terminals different from t with their tax label 
             descn = [(term,val) for term,val in 
                         ((tt,self.taxa[tt.name].fta( tmax = tlev, kwn_only = True ))
                             for tt in terms if tt.name != t.tid and tt.name in self.taxa)
                         if val]
+            
+            #if "cholera" in t.names['s']:
+            #    print "len",len(descn),len(set(descn))
+            
             if not descn or len(descn) < 2:
                 return None,None,None
 
@@ -249,8 +255,12 @@ class TaxCleaner:
             if len(set(descn)) == 1 and descn[0] != t.fta( tmax = tlev, kwn_only = True ):
                 for c in p.clades:
                     ttterm = c2t[c] if c2t else list(c.get_terminals())
+                    #if "cholera" in t.names['s']: 
+                    #    print set([at.name for at in terms]), set([tt.name for tt in ttterm])
                     if set([at.name for at in terms]) <= set([tt.name for tt in ttterm]):
-                        return None,None,None
+                        #print "=================================="
+                        #return None,None,None
+                        continue
                 return p,terms,descn[0]
         return None,None,None
 
@@ -579,7 +589,7 @@ class TaxCleaner:
                 outt[tid] = taxon.fta(newnames=True)
             elif ref and max([v['val'] for v in ref.values()]) == 2:
                 outt[tid] = taxon.fta(newnames=True)
-            elif rem and taxon.is_removed():
+            elif rem and max([v['val'] for v in rem.values()]) == 2 and taxon.is_removed():
                 outt[tid] = taxon.fta(newnames=True)
             else:
                 outt[tid] = taxon.fta()
@@ -781,31 +791,31 @@ class TaxCleaner:
                         elif taxon.is_corrected():
                             taxon.corrected['nn'] = {'val':lconf,'nnd':nnd,'n':len(nns)} 
 
-        clusters = collections.defaultdict(list)
-        for tid,taxon in ((a,b) for a,b in self.taxa.items() if b.torem):
-            if 's' in self.taxa[tid].newnames and self.taxa[tid].newnames['s'] != '?':
-                continue
-            found = False
-            for cid,tids in clusters.items():
-                for t in tids:
-                    if t in self.to_skip:
-                        continue
-                    dist = self.dists[tid][t]
-                    if dist > self.var['s'][90]: continue
-                    knwn_clos = [v for k,v in self.taxa.items() if k != t and self.dists[t][k] < dist]
-                    knwn_clos = [v for v in knwn_clos if v.names['s'] == '?' and ('s' not in v.newnames or v.newnames['s'] == '?')]
-                    if len( knwn_clos ) > 0:
-                        continue
-                    clusters[cid].append( tid )
-                    found = True
-                    break
-                if found:
-                    break
-            if not found:
-                clusters[tid].append(tid)
-
         new_species = False
         if new_species:
+            clusters = collections.defaultdict(list)
+            for tid,taxon in ((a,b) for a,b in self.taxa.items() if b.torem):
+                if 's' in self.taxa[tid].newnames and self.taxa[tid].newnames['s'] != '?':
+                    continue
+                found = False
+                for cid,tids in clusters.items():
+                    for t in tids:
+                        if t in self.to_skip:
+                            continue
+                        dist = self.dists[tid][t]
+                        if dist > self.var['s'][90]: continue
+                        knwn_clos = [v for k,v in self.taxa.items() if k != t and self.dists[t][k] < dist]
+                        knwn_clos = [v for v in knwn_clos if v.names['s'] == '?' and ('s' not in v.newnames or v.newnames['s'] == '?')]
+                        if len( knwn_clos ) > 0:
+                            continue
+                        clusters[cid].append( tid )
+                        found = True
+                        break
+                    if found:
+                        break
+                if not found:
+                    clusters[tid].append(tid)
+
             cln = 0
             for k,v in clusters.items():
                 for t in v:
@@ -825,11 +835,18 @@ class TaxCleaner:
                 continue
             # check at species level only 
             if not synth_err or (synth_err and 'synth_err' in taxon.names['t']): # taxon.names['s'] != '?':
+
+                #if "cholera" in taxon.names['s']:
+                #    print taxon.names
+
                 # identify the largest monophyletic subtree around the taxon exluding the taxon itself
                 lcca,lcca_terms,off_c = self.lcca( taxon, c2t = self.clades2terms,  parent_steps = 15 )                 
                 if not lcca:
+                    #if "cholera" in taxon.names['s']:
+                    #    print "not lcca"
                     continue
                 
+
                 # if such monphyletic tree exists then compute the closest distances statistics
                 all_dists = [   min([self.dists[l1.name][l2.name] 
                                     for l1 in lcca_terms 
@@ -837,16 +854,24 @@ class TaxCleaner:
                                 for l2 in lcca_terms 
                                     if l2.name != taxon.tid]
                 mind = min([self.dists[l.name][taxon.tid] for l in lcca_terms if l.name != taxon.tid])
+                
                 sdists = sorted(all_dists+[mind])
-
+                
                 # r is the "rank" of the distance to the closest taxon wrt the closest distances in the clade
                 r = float(sdists.index(mind))/float(len(sdists))
                 nlcca = len(lcca_terms)
-                if r <= 0.4 and nlcca > 4:
+                
+                #if "cholera" in taxon.names['s']:
+                #    print all_dists, mind
+                #    print sdists
+                #    print "r",r
+                #    print "nlcca",nlcca
+
+                if r <= 0.6 and nlcca > 7:
                     taxon.torem['redundant_clade'] = {'val':2,'r':r,'nlcca':nlcca}
-                elif r <= 0.5 and nlcca > 3:
+                elif r <= 0.7 and nlcca > 5:
                     taxon.torem['redundant_clade'] = {'val':1,'r':r,'nlcca':nlcca} 
-                elif r <= 0.6 and nlcca > 2:
+                elif r <= 0.8 and nlcca > 2:
                     taxon.torem['redundant_clade'] = {'val':0,'r':r,'nlcca':nlcca}
                 else:
                     continue
@@ -854,14 +879,25 @@ class TaxCleaner:
         
         ids2clades = dict([(t.name,t.name) for t in self.nTree.tree.get_terminals()])
         tc2t = self.nTree.get_c2t()
-       
-        # for all tax level from species to phyla
+      
+        
+        self.d_ltcs = {}
+        self.d_lca = {}
+        self.d_ltcs_fra = {}
+
+
+        # for all tax levels from species to phyla
         for tlev in Taxon.sTaxLevs[1:-1][::-1]:
             c2t = collections.defaultdict(list)
             for tid,taxon in self.taxa.items():
                 sTaxon = taxon.fta(tmax = tlev, kwn_only = True) if tlev == 's' else taxon.fta(tmax = tlev )
                 c2t[sTaxon].append( tid )
             
+            if tlev not in self.d_ltcs:
+                self.d_ltcs[tlev] = {}
+                self.d_lca[tlev] = {}
+                self.d_ltcs_fra[tlev] = {}
+
             # Check the consistency of the labels in each clade 
             for c,terms in c2t.items(): 
                 # If the clade has only two taxa, no way to fix it!
@@ -877,11 +913,14 @@ class TaxCleaner:
                 
                 ltcs_fra = float(len(ltcs_terms))/float(lterms)
                 
+
                 #if ltcs_fra < 0.7:
                 #    continue
                 if len(ltcs_terms) < 4:
                     continue
             
+                self.d_ltcs[tlev][c], self.d_lca[tlev][c], self.d_ltcs_fra[tlev][c] = ltcs, lca, ltcs_fra
+                
                 # Find the taxa outside the LTCS  
                 out_terms = set([t for t in lca_terms if t.name in terms]) - ltcs_terms
                 outs = [c]
