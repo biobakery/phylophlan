@@ -89,7 +89,7 @@ def read_params(args):
     arg( 'inp', metavar='PROJECT NAME', type=str, default=None, nargs='?', help=
         "The basename of the project corresponding to the name of the input data folder inside \n"
         "input/. The input data consist of a collection of multifasta files (extension .faa)\n"
-        "containing the proteins in each genomei. \n"
+        "containing the proteins in each genome. \n"
         "If the project already exists, the already executed steps are not re-ran.\n"
         "The results will be stored in a folder with the project basename in output/\n"
         "Multiple project can be generated and they safetely coexists." )
@@ -726,11 +726,21 @@ if __name__ == '__main__':
     projn = pars['inp']
 
     if pars['cleanall']:
-        clean_all()
+        if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
+                'user_tree' in pars and pars['user_tree']) or (
+                        'integrate' in pars and pars['integrate']):
+            exit("--cleanall is in conflict with -t, -u, and -i") 
+        else:    
+            clean_all()
         sys.exit(0)
     
     if pars['clean']:
-        clean_project(projn) 
+        if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
+                'user_tree' in pars and pars['user_tree']) or (
+                        'integrate' in pars and pars['integrate']):
+            exit("--cleanall is in conflict with -t, -u, and -i") 
+        else:    
+            clean_project(projn) 
         sys.exit(0)
 
     if 'v' in pars and pars['v'] or projn == None:
