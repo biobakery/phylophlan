@@ -743,9 +743,11 @@ if __name__ == '__main__':
             clean_project(projn) 
         sys.exit(0)
 
-    if 'v' in pars and pars['v'] or projn == None:
+    if 'v' in pars and pars['v']:
         sys.stdout.write("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
         sys.exit(0)
+    if projn == None:
+        exit("Project name not provided.")
 
     dep_checks()
     init()
