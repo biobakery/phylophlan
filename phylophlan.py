@@ -646,8 +646,8 @@ def circlader( proj, integrate, tax = None ):
                          ]:
                 outf.write( "\t".join([v1,v2]) + "\n" )
 
-    #sb.call( [ c_circ_an, "--annot", annotation_f, xtree_rr, xtree_an ] )
-    #sb.call( [ c_circ, "--dpi", "300", xtree_an, pngtree ] )
+    sb.call( [ c_circ_an, "--annot", annotation_f, xtree_rr, xtree_an ] )
+    sb.call( [ c_circ, "--dpi", "300", xtree_an, pngtree ] )
     info( "Done!\n" )
 
 def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
@@ -683,8 +683,9 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
         taxCleaner.write_report( out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images = True, typ = "refined" )
         taxCleaner.write_report( out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images = True, typ = "corrected" )
     
-    taxCleaner.write_new_taxonomy( taxout )
-    
+    if not integrate:
+        taxCleaner.write_new_taxonomy( taxout )
+   
     info("Done!\n")
 
 def tax_imputation( proj):
