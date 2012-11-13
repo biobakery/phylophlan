@@ -654,7 +654,9 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
     inp_fol = "input/"+proj+"/"
     out_fol = "output/"+proj+"/"
     taxin = ppa_tax if integrate else inp_fol+tax
-    taxout = None if integrate else out_fol+tax
+    taxout = None if integrate else out_fol+"new."+tax
+    taxdiffs = None if integrate else out_fol+"diff."+tax
+    taxboth = None if integrate else out_fol+"comp."+tax
     intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
     operation = "imputation" if integrate else "curation" 
   
@@ -684,7 +686,7 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
         taxCleaner.write_report( out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images = True, typ = "corrected" )
     
     if not integrate:
-        taxCleaner.write_new_taxonomy( taxout )
+        taxCleaner.write_new_taxonomy( taxout, taxdiffs, taxboth )
    
     info("Done!\n")
 

@@ -581,22 +581,41 @@ class TaxCleaner:
 
         report( typ )
 
-    def write_new_taxonomy( self, outf ):
+    def write_new_taxonomy( self, outf, outdiffs, outboth ):
         outt = {}
+        diffs = {}
+        both = {}
         for tid,taxon in self.taxa.items():
+            both[tid] = [taxon.fta()]
             ref,cor,rem = taxon.refined, taxon.corrected, taxon.torem
             if cor and max([v['val'] for v in cor.values()]) == 2:
                 outt[tid] = taxon.fta(newnames=True)
+                both[tid].append( outt[tid] )
+                diffs[tid] = [taxon.fta(),outt[tid]]
             elif ref and max([v['val'] for v in ref.values()]) == 2:
                 outt[tid] = taxon.fta(newnames=True)
+                both[tid].append( outt[tid] )
+                diffs[tid] = [taxon.fta(),outt[tid]]
             elif rem and max([v['val'] for v in rem.values()]) == 2 and taxon.is_removed():
                 outt[tid] = taxon.fta(newnames=True)
+                both[tid].append( outt[tid] )
+                diffs[tid] = [taxon.fta(),outt[tid]]
             else:
                 outt[tid] = taxon.fta()
+                both[tid].append( outt[tid] )
+
 
         with open( outf, "w" ) as out:
             for k,v in sorted( outt.items(), key=lambda x:x[0]):
                 out.write( "\t".join( [str(k),v] ) + "\n" )
+        with open( outdiffs, "w" ) as out:
+            out.write( "\t".join( ["genome_ID","original","new"] ) + "\n" )
+            for k,v in sorted( diffs.items(), key=lambda x:x[0]):
+                out.write( "\t".join( [str(k),v[0],v[1]] ) + "\n" )
+        with open( outboth, "w" ) as out:
+            out.write( "\t".join( ["genome_ID","original","new"] ) + "\n" )
+            for k,v in sorted( both.items(), key=lambda x:x[0]):
+                out.write( "\t".join( [str(k),v[0],v[1]] ) + "\n" )
 
 
     def write_output( self, proj, outname = None, images = False ):
