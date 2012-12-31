@@ -18,6 +18,7 @@ import tempfile as tf
 import numpy as np
 import random as rnd
 import urllib2
+from contextlib import closing
 
 sys.path.insert(0,'pyphlan/')
 import pyphlan as circ
@@ -65,7 +66,7 @@ def exit( s ):
 
 # upatr
 def dep_checks():
-    for prog in ["FastTree","usearch"]:
+    for prog in ["FastTree","usearch","muscle"]:
         try:
             ret = sb.call([prog],stdout=open('/dev/null'),stderr=open('/dev/null'))
         except OSError:
@@ -129,21 +130,21 @@ def init():
             u = urllib2.urlopen( download_compressed(f)  )
             if not os.path.exists( f ):
                 info("Downloading and extracting "+f+" ... ")
-                with tarfile.open( fileobj = StringIO(u.read()) ) as inp:
+                with closing(tarfile.open( fileobj = StringIO(u.read()) )) as inp:
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
     else:
         for f in [ppa_fna,ppa_aln,ppa_xml,ppa_up2prots,ppa_ors2prots]:
             if not os.path.exists( f ):
                 info("Extracting "+f+" ... ")
-                with tarfile.open( compressed(f)  ) as inp:
+                with closing(tarfile.open( compressed(f)  )) as inp:
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
         
         for t,f in [ppa_alns]:
             if not os.path.exists( t ):
                 info("Extracting "+f+" ... ")
-                with tarfile.open( f ) as inp:
+                with closing(tarfile.open( f )) as inp:
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
 
@@ -497,7 +498,9 @@ def aln_merge(proj, integrate):
 
     for f in (dat_fol+ff for ff in os.listdir(dat_fol) if ( ff.endswith(".int.sub.aln") and integrate) or (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln"))):
         faas += list(SeqIO.parse(f, "fasta"))
+    print faas
     faas = SeqIO.to_dict( faas )
+    print faas
     aln = dict([(t,"") for t in t2p.keys()])
     salnk = sorted(aln.keys())
 
