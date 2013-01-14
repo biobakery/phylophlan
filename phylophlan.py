@@ -256,7 +256,8 @@ def faa2ppafaa( inps, nproc, proj ):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
     #pool = mp.Pool( min(nproc,3) )
-    pool = mp.Pool( min(nproc,10) )
+    #pool = mp.Pool( min(nproc,10) )
+    pool = mp.Pool( nproc )
     mmap = [(inp_fol+i+".faa",dat_fol+i+".b6o") for i in inps
                 if not os.path.exists( dat_fol+i+".b6o" )]
     
@@ -498,9 +499,7 @@ def aln_merge(proj, integrate):
 
     for f in (dat_fol+ff for ff in os.listdir(dat_fol) if ( ff.endswith(".int.sub.aln") and integrate) or (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln"))):
         faas += list(SeqIO.parse(f, "fasta"))
-    print faas
     faas = SeqIO.to_dict( faas )
-    print faas
     aln = dict([(t,"") for t in t2p.keys()])
     salnk = sorted(aln.keys())
 
