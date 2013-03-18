@@ -309,16 +309,16 @@ def gens2prots(inps, proj ):
     ups2faa = collections.defaultdict( set )
     e = None
     for i in inps:
-        with open(inp_fol+i+".faa") as inp:
+        with open(inp_fol+i+".faa","U") as inp:
             for l in inp:
                 if l.startswith(">"):
                     if e in prots2ups:
-                        ups2faa[prots2ups[e]].add(s)
+                        ups2faa[prots2ups[e]].add(s+"\n")
                     #e, s = int(l.strip().split(' ')[0][1:]), ""
                     e, s = l.strip().split()[0][1:], ""
                 s += l
             if e in prots2ups:
-                ups2faa[prots2ups[e]].add(s)
+                ups2faa[prots2ups[e]].add(s+"\n")
     for k,v in ups2faa.items():
         with open(dat_fol+k+".faa","w") as outf:
             for vv in v:
