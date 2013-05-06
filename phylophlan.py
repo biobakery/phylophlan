@@ -692,9 +692,25 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
    
     info("Done!\n")
 
-def tax_imputation( proj):
+def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     inp_fol = "input/"+proj+"/"
     out_fol = "output/"+proj+"/"
+    taxin = ppa_tax if integrate else inp_fol+tax
+    taxout = None if integrate else out_fol+"new."+tax
+    taxdiffs = None if integrate else out_fol+"diff."+tax
+    taxboth = None if integrate else out_fol+"comp."+tax
+    intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
+    operation = "imputation" if integrate else "curation" 
+  
+    taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, inps = inps  )
+    info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
+
+    taxCleaner.infer_tlabels()
+    info("Done!\n")
+    
+    info("Writing taxonomic "+operation+" outputs ... ")
+    tid2img = taxCleaner.write_output( proj, images = False )
+    info("Done!\n")
     
 
 
@@ -763,22 +779,36 @@ if __name__ == '__main__':
         exit("No taxonomy file found for the taxonomic analysis\n") 
 
     check_inp( inps )
+    
+    import time
+    t0 = time.time()
 
     faa2ppafaa( inps, pars['nproc'], projn )
     gens2prots(inps, projn)
-  
+   
+    t1 = time.time()
+    sys.stdout.write("Mapping finished in "+str(int(t1-t0))+" secs.\n\n" )
+
     faa2aln( pars['nproc'], projn, pars['integrate'] ) 
+ 
+    t2 = time.time()
+    sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+"total time).\n\n" )
+
     aln_merge(projn,pars['integrate'])
     
     fasttree(projn,pars['integrate'])
     
+    t4 = time.time()
+    sys.stdout.write("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+"total time).\n\n" )
+    
     circlader(projn,pars['integrate'],tax)
   
+    if pars['integrate'] and tax:
+        tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
+    
     if not pars['taxonomic_analysis']:
-        sys.exit()
+        sys.exit( )
 
-    #if pars['integrate']:
-    #    tax_imputation()
     #else:
     if pars['tax_test']:
         nerrorrs,error_type,taxl,tmin,tex,name = pars['tax_test'].split(":")

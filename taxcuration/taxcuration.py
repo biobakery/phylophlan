@@ -233,8 +233,6 @@ class TaxCleaner:
         if not node_path or len(node_path) < 2:
             return None,None,None
         # for all nodes in the path starting from the highest ones....
-        #if "cholera" in t.names['s']:
-        #    print "lcca",t.names
         for ii,p in enumerate(node_path[-parent_steps:]):
             terms = c2t[p] if c2t else list(p.get_terminals())
             
@@ -244,9 +242,6 @@ class TaxCleaner:
                             for tt in terms if tt.name != t.tid and tt.name in self.taxa)
                         if val]
             
-            #if "cholera" in t.names['s']:
-            #    print "len",len(descn),len(set(descn))
-            
             if not descn or len(descn) < 2:
                 return None,None,None
 
@@ -255,10 +250,7 @@ class TaxCleaner:
             if len(set(descn)) == 1 and descn[0] != t.fta( tmax = tlev, kwn_only = True ):
                 for c in p.clades:
                     ttterm = c2t[c] if c2t else list(c.get_terminals())
-                    #if "cholera" in t.names['s']: 
-                    #    print set([at.name for at in terms]), set([tt.name for tt in ttterm])
                     if set([at.name for at in terms]) <= set([tt.name for tt in ttterm]):
-                        #print "=================================="
                         #return None,None,None
                         continue
                 return p,terms,descn[0]
