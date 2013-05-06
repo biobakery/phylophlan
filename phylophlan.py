@@ -29,7 +29,6 @@ from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord 
 
-#download = "http://huttenhower.sph.harvard.edu/sites/default/files/"
 download = ""
 
 ppa_fna = "data/ppa.seeds.faa"
@@ -53,7 +52,6 @@ o_inttree = "tree.int.nwk"
 compressed = lambda x: x+".tar.bz2"
 download_compressed = lambda x: download+os.path.basename(x)+".tar.bz2"
 
-# faa needs to have unique starting int
 
 def info( s ):
     sys.stdout.write( s )
@@ -64,7 +62,6 @@ def exit( s ):
     sys.stderr.write("Exiting ... \n")
     sys.exit(1)
 
-# upatr
 def dep_checks():
     for prog in ["FastTree","usearch","muscle"]:
         try:
@@ -255,8 +252,6 @@ def exe_usearch(x):
 def faa2ppafaa( inps, nproc, proj ):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
-    #pool = mp.Pool( min(nproc,3) )
-    #pool = mp.Pool( min(nproc,10) )
     pool = mp.Pool( nproc )
     mmap = [(inp_fol+i+".faa",dat_fol+i+".b6o") for i in inps
                 if not os.path.exists( dat_fol+i+".b6o" )]
@@ -297,7 +292,6 @@ def gens2prots(inps, proj ):
     if os.path.exists( dat_fol+ups2faa_pkl ):
         return
 
-    #ups2prots = dict([ (ll[0],set([int(i) for i in ll[1:]])) for ll in 
     ups2prots = dict([ (ll[0],set([i for i in ll[1:]])) for ll in 
                             (l.strip().split('\t') 
                                 for l in open(dat_fol+up2prots))])
@@ -314,7 +308,6 @@ def gens2prots(inps, proj ):
                 if l.startswith(">"):
                     if e in prots2ups:
                         ups2faa[prots2ups[e]].add(s+"\n")
-                    #e, s = int(l.strip().split(' ')[0][1:]), ""
                     e, s = l.strip().split()[0][1:], ""
                 s += l
             if e in prots2ups:
@@ -325,7 +318,6 @@ def gens2prots(inps, proj ):
                 outf.write( "".join(vv) )
     with open( dat_fol+ups2faa_pkl, "w" ) as outf:
         pickle.dump(ups2faa, outf, pickle.HIGHEST_PROTOCOL)
-        #ups2faa.keys()
         
 def screen( stat, cols, sf = None, unknown_fraction = 0.5, n = 10 ):
     lena, nsc = len(cols[0]), []
@@ -408,8 +400,6 @@ def faa2aln( nproc, proj, integrate = False ):
                 dat_fol+i+".sub.aln",dat_fol+i+".int.sub.aln",i in prots,
                 i) 
                 for i in ('p{num:04d}'.format(num=aa) for aa in range(400)) 
-                #    if not os.path.exists( dat_fol+i+".aln" ) or 
-                #        (integrate and not os.path.exists( dat_fol+i+"int.aln"))
                         ]
     if mmap:
         us_cmd = [ ["muscle","-quiet",
@@ -422,7 +412,6 @@ def faa2aln( nproc, proj, integrate = False ):
         if us_cmd:
             info("Looking for PhyloPhlAn proteins to align\n")
             info(str(len(us_cmd))+" alignments to be performed\n")
-            #pool = mp.Pool( min(nproc,10) )
             pool = mp.Pool( nproc )
             rval = pool.map_async( exe_muscle, us_cmd )
             pool.close()
@@ -446,7 +435,6 @@ def faa2aln( nproc, proj, integrate = False ):
             info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
             info(str(len(us_cmd))+" alignments to be merged\n")
             pool = mp.Pool( nproc )
-            #pool = mp.Pool( min(nproc,10) )
             rval = pool.map_async( exe_muscle, us_cmd )
             pool.close()
             pool.join()
@@ -518,8 +506,6 @@ def aln_merge(proj, integrate):
             ss = SeqRecord( Seq("".join( '-' * ll )) )
             ss.id = k
             aln[k] += ss 
-            #aln[k] += "".join( '-' * ll )
-            #pass
     out_faas = []
     for k,v in aln.items():
         v.id = k
@@ -593,7 +579,7 @@ def circlader( proj, integrate, tax = None ):
     if integrate:
         int_names = [l.strip().split('\t')[0] for l in open(ppa_ors2prots)]
         
-        mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)] # !!!!!!!! 
+        mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)]  
         mt4o2t = dict([(o,t.split('.')) for t,o in mt4tax_d])
         mt4t2o = dict(mt4tax_d)
         
@@ -673,10 +659,8 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
         info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
 
     taxCleaner.infer_tlabels()
-    #pickle.dump(taxCleaner, open("aa.pkl","w"), pickle.HIGHEST_PROTOCOL)
     info("Done!\n")
     
-    #taxCleaner = pickle.load(open("aa.pkl"))
     info("Writing taxonomic "+operation+" outputs ... ")
     tid2img = taxCleaner.write_output( proj, images = False )
     info("Done!\n")
@@ -801,7 +785,7 @@ if __name__ == '__main__':
     t4 = time.time()
     sys.stdout.write("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+"total time).\n\n" )
     
-    circlader(projn,pars['integrate'],tax)
+    #circlader(projn,pars['integrate'],tax)
   
     if pars['integrate'] and tax:
         tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
@@ -809,7 +793,6 @@ if __name__ == '__main__':
     if not pars['taxonomic_analysis']:
         sys.exit( )
 
-    #else:
     if pars['tax_test']:
         nerrorrs,error_type,taxl,tmin,tex,name = pars['tax_test'].split(":")
         tax_curation_test( projn, tax, 
