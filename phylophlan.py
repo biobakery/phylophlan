@@ -569,7 +569,7 @@ def circlader( proj, integrate, tax = None ):
         info("Output tree images already generated!\n")
         return 
     
-    info("Generating tree output images ...")
+    #info("Generating tree output images ...")
     c_circ = "circlader/circlader.py"
     c_circ_an = "circlader/circlader_annotate.py"
     c_reroot = "./pyphlan/tree_reroot.py"
@@ -577,6 +577,7 @@ def circlader( proj, integrate, tax = None ):
     names = [l.strip().split('\t')[0] for l in open(dat_fol+ors2prots)]
     
     if integrate:
+        return
         int_names = [l.strip().split('\t')[0] for l in open(ppa_ors2prots)]
         
         mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)]  
@@ -621,6 +622,7 @@ def circlader( proj, integrate, tax = None ):
             sb.call( [  c_reroot, "-s", "longest_internal_edge_n", "-n", 
                         str(n), tree, xtree_rr ] )
          
+        return
         with open( annotation_f, "w") as outf:
             for v1,v2 in [  ('clade_fill_color','r'),
                             ('clade_size','7.0'),
@@ -646,11 +648,13 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
     taxdiffs = None if integrate else out_fol+"diff."+tax
     taxboth = None if integrate else out_fol+"comp."+tax
     intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
+    if not os.path.exists(intree):
+        intree = out_fol+proj+".tree."+ ( "int." if integrate else "")+"nwk"
     operation = "imputation" if integrate else "curation" 
   
     if tax:
-        taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, to_integrate = inp_fol+tax )
         info("Starting taxonomic curation: detecting suspicious taxonomic labels ... ")
+        taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, to_integrate = inp_fol+tax )
         taxCleaner.remove_tlabels()
         info("Done!\n")
         info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ... ")
@@ -684,16 +688,18 @@ def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     taxdiffs = None if integrate else out_fol+"diff."+tax
     taxboth = None if integrate else out_fol+"comp."+tax
     intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
+    if not os.path.exists(intree):
+        intree = out_fol+proj+".tree."+ ( "int." if integrate else "")+"nwk"
     operation = "imputation" if integrate else "curation" 
   
-    taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, inps = inps  )
     info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
+    taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, inps = inps  )
 
     taxCleaner.infer_tlabels()
     info("Done!\n")
     
     info("Writing taxonomic "+operation+" outputs ... ")
-    tid2img = taxCleaner.write_output( proj, images = False )
+    tid2img = taxCleaner.write_output( proj, images = False, imp_only = True )
     info("Done!\n")
     
 
@@ -759,7 +765,7 @@ if __name__ == '__main__':
 
     inps,tax,rtax,mtdt = get_inputs(projn)
     
-    if not tax and pars['taxonomic_analysis']:
+    if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
         exit("No taxonomy file found for the taxonomic analysis\n") 
 
     check_inp( inps )
@@ -776,19 +782,22 @@ if __name__ == '__main__':
     faa2aln( pars['nproc'], projn, pars['integrate'] ) 
  
     t2 = time.time()
-    sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+"total time).\n\n" )
+    sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n\n" )
 
     aln_merge(projn,pars['integrate'])
     
     fasttree(projn,pars['integrate'])
     
     t4 = time.time()
-    sys.stdout.write("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+"total time).\n\n" )
+    sys.stdout.write("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+" total time).\n\n" )
     
-    #circlader(projn,pars['integrate'],tax)
+    circlader(projn,pars['integrate'],tax)
   
-    if pars['integrate'] and tax:
+    #if pars['integrate'] and tax and not pars['taxonomic_analysis']:
+    #    tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
+    if pars['integrate'] and pars['taxonomic_analysis']:
         tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
+        sys.exit( )
     
     if not pars['taxonomic_analysis']:
         sys.exit( )

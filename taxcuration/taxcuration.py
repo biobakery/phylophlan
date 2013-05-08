@@ -610,9 +610,16 @@ class TaxCleaner:
                 out.write( "\t".join( [str(k),v[0],v[1]] ) + "\n" )
 
 
-    def write_output( self, proj, outname = None, images = False ):
+    def write_output( self, proj, outname = None, images = False, imp_only = False ):
         out_fol = "output/"+proj+"/"
         out_imgs = {}
+
+        def strc( vn ):
+            if vn == 2:
+                return "high-conf"
+            if vn == 1:
+                return "medium-conf"
+            return "low_conf"
 
         if images:
             for f in ['refined','corrected','removed','incompleted']:
@@ -663,27 +670,30 @@ class TaxCleaner:
             if conf in refined:
                 out = "\n".join(["\t".join(r) for r in refined[conf] if r[0] not in self.to_skip and "d__?" not in r[1]])
                 if out:
-                    with open(out_fol+"refined_conf_"+str(conf)+exten,"w") as outf:
+                    with open(out_fol+"refined_conf_"+strc(conf)+exten,"w") as outf:
                         outf.write(out+"\n")
             if conf in refined:
-                out = "\n".join(["\t".join(r) for r in refined[conf] if r[0] not in self.to_skip and "d__?" in r[1]])
+                if imp_only:
+                    out = "\n".join(["\t".join([r[0],r[2]]) for r in refined[conf] if r[0] not in self.to_skip and "d__?" in r[1]])
+                else:
+                    out = "\n".join(["\t".join(r) for r in refined[conf] if r[0] not in self.to_skip and "d__?" in r[1]])
                 if out:
-                    with open(out_fol+"imputed_conf_"+str(conf)+exten,"w") as outf:
+                    with open(out_fol+"imputed_conf_"+strc(conf)+exten,"w") as outf:
                         outf.write( out +"\n")
             if conf in corrected:
                 out = "\n".join(["\t".join(r) for r in corrected[conf] if r[0] not in self.to_skip])
                 if out:
-                    with open(out_fol+"corrected_conf_"+str(conf)+exten,"w") as outf:
+                    with open(out_fol+"corrected_conf_"+strc(conf)+exten,"w") as outf:
                         outf.write( out +"\n") 
             if conf in removed:
                 out = "\n".join(["\t".join(r) for r in removed[conf] if r[0] not in self.to_skip])
                 if out:
-                    with open(out_fol+"removed_conf_"+str(conf)+exten,"w") as outf:
+                    with open(out_fol+"removed_conf_"+strc(conf)+exten,"w") as outf:
                         outf.write(out +"\n") 
             if conf in incompleted:
                 out = "\n".join(["\t".join(r) for r in incompleted[conf] if r[0] not in self.to_skip])
                 if out:
-                    with open(out_fol+"incomplete_conf_"+str(conf)+exten,"w") as outf:
+                    with open(out_fol+"incomplete_conf_"+strc(conf)+exten,"w") as outf:
                         outf.write(out +"\n") 
         if newspecies:
             with open(out_fol+"subgenera.txt","w") as outf:
