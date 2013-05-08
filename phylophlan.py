@@ -20,8 +20,8 @@ import random as rnd
 import urllib2
 from contextlib import closing
 
-sys.path.insert(0,'pyphlan/')
-import pyphlan as circ
+#sys.path.insert(0,'pyphlan/')
+#import pyphlan as circ
 sys.path.insert(0,'taxcuration/')
 import taxcuration as taxc 
 
@@ -572,7 +572,7 @@ def circlader( proj, integrate, tax = None ):
     #info("Generating tree output images ...")
     c_circ = "circlader/circlader.py"
     c_circ_an = "circlader/circlader_annotate.py"
-    c_reroot = "./pyphlan/tree_reroot.py"
+    c_reroot = "./taxcuration/tree_reroot.py"
 
     names = [l.strip().split('\t')[0] for l in open(dat_fol+ors2prots)]
     
