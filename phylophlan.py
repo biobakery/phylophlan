@@ -19,6 +19,7 @@ import numpy as np
 import random as rnd
 import urllib2
 from contextlib import closing
+from glob import glob
 
 #sys.path.insert(0,'pyphlan/')
 #import pyphlan as circ
@@ -53,21 +54,24 @@ compressed = lambda x: x+".tar.bz2"
 download_compressed = lambda x: download+os.path.basename(x)+".tar.bz2"
 
 
-def info( s ):
-    sys.stdout.write( s )
+def info(s):
+    sys.stdout.write(str(s))
     sys.stdout.flush()
 
-def exit( s ):
-    sys.stderr.write(s+"\n")
-    sys.stderr.write("Exiting ... \n")
+
+def error(s):
+    sys.stderr.write('[E] ' + str(s) + '\n')
+    sys.stderr.write('Exiting... \n')
     sys.exit(1)
 
+
 def dep_checks():
-    for prog in ["FastTree","usearch","muscle"]:
+    for prog in ["FastTree", "usearch", "muscle"]:
         try:
             ret = sb.call([prog],stdout=open('/dev/null'),stderr=open('/dev/null'))
         except OSError:
-            exit(prog+" not found or not in system path\n")
+            error(prog+" not found or not in system path")
+
 
 def read_params(args):
     p = ap.ArgumentParser( description=
@@ -120,8 +124,8 @@ def read_params(args):
 
 from StringIO import StringIO
 
-def init():
 
+def init():
     if download:
         for f in [ppa_fna,ppa_aln,ppa_xml,ppa_up2prots,ppa_ors2prots]:
             u = urllib2.urlopen( download_compressed(f)  )
@@ -152,41 +156,47 @@ def init():
                   "--output",ppa_wdb])
         info("Done!\n")
 
+
 def clean_all():
-    sb.call(["rm","-f","data/*.txt"])
-    sb.call(["rm","-f","data/*.faa"])
-    sb.call(["rm","-f","data/*.xml"])
-    sb.call(["rm","-f","data/*.wdb"])
-    sb.call(["rm","-f",os.path.dirname(ppa_alns[1])+"/*.txt"])
-    sb.call(["rm","-f",os.path.dirname(ppa_alns[1])+"/*.score"])
-    sb.call(["rm","-f",os.path.dirname(ppa_alns[1])+"/*.aln"])
+    files = glob('data/*.txt')
+    files += glob('data/*.faa')
+    files += glob('data/*.xml')
+    files += glob('data/*.wdb')
+    files += glob(os.path.dirname(ppa_alns[1]) + '/*.txt')
+    files += glob(os.path.dirname(ppa_alns[1]) + '/*.score')
+    files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
+
+    for f in files:
+        sb.call(['rm', '-f', f])
+
 
 def clean_project( proj ):
     sb.call(["rm","-rf","data/"+proj])
     sb.call(["rm","-rf","output/"+proj])
 
+
 def get_inputs(proj):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
     if not os.path.isdir(inp_fol):
-        exit( "No "+proj+" folder found in input/" )
+        error( "No "+proj+" folder found in input/" )
     files = list(os.listdir(inp_fol))
     faa_in = [os.path.splitext(l)[0] for l in files
                 if os.path.splitext(l)[1] == ".faa"]
     if not faa_in:
-        exit( "No '.faa' input files found in input/" )
+        error( "No '.faa' input files found in input/" )
     txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len( txt_in ) > 1:
-        exit( "More than one '.txt' input files found in input/\n" 
-              "[No more than one txt file (the taxonomy) allowed\n" )
+        error( "More than one '.txt' input files found in input/\n" 
+              "[No more than one txt file (the taxonomy) allowed" )
     tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len( tax_in ) > 1:
-        exit( "More than one '.tax' input files found in input/\n" 
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed\n" )
+        error( "More than one '.tax' input files found in input/\n" 
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
     mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len( tax_in ) > 1:
-        exit( "More than one '.metadata' input files found in input/\n" 
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed\n" )
+        error( "More than one '.metadata' input files found in input/\n" 
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
 
     if not os.path.isdir(dat_fol):
         os.mkdir( dat_fol )
@@ -199,17 +209,18 @@ def get_inputs(proj):
 
     return faa_in,txt_in[0] if txt_in else None,tax_in[0] if tax_in else None, mdt_in[0] if mdt_in else None 
 
+
 def check_inp( inps ):
     init_dig = [l for l in inps if l[0].isdigit()]
     if init_dig:
-        exit("Error: the following genome IDs start with a digit\n"+
+        error("Error: the following genome IDs start with a digit\n"+
              "\n".join(init_dig) + "\n"
              "Please rename accordingly the corresponding input file names")
     ppa_ids = [l[1:] for l in open(ppa_aln) if l[0]=='>']
     init_dup = [l for l in inps if l in ppa_ids]
     if init_dup:
-        exit("Error: the following genome IDs are already in PhyloPhlAn\n"+
-              "\n".join(init_dig) )
+        error("Error: the following genome IDs are already in PhyloPhlAn\n"+
+              "\n".join(init_dig))
 
 
 def exe_usearch(x):
@@ -240,14 +251,15 @@ def exe_usearch(x):
         screen_usearch_wdb( x[5] )
         info( x[5] + " generated!\n" )
     except OSError:
-        error( "OSError: fatal error running usearch.\n" )
+        error( "OSError: fatal error running usearch." )
         return
     except ValueError:
-        error( "ValueError: fatal error running usearch.\n" )
+        error( "ValueError: fatal error running usearch." )
         return
     except KeyboardInterrupt:
-        error( "KeyboardInterrupt: usearch process interrupted.\n" )
+        error( "KeyboardInterrupt: usearch process interrupted." )
         return
+
 
 def faa2ppafaa( inps, nproc, proj ):
     inp_fol = "input/"+proj+"/"
@@ -283,8 +295,6 @@ def faa2ppafaa( inps, nproc, proj ):
                 outf.write( "\t".join([k]+v) + "\n" )
 
 
-
-
 def gens2prots(inps, proj ):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
@@ -318,7 +328,8 @@ def gens2prots(inps, proj ):
                 outf.write( "".join(vv) )
     with open( dat_fol+ups2faa_pkl, "w" ) as outf:
         pickle.dump(ups2faa, outf, pickle.HIGHEST_PROTOCOL)
-        
+
+
 def screen( stat, cols, sf = None, unknown_fraction = 0.5, n = 10 ):
     lena, nsc = len(cols[0]), []
     if sf and os.path.exists(sf):
@@ -346,6 +357,7 @@ def screen( stat, cols, sf = None, unknown_fraction = 0.5, n = 10 ):
     ret = [v for s,v in nsc][-n:]
     return ret if ret else [list(['-']*lena+['\n'])]
 
+
 def aln_subsample( inp_f, out_f, scores, unknown_fraction, namn ):
     with open(inp_f) as inp:
         fnas = list(SeqIO.parse(inp, "fasta"))
@@ -361,6 +373,7 @@ def aln_subsample( inp_f, out_f, scores, unknown_fraction, namn ):
                 for r,nid in zip(raws,ids)]
     with open(out_f,"w") as out:
         SeqIO.write( recs, out, "fasta")
+
 
 def exe_muscle(x):
     try:
@@ -378,17 +391,18 @@ def exe_muscle(x):
             info( x[-2] + " generated (from "+x[4]+" and "+x[6]+")!\n" )
 
     except OSError, e:
-        error( "OSError: fatal error running muscle.\n" )
+        error( "OSError: fatal error running muscle." )
         raise e 
     except ValueError, e:
-        error( "ValueError: fatal error running muscle.\n" )
+        error( "ValueError: fatal error running muscle." )
         raise e
     except KeyboardInterrupt, e:
-        error( "KeyboardInterrupt: usearch process muscle.\n" )
+        error( "KeyboardInterrupt: usearch process muscle." )
         raise e
     except Exception, e:
         error( e )
         raise e
+
 
 def faa2aln( nproc, proj, integrate = False ):
     dat_fol = "data/"+proj+"/"
@@ -457,6 +471,7 @@ def faa2aln( nproc, proj, integrate = False ):
         for k,v in up2p.items():
             outf.write( "\t".join([k]+v) + "\n" )
 
+
 def aln_merge(proj, integrate):
     dat_fol = "data/"+proj+"/"
     outf = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
@@ -491,7 +506,6 @@ def aln_merge(proj, integrate):
     aln = dict([(t,"") for t in t2p.keys()])
     salnk = sorted(aln.keys())
 
-    
     for up,pts in sorted(up2p.items(),key=lambda x:x[0]):
         toadd, ll = [], -1
         for k in salnk:
@@ -513,6 +527,7 @@ def aln_merge(proj, integrate):
         out_faas.append(v)
     SeqIO.write( out_faas, outf, "fasta")
     info("All alignments merged into "+outf+"!\n")
+
 
 def fasttree( proj, integrate ):
     out_fol = "output/"+proj+"/"
@@ -547,6 +562,7 @@ def fasttree( proj, integrate ):
     #sb.call( cmd )
     info("Tree built! The output newick file is in "+outt+"\n")
 
+
 def circlader( proj, integrate, tax = None ):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
@@ -563,7 +579,6 @@ def circlader( proj, integrate, tax = None ):
     tax_d = [l.strip().split('\t') for l in open(inp_fol+tax)] if tax else []
     o2t = dict([(o,t.split('.')) for t,o in tax_d])
     t2o = dict(tax_d)
-
 
     if os.path.exists( pngtree ):
         info("Output tree images already generated!\n")
@@ -640,6 +655,7 @@ def circlader( proj, integrate, tax = None ):
     sb.call( [ c_circ, "--dpi", "300", xtree_an, pngtree ] )
     info( "Done!\n" )
 
+
 def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
     inp_fol = "input/"+proj+"/"
     out_fol = "output/"+proj+"/"
@@ -680,6 +696,7 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
    
     info("Done!\n")
 
+
 def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     inp_fol = "input/"+proj+"/"
     out_fol = "output/"+proj+"/"
@@ -701,7 +718,6 @@ def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     info("Writing taxonomic "+operation+" outputs ... ")
     tid2img = taxCleaner.write_output( proj, images = False, imp_only = True )
     info("Done!\n")
-    
 
 
 def tax_curation_test( proj, tax, 
@@ -740,8 +756,8 @@ if __name__ == '__main__':
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
                 'user_tree' in pars and pars['user_tree']) or (
                         'integrate' in pars and pars['integrate']):
-            exit("--cleanall is in conflict with -t, -u, and -i") 
-        else:    
+            error("--cleanall is in conflict with -t, -u, and -i")
+        else:
             clean_all()
         sys.exit(0)
     
@@ -749,16 +765,16 @@ if __name__ == '__main__':
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
                 'user_tree' in pars and pars['user_tree']) or (
                         'integrate' in pars and pars['integrate']):
-            exit("--cleanall is in conflict with -t, -u, and -i") 
+            error("--cleanall is in conflict with -t, -u, and -i")
         else:    
-            clean_project(projn) 
+            clean_project(projn)
         sys.exit(0)
 
     if 'v' in pars and pars['v']:
         sys.stdout.write("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
         sys.exit(0)
     if projn == None:
-        exit("Project name not provided.")
+        error("Project name not provided.")
 
     dep_checks()
     init()
@@ -766,7 +782,7 @@ if __name__ == '__main__':
     inps,tax,rtax,mtdt = get_inputs(projn)
     
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
-        exit("No taxonomy file found for the taxonomic analysis\n") 
+        error("No taxonomy file found for the taxonomic analysis") 
 
     check_inp( inps )
     
@@ -779,7 +795,7 @@ if __name__ == '__main__':
     t1 = time.time()
     sys.stdout.write("Mapping finished in "+str(int(t1-t0))+" secs.\n\n" )
 
-    faa2aln( pars['nproc'], projn, pars['integrate'] ) 
+    faa2aln( pars['nproc'], projn, pars['integrate'] )
  
     t2 = time.time()
     sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n\n" )
@@ -805,13 +821,12 @@ if __name__ == '__main__':
     if pars['tax_test']:
         nerrorrs,error_type,taxl,tmin,tex,name = pars['tax_test'].split(":")
         tax_curation_test( projn, tax, 
-                           nerrorrs = int(nerrorrs), 
-                           error_type = error_type, 
+                           nerrorrs = int(nerrorrs),
+                           error_type = error_type,
                            taxl = taxl,
                            tmin = int(tmin),
                            tex = int(tex) if tex else None,
                            name = name,
-                           descr = pars['tax_test'] ) 
+                           descr = pars['tax_test'] )
     else:
-        tax_curation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps ) 
-
+        tax_curation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
