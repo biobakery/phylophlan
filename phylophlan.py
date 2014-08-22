@@ -41,6 +41,7 @@ ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
 ppa_wdb = "data/ppa.wdb"
+ppa_seeds = "data/ppa.seeds"
 up2prots = "up2prots.txt"
 ors2prots = "orgs2prots.txt"
 aln_tot = "aln.fna"
@@ -66,7 +67,7 @@ def error(s):
 
 
 def dep_checks():
-    for prog in ["FastTree", "usearch", "muscle"]:
+    for prog in ["FastTree", "usearch", "muscle", "blastx"]:
         try:
             ret = sb.call([prog],stdout=open('/dev/null'),stderr=open('/dev/null'))
         except OSError:
@@ -155,6 +156,12 @@ def init():
                   "--makewdb",ppa_fna,
                   "--output",ppa_wdb])
         info("Done!\n")
+
+    if not len(glob(ppa_seeds + '*')):
+        info('Generating ' + ppa_seeds + ' (blast indexed DB)... ')
+        sb.call(['makeblastdb', '-dbtype', 'prot', '-in', ppa_fna, '-out', ppa_seeds],
+                stdin=open('/dev/null'), stdout=open('/dev/null'), stderr=open('/dev/null'))
+        info('Done!\n')
 
 
 def clean_all():
@@ -293,6 +300,77 @@ def faa2ppafaa( inps, nproc, proj ):
         with open(dat_fol+up2prots,"w") as outf:
             for k,v in up2p.items():
                 outf.write( "\t".join([k]+v) + "\n" )
+
+
+def blastx_exe(x):
+    try:
+        info("Starting " + x[8] + "...\n")
+        sb.call(x)
+        info(x[8] + " generated!\n")
+    except OSError:
+        error("OSError: fatal error running blastx.")
+        return
+    except ValueError:
+        error("ValueError: fatal error running blastx.")
+        return
+    except KeyboardInterrupt:
+        error("KeyboardInterrupt: blastx process interrupted.")
+        return
+
+
+def blastx(inps, nproc, proj):
+    inp_fol = 'input/' + proj + '/'
+    dat_fol = 'data/' + proj + '/'
+    pool = mp.Pool(nproc)
+    mmap = [(inp_fol+i+'.fna', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
+    
+    # if not mmap:
+    #     info('All blastx runs already performed!\n')
+    # else: 
+    #     info('Looking for PhyloPhlAn proteins in input fna files\n')
+    #     us_cmd = [['blastx', '-outfmt', '6', '-evalue', '1e-5', '-db', ppa_seeds, '-query', i, '-out', o]
+    #               for i, o in mmap]
+    #     pool.map_async(blastx_exe, us_cmd)
+    #     pool.close()
+    #     pool.join()
+    #     info('All blastx runs performed!\n')
+
+    if not os.path.exists(dat_fol + up2prots):
+        dic = collections.defaultdict(list)
+
+        for i in inps:
+            dicc = collections.defaultdict(list)
+
+            # for each universal protein found the tuples
+            for lst in (l.strip().split('\t') for l in open(dat_fol+i+".b6o").readlines()):
+                upid = lst[1].split('_')[1]
+
+                if upid not in dicc:
+                    dicc[upid] = lst
+                else:
+                    if float(lst[-1]) > float(dicc[upid][-1]):
+                        dicc[upid] = lst
+
+            dic[i] = dicc
+
+        for k, v in dic.iteritems():
+            print k
+            for kk, vv in v.iteritems():
+                # open the fasta nucleotides file
+                with open(inp_fol+k+".fna", "rU") as f:
+                    for record in SeqIO.parse(f, "fasta"):
+                        if vv[0] in record.id:
+                            print record.id
+
+                # look for the XXX
+            print
+
+                # cut the sequence from START to END
+                # print vv[6]
+                # print vv[7]
+
+                # convert it to aminoacids
+                # print
 
 
 def gens2prots(inps, proj ):
@@ -788,6 +866,9 @@ if __name__ == '__main__':
     
     import time
     t0 = time.time()
+
+    blastx(inps, pars['nproc'], projn)
+    error(1) # to-remove
 
     faa2ppafaa( inps, pars['nproc'], projn )
     gens2prots(inps, projn)
