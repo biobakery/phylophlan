@@ -324,16 +324,16 @@ def blastx(inps, nproc, proj):
     pool = mp.Pool(nproc)
     mmap = [(inp_fol+i+'.fna', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
     
-    # if not mmap:
-    #     info('All blastx runs already performed!\n')
-    # else: 
-    #     info('Looking for PhyloPhlAn proteins in input fna files\n')
-    #     us_cmd = [['blastx', '-outfmt', '6', '-evalue', '1e-5', '-db', ppa_seeds, '-query', i, '-out', o]
-    #               for i, o in mmap]
-    #     pool.map_async(blastx_exe, us_cmd)
-    #     pool.close()
-    #     pool.join()
-    #     info('All blastx runs performed!\n')
+    if not mmap:
+        info('All blastx runs already performed!\n')
+    else: 
+        info('Looking for PhyloPhlAn proteins in input fna files\n')
+        us_cmd = [['blastx', '-outfmt', '6', '-evalue', '1e-5', '-db', ppa_seeds, '-query', i, '-out', o]
+                  for i, o in mmap]
+        pool.map_async(blastx_exe, us_cmd)
+        pool.close()
+        pool.join()
+        info('All blastx runs performed!\n')
 
     if not os.path.exists(dat_fol + up2prots):
         dic = collections.defaultdict(list)
