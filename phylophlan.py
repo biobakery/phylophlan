@@ -1,37 +1,41 @@
 #!/usr/bin/env python
 
+
 __author__  = 'Nicola Segata (nsegata@hsph.harvard.edu)'
 __version__ = '0.99'
 __date__    = '8 May 2013'
 
+
 import sys
 import os
 import tarfile
-import copy 
+# import copy
 import argparse as ap
-import subprocess as sb 
+import subprocess as sb
 import multiprocessing as mp
 import collections
-#import cPickle as pickle
-import pickle
-import tempfile as tf
-import numpy as np
-import random as rnd
+try:
+    import cPickle as pickle
+except:
+    import pickle
+# import tempfile as tf
+# import numpy as np
+# import random as rnd
 import urllib2
 from contextlib import closing
 from glob import glob
-
-#sys.path.insert(0,'pyphlan/')
-#import pyphlan as circ
+from StringIO import StringIO
+from Bio import SeqIO
+from Bio.Seq import Seq
+from Bio.SeqRecord import SeqRecord
+from Bio.SeqFeature import SeqFeature, FeatureLocation
+# sys.path.insert(0,'pyphlan/')
+# import pyphlan as circ
 sys.path.insert(0,'taxcuration/')
 import taxcuration as taxc 
 
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord 
 
 download = ""
-
 ppa_fna = "data/ppa.seeds.faa"
 ppa_aln = "data/ppafull.aln.faa"
 ppa_up2prots = "data/ppafull.up2prots.txt"
@@ -41,15 +45,15 @@ ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
 ppa_wdb = "data/ppa.wdb"
-ppa_seeds = "data/ppa.seeds"
+ppa_seeds = "data/ppa.seeds.blastx"
 up2prots = "up2prots.txt"
 ors2prots = "orgs2prots.txt"
 aln_tot = "aln.fna"
 aln_int_tot = "aln.int.fna"
 ups2faa_pkl = "ups2faa.pkl"
-
 o_tree = "tree.nwk"
 o_inttree = "tree.int.nwk"
+
 
 compressed = lambda x: x+".tar.bz2"
 download_compressed = lambda x: download+os.path.basename(x)+".tar.bz2"
@@ -123,8 +127,6 @@ def read_params(args):
 
     return vars(p.parse_args())
 
-from StringIO import StringIO
-
 
 def init():
     if download:
@@ -159,8 +161,8 @@ def init():
 
     if not len(glob(ppa_seeds + '*')):
         info('Generating ' + ppa_seeds + ' (blast indexed DB)... ')
-        sb.call(['makeblastdb', '-dbtype', 'prot', '-in', ppa_fna, '-out', ppa_seeds],
-                stdin=open('/dev/null'), stdout=open('/dev/null'), stderr=open('/dev/null'))
+        with open(os.devnull, 'w') as devnull:
+            sb.call(['makeblastdb', '-dbtype', 'prot', '-in', ppa_fna, '-out', ppa_seeds], stdout=devnull)
         info('Done!\n')
 
 
@@ -169,6 +171,7 @@ def clean_all():
     files += glob('data/*.faa')
     files += glob('data/*.xml')
     files += glob('data/*.wdb')
+    files += glob(ppa_seeds + '*')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.txt')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.score')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
@@ -323,26 +326,27 @@ def blastx(inps, nproc, proj):
     dat_fol = 'data/' + proj + '/'
     pool = mp.Pool(nproc)
     mmap = [(inp_fol+i+'.fna', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
-    
+
     if not mmap:
         info('All blastx runs already performed!\n')
     else: 
         info('Looking for PhyloPhlAn proteins in input fna files\n')
         us_cmd = [['blastx', '-outfmt', '6', '-evalue', '1e-5', '-db', ppa_seeds, '-query', i, '-out', o]
                   for i, o in mmap]
+    # -word_size (4, o 5)
         pool.map_async(blastx_exe, us_cmd)
         pool.close()
         pool.join()
         info('All blastx runs performed!\n')
 
-    if not os.path.exists(dat_fol + up2prots):
+    if not os.path.exists(dat_fol+up2prots):
         dic = collections.defaultdict(list)
 
         for i in inps:
             dicc = collections.defaultdict(list)
 
             # for each universal protein found the tuples
-            for lst in (l.strip().split('\t') for l in open(dat_fol+i+".b6o").readlines()):
+            for lst in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
                 upid = lst[1].split('_')[1]
 
                 if upid not in dicc:
@@ -353,24 +357,37 @@ def blastx(inps, nproc, proj):
 
             dic[i] = dicc
 
+        updic = collections.defaultdict(list)
+
         for k, v in dic.iteritems():
-            print k
-            for kk, vv in v.iteritems():
-                # open the fasta nucleotides file
-                with open(inp_fol+k+".fna", "rU") as f:
-                    for record in SeqIO.parse(f, "fasta"):
-                        if vv[0] in record.id:
-                            print record.id
+            with open(inp_fol+k+'.fna', 'rU') as f:
+                for record in SeqIO.parse(f, 'fasta'):
+                    for kk, vv in v.iteritems():
+                        if str(vv[0]) in record.id:
+                            qstart = int(vv[6]) - 1
+                            qend = int(vv[7])
+                            reverse = False
 
-                # look for the XXX
-            print
+                            if qstart > qend:
+                                qstart = int(vv[7]) - 1
+                                qend = int(vv[6])
+                                reverse = True
 
-                # cut the sequence from START to END
-                # print vv[6]
-                # print vv[7]
+                            sequence = Seq(str(record.seq))
+                            if reverse: sequence = sequence.reverse_complement()
+                            seqid = ':c' if reverse else ':'
+                            aminoacids = Seq.translate(sequence)
+                            updic[kk].append(SeqRecord(aminoacids, id=record.id+seqid+str(qstart)+'-'+str(qend)))
 
-                # convert it to aminoacids
-                # print
+        # write mapping file dat_fol+up2prots
+        with open(dat_fol+up2prots, 'w') as f:
+            for k in sorted(updic):
+                f.write('\t'.join([k] + [sr.id for sr in updic[k]] + ['\n']))
+
+        # write a fasta file for each up
+        for k, v in updic.iteritems():
+            with open(dat_fol+k+'.faa', 'w') as f:
+                SeqIO.write(v, f, 'fasta')
 
 
 def gens2prots(inps, proj ):
@@ -868,7 +885,9 @@ if __name__ == '__main__':
     t0 = time.time()
 
     blastx(inps, pars['nproc'], projn)
-    error(1) # to-remove
+    t1 = time.time()
+    sys.stdout.write("BlastX finished in "+str(int(t1-t0))+" secs.\n" )
+    error("BLASTX TESTING PHASE") # to-remove
 
     faa2ppafaa( inps, pars['nproc'], projn )
     gens2prots(inps, projn)
