@@ -118,7 +118,7 @@ def read_params(args):
          "The number of CPUs to use for parallelizing the blasting\n"
          "[default 1, i.e. no parallelism]\n" )
 
-    arg( '--blast_full', type=bool, default=False, help =
+    arg( '--blast_full', action='store_true', default=False, help =
          "If specified, tells blast to use the full dataset of universal proteins\n"
          "[default False, i.e. the small dataset of universal proteins is used]\n" )
 
