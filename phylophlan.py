@@ -913,7 +913,14 @@ def merge_usearch_blast(inps, proj):
   #######
     # NEED TO ADD A CHECK TO NOT PERFORM ALL THE COPIES IF FILES ARE ALREADY THERE!
 
-    if len(os.listdir(dat_fol)) > 2:
+    dat_fol_num = len(os.listdir(dat_fol))
+
+    if usearch_files and tblastn_files:
+        dat_fol_num -= 3
+    elif (usearch_files and not tblastn_files) or (tblastn_files and not usearch_files):
+        dat_fol_num -= 2
+
+    if dat_fol_num:
         return
   #######
 
@@ -946,10 +953,12 @@ def merge_usearch_blast(inps, proj):
                 SeqIO.write(records, ff, 'fasta')
 
         for f in usearch_files:
-            if f not in sett: shutil.copy2(usearch_fol+f, dat_fol+f)
+            if f not in sett:
+                shutil.copy2(usearch_fol+f, dat_fol+f)
 
         for f in tblastn_files:
-            if f not in sett: shutil.copy2(tblastn_fol+f, dat_fol+f)
+            if f not in sett:
+                shutil.copy2(tblastn_fol+f, dat_fol+f)
 
         # merge up2prots files
         up2prot = collections.defaultdict(list)
