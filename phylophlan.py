@@ -41,7 +41,6 @@ ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
 ppa_wdb = "data/ppa.wdb"
-ppa_seeds = "data/ppa.seeds.blastx"
 up2prots = "up2prots.txt"
 ors2prots = "orgs2prots.txt"
 aln_tot = "aln.fna"
@@ -139,7 +138,7 @@ def init():
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
     else:
-        for f in [ppa_fna,ppa_aln,ppa_xml,ppa_up2prots,ppa_ors2prots]:
+        for f in [ppa_fna, ppa_fna_40, ppa_tax, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
             if not os.path.exists( f ):
                 info("Extracting "+f+" ... ")
                 with closing(tarfile.open( compressed(f)  )) as inp:
@@ -171,7 +170,8 @@ def clean_all():
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
 
     for f in files:
-        sb.call(['rm', '-f', f])
+        if f not in []:
+            sb.call(['rm', '-f', f])
 
 
 def clean_project( proj ):
