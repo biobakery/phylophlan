@@ -9,7 +9,6 @@ __date__    = '8 May 2013'
 import sys
 import os
 import tarfile
-# import copy
 import argparse as ap
 import subprocess as sb
 import multiprocessing as mp
@@ -18,9 +17,6 @@ try:
     import cPickle as pickle
 except:
     import pickle
-# import tempfile as tf
-# import numpy as np
-# import random as rnd
 import urllib2
 from contextlib import closing
 from glob import glob
@@ -28,15 +24,15 @@ from StringIO import StringIO
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-# sys.path.insert(0,'pyphlan/')
-# import pyphlan as circ
 sys.path.insert(0,'taxcuration/')
 import taxcuration as taxc
 import shutil
+import time
 
 
 download = ""
 ppa_fna = "data/ppa.seeds.faa"
+ppa_fna_40 = "data/ppa.seeds.40.faa"
 ppa_aln = "data/ppafull.aln.faa"
 ppa_up2prots = "data/ppafull.up2prots.txt"
 ppa_ors2prots = "data/ppafull.orgs2prots.txt"
@@ -71,7 +67,7 @@ def error(s):
 
 
 def dep_checks():
-    for prog in ["FastTree", "usearch", "muscle", "tblastn"]:#"blastx", "makeblastdb"]:
+    for prog in ["FastTree", "usearch", "muscle", "tblastn"]:
         try:
             with open(os.devnull, 'w') as devnull:
                 sb.call([prog], stdout=devnull, stderr=devnull)
@@ -123,6 +119,10 @@ def read_params(args):
          "The number of CPUs to use for parallelizing the blasting\n"
          "[default 1, i.e. no parallelism]\n" )
 
+    arg( '--blast_full', type=bool, default=False, help =
+         "If specified, tells blast to use the full dataset of universal proteins\n"
+         "[default False, i.e. the small dataset of universal proteins is used]\n" )
+
     arg( '-v','--version', action='store_true', help=
          "Prints the current PhyloPhlAn version and exit\n" )
 
@@ -160,19 +160,12 @@ def init():
                   "--output",ppa_wdb])
         info("Done!\n")
 
-    # if not len(glob(ppa_seeds + '*')):
-    #     info('Generating ' + ppa_seeds + ' (blast indexed DB)... ')
-    #     with open(os.devnull, 'w') as devnull:
-    #         sb.call(['makeblastdb', '-dbtype', 'prot', '-in', ppa_fna, '-out', ppa_seeds], stdout=devnull)
-    #     info('Done!\n')
-
 
 def clean_all():
     files = glob('data/*.txt')
     files += glob('data/*.faa')
     files += glob('data/*.xml')
     files += glob('data/*.wdb')
-    # files += glob(ppa_seeds + '*')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.txt')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.score')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
@@ -198,7 +191,6 @@ def get_inputs(proj):
     fna_in = [os.path.splitext(l)[0] for l in files
               if (os.path.splitext(l)[1] == '.fna') and (os.path.splitext(l)[0] not in faa_in)]
 
-    # if not faa_in:
     if len(faa_in) + len(fna_in) < 1:
         error("No '.faa' or '.fna' input files found in " + str(inp_fol))
 
@@ -269,7 +261,7 @@ def exe_usearch(x):
 
     try:
         info( "Starting "+x[5] + "...\n" )
-        retcode = sb.call( x )
+        sb.call( x )
         screen_usearch_wdb( x[5] )
         info( x[5] + " generated!\n" )
     except OSError:
@@ -300,7 +292,7 @@ def faa2ppafaa( inps, nproc, proj ):
                     "-blast6out",o,
                     "-query",i,
                     "-evalue","1e-40"] for i,o in mmap ]
-        rval = pool.map_async( exe_usearch, us_cmd )
+        pool.map_async( exe_usearch, us_cmd )
         pool.close()
         pool.join()
         info("All usearch runs performed!\n")
@@ -320,11 +312,9 @@ def faa2ppafaa( inps, nproc, proj ):
 
 def blastx_exe(x):
     try:
-        # info("Starting " + x[8] + "...\n") # blastx
-        info("Starting " + x[6] + "...\n") # tblastn
+        info("Starting " + x[6] + "...\n")
         sb.call(x)
-        # info(x[8] + " generated!\n") # blastx
-        info(x[6] + " generated!\n") # tblastn
+        info(x[6] + " generated!\n")
     except OSError:
         error("OSError: fatal error running tblastn.")
         return
@@ -336,7 +326,7 @@ def blastx_exe(x):
         return
 
 
-def blast(inps, nproc, proj):
+def blast(inps, nproc, proj, blast_full=False):
     inp_fol = 'input/' + proj + '/'
     dat_fol = 'data/' + proj + '/tblastn/'
     pool = mp.Pool(nproc)
@@ -345,22 +335,22 @@ def blast(inps, nproc, proj):
     if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
 
     if not mmap:
-        # info('All blastx runs already performed!\n') # blastx
-        info('All tblastn runs already performed!\n') # tblastn
+        info('All tblastn runs already performed!\n')
     else:
         info('Looking for PhyloPhlAn proteins in input fna files\n')
-        # us_cmd = [['blastx', '-outfmt', '6', '-evalue', '1e-5', '-db', ppa_seeds, '-query', i, '-out', o]
-        #           for i, o in mmap] # blastx
-        us_cmd = [['tblastn', '-subject', i, '-query', ppa_fna, '-out', o, '-outfmt', '6', '-evalue', '1e-50']
-                  for i, o in mmap] # tblastn, full
-        # us_cmd = [['tblastn', '-subject', i, '-query', 'data/ppa.seeds.40.faa.txt', '-out', o, '-outfmt', '6', '-evalue', '1e-40']
-        #           for i, o in mmap] # tblastn, small
+
+        if blast_full: # full dataset
+            dataset = ppa_fna
+        else: # small dataset
+            dataset = ppa_fna_40
+
+        us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-40']
+                  for i, o in mmap]
 
         pool.map_async(blastx_exe, us_cmd)
         pool.close()
         pool.join()
-        # info('All blastx runs performed!\n') # blastx
-        info('All tblastn runs performed!\n') # tblastn
+        info('All tblastn runs performed!\n')
 
     if not os.path.exists(dat_fol+up2prots):
         dic = collections.defaultdict(list)
@@ -371,8 +361,7 @@ def blast(inps, nproc, proj):
 
             # for each universal protein found tuples
             for lst in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
-                # upid = lst[1].split('_')[1] # blastx
-                upid = lst[0].split('_')[1] # tblastn
+                upid = lst[0].split('_')[1]
                 contig_id = str(lst[1])
                 sstart = int(lst[8])
                 send = int(lst[9])
@@ -397,17 +386,12 @@ def blast(inps, nproc, proj):
                 for record in SeqIO.parse(f, 'fasta'):
                     # look for the contigs id
                     for kk, vv in v.iteritems():
-                        # if str(vv[0]) in record.id: # blastx
-                        if str(vv[1]) in record.id: # tblastn
-                            # qstart = int(vv[6]) - 1
-                            # qend = int(vv[7])
+                        if str(vv[1]) in record.id:
                             sstart = int(vv[8])
                             send = int(vv[9])
                             reverse = False
 
-                            # if qstart > qend:
                             if sstart > send:
-                                # qstart, qend = qend, qstart
                                 sstart, send = send, sstart
                                 reverse = True
 
@@ -415,7 +399,6 @@ def blast(inps, nproc, proj):
                             if reverse: sequence = sequence.reverse_complement()
                             rev = ':c' if reverse else ':' # reverse or not
                             aminoacids = Seq.translate(sequence)
-                            # updic[kk].append(SeqRecord(aminoacids, id=record.id+rev+str(qstart)+'-'+str(qend)+'|'+str(inc)))
                             updic[kk].append(SeqRecord(aminoacids, id=record.id+rev+str(sstart)+'-'+str(send), description=''))
 
         # write mapping file dat_fol+up2prots
@@ -449,7 +432,6 @@ def gens2prots(inps, proj ):
     prots2ups = {}
     for k,v in ups2prots.items():
         for vv in v:
-            # assert vv not in prots2ups
             if vv in prots2ups:
                 error(str(vv) + " already in dict!")
             prots2ups[vv] = k
@@ -507,7 +489,7 @@ def aln_subsample( inp_f, out_f, scores, unknown_fraction, namn ):
         fnas = list(SeqIO.parse(inp, "fasta"))
     ids = [f.id for f in fnas]
     cols = zip(*[f.seq for f in fnas])
-    l = len(cols[0])
+    # l = len(cols[0])
     col_alf = [set(x) for x in cols]
     col_sta = [dict([(a,seq.count(a)) for a in s]) for s,seq in zip(col_alf,cols)]
     col_sta_ok = screen(col_sta,cols, sf = scores,
@@ -525,7 +507,7 @@ def exe_muscle(x):
             info( "Running muscle on "+x[3] + "...\n" )
         else:
             info( "Running muscle on "+x[4] + " and "+x[6]+"...\n" )
-        retcode = sb.call( x[:-2] )
+        sb.call( x[:-2] )
         pn = max( int( max( int((400.0-int(x[-1][1:]))*30.0/400.0),1)**2 / 30.0), 3)
         if len(x) < 13:
             aln_subsample( x[5], x[-2], x[7], 0.1, pn )
@@ -571,7 +553,7 @@ def faa2aln( nproc, proj, integrate = False ):
             info("Looking for PhyloPhlAn proteins to align\n")
             info(str(len(us_cmd))+" alignments to be performed\n")
             pool = mp.Pool( nproc )
-            rval = pool.map_async( exe_muscle, us_cmd )
+            pool.map_async( exe_muscle, us_cmd )
             pool.close()
             pool.join()
             info("All alignments performed!\n")
@@ -593,7 +575,7 @@ def faa2aln( nproc, proj, integrate = False ):
             info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
             info(str(len(us_cmd))+" alignments to be merged\n")
             pool = mp.Pool( nproc )
-            rval = pool.map_async( exe_muscle, us_cmd )
+            pool.map_async( exe_muscle, us_cmd )
             pool.close()
             pool.join()
             info("All alignments already merged with PhyloPhlAn alignments!\n")
@@ -601,19 +583,19 @@ def faa2aln( nproc, proj, integrate = False ):
     if os.path.exists( dat_fol+up2prots ):
         info("All alignments already computed!\n")
         return
-    up2p = collections.defaultdict( list )
-    for i in inps:
-        for p,up in (l.strip().split('\t')
-                for l in open(dat_fol+i+".b6o").readlines()):
-            up2p[up].append( p )
-    if integrate:
-        with open(ppa_up2prots) as inpf:
-            for l in (ll.strip().split('\t') for ll in inpf):
-                up2p[l[0]] += l[1:]
+    # up2p = collections.defaultdict( list )
+    # for i in inps:
+    #     for p,up in (l.strip().split('\t')
+    #             for l in open(dat_fol+i+".b6o").readlines()):
+    #         up2p[up].append( p )
+    # if integrate:
+    #     with open(ppa_up2prots) as inpf:
+    #         for l in (ll.strip().split('\t') for ll in inpf):
+    #             up2p[l[0]] += l[1:]
 
-    with open(dat_fol+up2prots,"w") as outf:
-        for k,v in up2p.items():
-            outf.write( "\t".join([k]+v) + "\n" )
+    # with open(dat_fol+up2prots,"w") as outf:
+    #     for k,v in up2p.items():
+    #         outf.write( "\t".join([k]+v) + "\n" )
 
 
 def aln_merge(proj, integrate):
@@ -716,7 +698,7 @@ def circlader( proj, integrate, tax = None ):
     inp_fol = "input/"+proj+"/"
     dat_fol = "data/"+proj+"/"
     out_fol = "output/"+proj+"/"
-    out_img = "output/"+proj+"/imgs/"
+    # out_img = "output/"+proj+"/imgs/"
 
     tree = out_fol+proj+"."+ ( o_inttree if integrate else o_tree)
     xtree_rr = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"xml"
@@ -726,7 +708,7 @@ def circlader( proj, integrate, tax = None ):
     archaea_f = dat_fol+proj+( ".int" if integrate else "")+".archaea.txt"
 
     tax_d = [l.strip().split('\t') for l in open(inp_fol+tax)] if tax else []
-    o2t = dict([(o,t.split('.')) for t,o in tax_d])
+    # o2t = dict([(o,t.split('.')) for t,o in tax_d])
     t2o = dict(tax_d)
 
     if os.path.exists( pngtree ):
@@ -745,7 +727,7 @@ def circlader( proj, integrate, tax = None ):
         int_names = [l.strip().split('\t')[0] for l in open(ppa_ors2prots)]
 
         mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)]
-        mt4o2t = dict([(o,t.split('.')) for t,o in mt4tax_d])
+        # mt4o2t = dict([(o,t.split('.')) for t,o in mt4tax_d])
         mt4t2o = dict(mt4tax_d)
 
         mt4archaea = [o for t,o in mt4t2o.items() if t.split(".")[0] == "d__Archaea"]
@@ -850,9 +832,9 @@ def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     inp_fol = "input/"+proj+"/"
     out_fol = "output/"+proj+"/"
     taxin = ppa_tax if integrate else inp_fol+tax
-    taxout = None if integrate else out_fol+"new."+tax
-    taxdiffs = None if integrate else out_fol+"diff."+tax
-    taxboth = None if integrate else out_fol+"comp."+tax
+    # taxout = None if integrate else out_fol+"new."+tax
+    # taxdiffs = None if integrate else out_fol+"diff."+tax
+    # taxboth = None if integrate else out_fol+"comp."+tax
     intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
     if not os.path.exists(intree):
         intree = out_fol+proj+".tree."+ ( "int." if integrate else "")+"nwk"
@@ -865,7 +847,7 @@ def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
     info("Done!\n")
 
     info("Writing taxonomic "+operation+" outputs ... ")
-    tid2img = taxCleaner.write_output( proj, images = False, imp_only = True )
+    taxCleaner.write_output( proj, images = False, imp_only = True )
     info("Done!\n")
 
 
@@ -910,11 +892,8 @@ def merge_usearch_blast(inps, proj):
     if os.path.isdir(tblastn_fol):
         tblastn_files = [os.path.normcase(f) for f in os.listdir(tblastn_fol)]
 
-  #######
-    # NEED TO ADD A CHECK TO NOT PERFORM ALL THE COPIES IF FILES ARE ALREADY THERE!
-
+    # check if I have already copy files in dat_fol folder
     dat_fol_num = len(os.listdir(dat_fol))
-
     if usearch_files and tblastn_files:
         dat_fol_num -= 3
     elif (usearch_files and not tblastn_files) or (tblastn_files and not usearch_files):
@@ -922,7 +901,6 @@ def merge_usearch_blast(inps, proj):
 
     if dat_fol_num:
         return
-  #######
 
     if usearch_files and not tblastn_files: # just usearch ran -> NO MERGE, just copy
         for f in usearch_files:
@@ -962,7 +940,6 @@ def merge_usearch_blast(inps, proj):
 
         # merge up2prots files
         up2prot = collections.defaultdict(list)
-
         with open(usearch_fol+up2prots, 'r') as f:
             for row in f:
                 up = row.split('\t')[0].strip()
@@ -1026,15 +1003,12 @@ if __name__ == '__main__':
 
     dep_checks()
     init()
-
     faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn)
 
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
         error("No taxonomy file found for the taxonomic analysis")
 
     check_inp(faa_in+fna_in)
-
-    import time
     t0 = time.time()
 
     if (pars['nproc'] > 1) and faa_in and fna_in:
@@ -1064,7 +1038,7 @@ if __name__ == '__main__':
         usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn))
         usearch_thr.start()
 
-        blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn))
+        blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn, pars['blast_full']))
         blast_thr.start()
 
         usearch_thr.join()
@@ -1073,7 +1047,7 @@ if __name__ == '__main__':
         gens2prots(faa_in, projn)
     else:
         if fna_in:
-            blast(fna_in, pars['nproc'], projn)
+            blast(fna_in, pars['nproc'], projn, pars['blast_full'])
 
         if faa_in:
             faa2ppafaa(faa_in, pars['nproc'], projn)
