@@ -48,6 +48,7 @@ aln_int_tot = "aln.int.fna"
 ups2faa_pkl = "ups2faa.pkl"
 o_tree = "tree.nwk"
 o_inttree = "tree.int.nwk"
+p2t_map = "p2t_map.txt"
 
 
 compressed = lambda x: x+".tar.bz2"
@@ -378,6 +379,7 @@ def blast(inps, nproc, proj, blast_full=False):
             dic[i] = dicc
 
         updic = collections.defaultdict(list)
+        p2t = dict()
 
         # open each file
         for k, v in dic.iteritems():
@@ -398,8 +400,15 @@ def blast(inps, nproc, proj, blast_full=False):
                             sequence = Seq(str(record.seq)[sstart-1:send])
                             if reverse: sequence = sequence.reverse_complement()
                             rev = ':c' if reverse else ':' # reverse or not
+                            seqid = record.id+rev+str(sstart)+'-'+str(send)
                             aminoacids = Seq.translate(sequence)
-                            updic[kk].append(SeqRecord(aminoacids, id=record.id+rev+str(sstart)+'-'+str(send), description=''))
+                            updic[kk].append(SeqRecord(aminoacids, id=seqid, description=''))
+                            p2t[seqid] = k # save map from seqid to genome
+
+        # write the partial mapping of proteins into genomes
+        with open('data/'+proj+'/'+p2t_map, 'w') as f:
+            for k, v in p2t.iteritems():
+                f.write(str(k) + '\t' + str(v) + '\n')
 
         # write mapping file dat_fol+up2prots
         with open(dat_fol+up2prots, 'w') as f:
@@ -609,6 +618,9 @@ def aln_merge(proj, integrate):
     up2p = dict([(l[0],set(l[1:])) for l in
                     (ll.strip().split('\t') for ll in
                         open(dat_fol+up2prots))])
+
+    all_prots = set.union(*up2p.values()) # all proteins id
+
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_up2prots)):
             if l[0] in up2p:
@@ -616,47 +628,72 @@ def aln_merge(proj, integrate):
             else:
                 up2p[l[0]] = set(l[1:])
 
-    all_t = set()
-    for ns in up2p.values():
-        all_t |= ns
-    faas = []
     t2p = dict([(l[0],set(l[1:])) for l in
                 (ll.strip().split('\t') for ll in open(dat_fol+ors2prots))])
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_ors2prots)):
             t2p[l[0]] = set(l[1:])
 
-    for f in (dat_fol+ff for ff in os.listdir(dat_fol) if ( ff.endswith(".int.sub.aln") and integrate) or (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln"))):
-        faas += list(SeqIO.parse(f, "fasta"))
-    faas = SeqIO.to_dict( faas )
-    aln = dict([(t,"") for t in t2p.keys()])
-    salnk = sorted(aln.keys())
+    # map proteins id to genomes id
+    p2t = dict()
+    if os.path.exists(dat_fol+p2t_map):
+        p2t = dict([(l[0], l[1]) for l in (row.strip().split('\t') for row in open(dat_fol+p2t_map, 'r'))])
 
-    for up,pts in sorted(up2p.items(),key=lambda x:x[0]):
-        toadd, ll = [], -1
-        for k in salnk:
-            ppp = []
-            for x in list(t2p[k]):
-                for y in list(pts):
-                    if str(x) in str(y):
-                        ppp += [y]
+    for t, p in t2p.iteritems():
+        for pp in p:
+            if pp in all_prots: # if the protein is present in the current alignments
+                p2t[pp] = t  # map proteins to their genome
 
-            if ppp:
-                if ll < 0:
-                    ll = len( faas[ppp[0]] )
-                aln[k] += faas[ppp[0]]
-            else:
-                toadd.append(k)
-        for k in toadd:
-            ss = SeqRecord( Seq("".join( '-' * ll )) )
-            ss.id = k
-            aln[k] += ss
+    all_g = set(t2p.keys()) # all genomes id
+    aln = dict([(t,"") for t in t2p.keys()]) # dictionary that will contains all alignments
+
+    for f in sorted((dat_fol+ff for ff in os.listdir(dat_fol) if (ff.endswith(".int.sub.aln") and integrate) or (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln")))):
+        g2aln = dict()
+        lenal = 0 # keep the lenght of the current alignments
+
+        for seq in SeqIO.parse(f, "fasta"):
+            if not lenal: lenal = len(seq.seq)
+            g2aln[p2t[seq.id]] = seq
+
+        for g in all_g: # for all genomes
+            if g in g2aln: # if there is alignment
+                aln[g] += g2aln[g]
+            else: # otherwise add gaps
+                aln[g] += SeqRecord(Seq('-' * lenal), id=str(g))
+
+###########################################################
+    # faas = []
+    # faas = SeqIO.to_dict( faas )
+    # aln = dict([(t,"") for t in t2p.keys()])
+    # salnk = sorted(aln.keys())
+
+    # for up,pts in sorted(up2p.items(),key=lambda x:x[0]):
+    #     toadd, ll = [], -1
+    #     for k in salnk:
+    #         ppp = []
+    #         for x in list(t2p[k]):
+    #             for y in list(pts):
+    #                 if str(x) in str(y):
+    #                     ppp += [y]
+    #         if ppp:
+    #             if ll < 0:
+    #                 ll = len( faas[ppp[0]] )
+    #             aln[k] += faas[ppp[0]]
+    #         else:
+    #             toadd.append(k)
+    #     for k in toadd:
+    #         ss = SeqRecord( Seq("".join( '-' * ll )) )
+    #         ss.id = k
+    #         aln[k] += ss
+###########################################################
+
     out_faas = []
-    for k,v in aln.items():
+    for k, v in aln.iteritems():
         v.id = k
         v.description = ""
         out_faas.append(v)
-    SeqIO.write( out_faas, outf, "fasta")
+
+    SeqIO.write(out_faas, outf, "fasta")
     info("All alignments merged into "+outf+"!\n")
 
 
@@ -892,12 +929,12 @@ def merge_usearch_blast(inps, proj):
     if os.path.isdir(tblastn_fol):
         tblastn_files = [os.path.normcase(f) for f in os.listdir(tblastn_fol)]
 
-    # check if I have already copy files in dat_fol folder
+    # check if I have already copied files in dat_fol folder
     dat_fol_num = len(os.listdir(dat_fol))
     if usearch_files and tblastn_files:
-        dat_fol_num -= 3
+        dat_fol_num -= 4 # bad!
     elif (usearch_files and not tblastn_files) or (tblastn_files and not usearch_files):
-        dat_fol_num -= 2
+        dat_fol_num -= 2 # bad!
 
     if dat_fol_num:
         return
@@ -1064,7 +1101,7 @@ if __name__ == '__main__':
     t2 = time.time()
     sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n\n" )
 
-    aln_merge(projn,pars['integrate'])
+    aln_merge(projn, pars['integrate'])
     fasttree(projn,pars['integrate'])
 
     t4 = time.time()
