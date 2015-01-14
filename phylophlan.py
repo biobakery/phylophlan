@@ -24,10 +24,11 @@ from StringIO import StringIO
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-sys.path.insert(0,'taxcuration/')
+sys.path.insert(0, 'taxcuration/')
 import taxcuration as taxc
 import shutil
 import time
+# from collections import Counter # works only with python >= 2.7
 
 
 download = ""
@@ -49,7 +50,8 @@ ups2faa_pkl = "ups2faa.pkl"
 o_tree = "tree.nwk"
 o_inttree = "tree.int.nwk"
 p2t_map = "p2t_map.txt"
-
+cleanfaa_fld = "clean_faa/"
+old2newprots = "old2newprots.txt"
 
 compressed = lambda x: x+".tar.bz2"
 download_compressed = lambda x: download+os.path.basename(x)+".tar.bz2"
@@ -115,16 +117,33 @@ def read_params(args):
             "that is automatically extracted and formatted at the first pipeline run.\n"
             "Projects are not remove (specify a project and use -c for removing projects).\n")
 
-    arg( '--nproc', metavar="N", type=int, default=1, help =
+    arg( '--nproc', metavar="N", type=int, default=1, help=
          "The number of CPUs to use for parallelizing the blasting\n"
          "[default 1, i.e. no parallelism]\n" )
 
-    arg( '--blast_full', action='store_true', default=False, help =
+    arg('--blast_full', action='store_true', default=False, help=
          "If specified, tells blast to use the full dataset of universal proteins\n"
-         "[default False, i.e. the small dataset of universal proteins is used]\n" )
+         "[default False, i.e. the small dataset of universal proteins is used]\n")
 
-    arg( '-v','--version', action='store_true', help=
-         "Prints the current PhyloPhlAn version and exit\n" )
+    # decide if want to perform the .faa cleaning
+    arg('--faa_cleaning', action='store_true', default=False, help=
+         "When specified perform a cleaning on the number and the length of proteins, changin also\n"
+         "the proteins id such that are unique among all the genomes."
+         "If you believe that your genomes have unique ids you can skip this step.")
+
+    # protein filtering params
+    arg('--min_num_proteins', type=int, default=100, help=
+         "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
+         "genomes with less than this number of proteins will be discarded.\n"
+         "Default minimum number of proteins is 100.")
+
+    arg('--min_len_protein', type=int, default=50, help=
+         "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
+         "proteins shorter that this value will be discarded.\n"
+         "Default minimum length for each protein is 50.")
+
+    arg('-v', '--version', action='store_true', help=
+         "Prints the current PhyloPhlAn version and exit\n")
 
     return vars(p.parse_args())
 
@@ -171,7 +190,7 @@ def clean_all():
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
 
     for f in files:
-        if f not in []:
+        if not f:
             sb.call(['rm', '-f', f])
 
 
@@ -180,12 +199,13 @@ def clean_project( proj ):
     sb.call(["rm","-rf","output/"+proj])
 
 
-def get_inputs(proj):
+def get_inputs(proj, params):
     inp_fol = "input/"+proj+"/"
+    cln_fol = "data/"+proj+"/"+cleanfaa_fld
     dat_fol = "data/"+proj+"/"
 
     if not os.path.isdir(inp_fol):
-        error( "No "+proj+" folder found in input/" )
+        error("No "+proj+" folder found in input/")
 
     files = list(os.listdir(inp_fol))
     faa_in = [os.path.splitext(l)[0] for l in files if os.path.splitext(l)[1] == '.faa']
@@ -211,10 +231,19 @@ def get_inputs(proj):
     if not os.path.isdir(dat_fol):
         os.mkdir( dat_fol )
 
+    # clean the faa files by filter on the number of proteins and their minimum length
+    if faa_in and params['faa_cleaning']:
+        t0 = time.time()
+        faa_in = clean_faa(proj, faa_in, params['min_num_proteins'], params['min_len_protein'])#, verbose=True)
+        info("Cleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
+
     if not os.path.exists(dat_fol + ors2prots):
         with open(dat_fol + ors2prots, 'w') as outf:
             for f in faa_in:
-                prots = sorted([l.split()[0][1:] for l in open(inp_fol + f + '.faa') if l.startswith('>')])
+                if params['faa_cleaning']:
+                    prots = sorted([l.split()[0][1:] for l in open(cln_fol + f + '.faa') if l.startswith('>')])
+                else:
+                    prots = sorted([l.split()[0][1:] for l in open(inp_fol + f + '.faa') if l.startswith('>')])
                 outf.write('\t'.join([f] + prots) + '\n')
 
             for f in fna_in:
@@ -236,6 +265,69 @@ def check_inp(inps):
 
     if init_dup:
         error("The following genome IDs are already in PhyloPhlAn\n" + "\n".join(init_dig))
+
+
+def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
+    inp_fol = "input/"+proj+"/"
+    dat_fol = "data/"+proj+"/"
+    cln_fol = "data/"+proj+"/"+cleanfaa_fld
+
+    if not os.path.isdir(cln_fol):
+        os.mkdir(cln_fol) # create the directory if it does not exists
+
+    protein_ids_map = dict() # will contains the old protein id and the new protein id assigned
+
+    for f in faa_in:
+        records = []
+        out = []
+        seqid = 0
+        msg = ""
+        old_id = dict()
+
+        with open(inp_fol+f+'.faa', 'rU') as h_in:
+            records = list(SeqIO.parse(h_in, "fasta"))
+
+        if len(records) >= min_num_proteins: # check the number of proteins of the genome
+            for protein in records:
+                if len(protein.seq) >= min_len_protein: # check the length of the protein
+                    pid = f+'_'+str(seqid)
+                    out.append(SeqRecord(protein.seq, id=pid, description=''))
+                    old_id[pid] = protein.id
+                    seqid += 1
+        else:
+            msg = "not enough proteins!"
+
+        # if some proteins has been removed, checked that the good ones kept are at least min_num_proteins
+        if len(out) >= min_num_proteins:
+            if len(records) - len(out):
+                msg = str(len(records)-len(out)) + " too short proteins removed!"
+
+            # save the old and new mapping
+            if f in protein_ids_map:
+                # for t in [(old_id[s.id], s.id) for s in out]:
+                #     protein_ids_map[f].append(t)
+
+                # protein_ids_map[f].extend([(old_id[s.id], s.id) for s in out])
+
+                protein_ids_map[f] += [(old_id[s.id], s.id) for s in out]
+            else:
+                protein_ids_map[f] = [(old_id[s.id], s.id) for s in out]
+
+            # write the new .faa
+            with open(cln_fol+f+'.faa', 'w') as h_out:
+                SeqIO.write(out, h_out, "fasta")
+        else:
+            msg = "not enough good proteins!"
+
+        if msg and verbose:
+            info(' '.join(["[clean_faa]", f, msg]) + "\n")
+
+    # write the mapping of the old and new proteins id of all genomes
+    with open(dat_fol+old2newprots, 'w') as f:
+        for k, v in protein_ids_map.iteritems():
+            f.write('\t'.join([k] + ['('+a+','+b+')' for a,b in v]))
+
+    return protein_ids_map.keys()
 
 
 def exe_usearch(x):
@@ -276,8 +368,8 @@ def exe_usearch(x):
         return
 
 
-def faa2ppafaa( inps, nproc, proj ):
-    inp_fol = "input/"+proj+"/"
+def faa2ppafaa(inps, nproc, proj, faa_cleaning):
+    inp_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
     dat_fol = "data/"+proj+"/usearch/"
     pool = mp.Pool( nproc )
     mmap = [(inp_fol+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
@@ -300,8 +392,8 @@ def faa2ppafaa( inps, nproc, proj ):
 
     if os.path.exists(dat_fol+up2prots):
         return
-    up2p = collections.defaultdict( list )
-    if not os.path.exists(dat_fol+up2prots):
+    else:
+        up2p = collections.defaultdict(list)
         for i in inps:
             for p,up in (l.strip().split('\t')
                     for l in open(dat_fol+i+'.b6o').readlines()):
@@ -353,7 +445,9 @@ def blast(inps, nproc, proj, blast_full=False):
         pool.join()
         info('All tblastn runs performed!\n')
 
-    if not os.path.exists(dat_fol+up2prots):
+    if os.path.exists(dat_fol+up2prots):
+        return
+    else:
         dic = collections.defaultdict(list)
         uniq = set()
 
@@ -425,8 +519,8 @@ def blast(inps, nproc, proj, blast_full=False):
             pickle.dump([k for k, _ in updic.iteritems()], f, pickle.HIGHEST_PROTOCOL)
 
 
-def gens2prots(inps, proj ):
-    inp_fol = "input/"+proj+"/"
+def gens2prots(inps, proj, faa_cleaning):
+    inp_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
     dat_fol = "data/"+proj+"/usearch/"
 
     if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
@@ -620,6 +714,9 @@ def aln_merge(proj, integrate):
                         open(dat_fol+up2prots))])
 
     all_prots = set.union(*up2p.values()) # all proteins id
+
+    # check if there are proteins id duplicate and if yes warn the user and exit
+    # [k for k, v in Counter(sum(*up2p.values(), [])).iteritems() if v > 1] # THIS NEED TO BE TESTED
 
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_up2prots)):
@@ -931,12 +1028,17 @@ def merge_usearch_blast(inps, proj):
 
     # check if I have already copied files in dat_fol folder
     dat_fol_num = len(os.listdir(dat_fol))
-    if usearch_files and tblastn_files:
-        dat_fol_num -= 4 # bad!
-    elif (usearch_files and not tblastn_files) or (tblastn_files and not usearch_files):
-        dat_fol_num -= 2 # bad!
 
-    if dat_fol_num:
+    if usearch_files and tblastn_files:
+        dat_fol_num -= 6 # bad, need to be fixed!
+    elif usearch_files and not tblastn_files:
+        dat_fol_num -= 4 # bad, need to be fixed!
+    elif tblastn_files and not usearch_files:
+        dat_fol_num -= 3 # bad, need to be fixed!
+    else:
+        error("Merge phase, no usearch and/or tbalstn files found!")
+
+    if dat_fol_num: # if it is NON-zero I already copied
         return
 
     if usearch_files and not tblastn_files: # just usearch ran -> NO MERGE, just copy
@@ -1014,6 +1116,13 @@ if __name__ == '__main__':
     pars = read_params( sys.argv )
     projn = pars['inp']
 
+    if ('v' in pars and pars['v']) or ('version' in pars and pars['version']):
+        info("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
+        sys.exit(0)
+
+    if projn is None:
+        error("Project name not provided.")
+
     if pars['cleanall']:
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
                 'user_tree' in pars and pars['user_tree']) or (
@@ -1032,15 +1141,9 @@ if __name__ == '__main__':
             clean_project(projn)
         sys.exit(0)
 
-    if 'v' in pars and pars['v']:
-        sys.stdout.write("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
-        sys.exit(0)
-    if projn == None:
-        error("Project name not provided.")
-
     dep_checks()
     init()
-    faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn)
+    faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn, pars)
 
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
         error("No taxonomy file found for the taxonomic analysis")
@@ -1072,7 +1175,7 @@ if __name__ == '__main__':
             blast_cpus += surplus
      # balancing cpu load
 
-        usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn))
+        usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn, pars['faa_cleaning']))
         usearch_thr.start()
 
         blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn, pars['blast_full']))
@@ -1081,31 +1184,31 @@ if __name__ == '__main__':
         usearch_thr.join()
         blast_thr.join()
 
-        gens2prots(faa_in, projn)
+        gens2prots(faa_in, projn, pars['faa_cleaning'])
     else:
         if fna_in:
             blast(fna_in, pars['nproc'], projn, pars['blast_full'])
 
         if faa_in:
-            faa2ppafaa(faa_in, pars['nproc'], projn)
-            gens2prots(faa_in, projn)
+            faa2ppafaa(faa_in, pars['nproc'], projn, pars['faa_cleaning'])
+            gens2prots(faa_in, projn, pars['faa_cleaning'])
 
     # merging phase for .faa and .fna files
     merge_usearch_blast(faa_in+fna_in, projn)
 
     t1 = time.time()
-    sys.stdout.write("Mapping finished in "+str(int(t1-t0))+" secs.\n\n" )
+    info("Mapping finished in "+str(int(t1-t0))+" secs.\n")
 
     faa2aln( pars['nproc'], projn, pars['integrate'] )
 
     t2 = time.time()
-    sys.stdout.write("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n\n" )
+    info("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n")
 
     aln_merge(projn, pars['integrate'])
-    fasttree(projn,pars['integrate'])
+    fasttree(projn, pars['integrate'])
 
     t4 = time.time()
-    sys.stdout.write("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+" total time).\n\n" )
+    info("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+" total time).\n")
 
     circlader(projn, pars['integrate'], tax)
 
