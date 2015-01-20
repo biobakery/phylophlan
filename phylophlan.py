@@ -125,7 +125,7 @@ def read_params(args):
          "If specified, tells blast to use the full dataset of universal proteins\n"
          "[default False, i.e. the small dataset of universal proteins is used]\n")
 
-    # decide if want to perform the .faa cleaning
+    # decide if you want perform the .faa cleaning
     arg('--faa_cleaning', action='store_true', default=False, help=
          "When specified perform a cleaning on the number and the length of proteins, changin also\n"
          "the proteins id such that are unique among all the genomes."
@@ -709,7 +709,7 @@ def aln_merge(proj, integrate):
         info("All alignments already merged!\n")
         return
 
-    up2p = dict([(l[0],set(l[1:])) for l in
+    up2p = dict([(l[0], set(l[1:])) for l in
                     (ll.strip().split('\t') for ll in
                         open(dat_fol+up2prots))])
 
@@ -717,6 +717,8 @@ def aln_merge(proj, integrate):
 
     # check if there are proteins id duplicate and if yes warn the user and exit
     # [k for k, v in Counter(sum(*up2p.values(), [])).iteritems() if v > 1] # THIS NEED TO BE TESTED
+    # [k for k, v in Counter(sum(list(list(x) for x in up2p.values()), [])).iteritems() if v > 1] # this one should work
+    # [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
 
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_up2prots)):
