@@ -41,7 +41,8 @@ ppa_tax = "data/ppafull.tax.txt"
 ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
-ppa_wdb = "data/ppa.wdb"
+# ppa_wdb = "data/ppa.wdb"
+ppa_udb = "data/ppa.udb"
 up2prots = "up2prots.txt"
 ors2prots = "orgs2prots.txt"
 aln_tot = "aln.fna"
@@ -172,11 +173,14 @@ def init():
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
 
-    if not os.path.exists( ppa_wdb ):
-        info("Generating "+ppa_wdb+" (usearch indexed DB)... ")
-        sb.call( ["usearch","-quiet",
-                  "--makewdb",ppa_fna,
-                  "--output",ppa_wdb])
+    # if not os.path.exists( ppa_wdb ):
+    if not os.path.exists(ppa_udb):
+        # info("Generating "+ppa_wdb+" (usearch indexed DB)... ")
+        info("Generating "+ppa_udb+" (usearch indexed DB)...")
+        # sb.call( ["usearch","-quiet",
+        #           "--makewdb",ppa_fna,
+        #           "--output",ppa_wdb]) # usearch5.2.32
+        sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1517
         info("Done!\n")
 
 
@@ -380,11 +384,13 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         info("All usearch runs already performed!\n")
     else:
         info("Looking for PhyloPhlAn proteins in input faa files\n")
-        us_cmd = [ ["usearch","-quiet",
-                    "-wdb",ppa_wdb,
-                    "-blast6out",o,
-                    "-query",i,
-                    "-evalue","1e-40"] for i,o in mmap ]
+        # us_cmd = [ ["usearch","-quiet",
+        #             "-wdb",ppa_wdb,
+        #             "-blast6out",o,
+        #             "-query",i,
+        #             "-evalue","1e-40"] for i,o in mmap ] # usearch5.2.32
+        us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", ppa_udb, "-blast6out", o, "-threads", "1",
+            "-evalue", "1e-10", "-maxaccepts", "1", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
         pool.map_async( exe_usearch, us_cmd )
         pool.close()
         pool.join()
@@ -808,8 +814,8 @@ def fasttree( proj, integrate ):
         return
     info("Start building the tree with FastTree ... \n")
     cmd = [ "FastTree", "-quiet",
-            #"-fastest","-noml"
-            #"-gamma",
+            # "-fastest","-noml"
+            # "-gamma",
             "-bionj","-slownni",
             "-mlacc","2", # "-pseudo",
             "-spr","4"
@@ -819,14 +825,14 @@ def fasttree( proj, integrate ):
              stdout = open(outt,"w") )
 
     # convert aln_in from fasta to phylip format
-    #cmd = [ "raxmlHPC-PTHREADS-SSE3",
-    #        "-T","#threads",
-    #        "-s","alignment in phylip format",
-    #        "-n",outt,
-    #        "-m","PROTCATWAG",
-    #        "-p","1982"
-    #        ]
-    #sb.call( cmd )
+    # cmd = [ "raxmlHPC-PTHREADS-SSE3",
+    #         "-T","#threads",
+    #         "-s","alignment in phylip format",
+    #         "-n",outt,
+    #         "-m","PROTCATWAG",
+    #         "-p","1982"
+    #         ]
+    # sb.call( cmd )
     info("Tree built! The output newick file is in "+outt+"\n")
 
 
@@ -851,7 +857,7 @@ def circlader( proj, integrate, tax = None ):
         info("Output tree images already generated!\n")
         return
 
-    #info("Generating tree output images ...")
+    # info("Generating tree output images ...")
     c_circ = "circlader/circlader.py"
     c_circ_an = "circlader/circlader_annotate.py"
     c_reroot = "./taxcuration/tree_reroot.py"
@@ -1214,8 +1220,8 @@ if __name__ == '__main__':
 
     circlader(projn, pars['integrate'], tax)
 
-    #if pars['integrate'] and tax and not pars['taxonomic_analysis']:
-    #    tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
+    # if pars['integrate'] and tax and not pars['taxonomic_analysis']:
+    #     tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
     if pars['integrate'] and pars['taxonomic_analysis']:
         tax_imputation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
         sys.exit()
