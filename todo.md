@@ -5,3 +5,4 @@
 * Allow the user to specify and use a personal reference dataset instead of using the one of PhyloPhlAn. There are some 400s hard-coded to fix
 
 # Low
+* remove circlader and add graphlan
