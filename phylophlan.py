@@ -28,6 +28,7 @@ sys.path.insert(0, 'taxcuration/')
 import taxcuration as taxc
 import shutil
 import time
+from bz2 import BZ2File
 # from collections import Counter # works only with python >= 2.7
 
 
@@ -53,6 +54,9 @@ o_inttree = "tree.int.nwk"
 p2t_map = "p2t_map.txt"
 cleanfaa_fld = "clean_faa/"
 old2newprots = "old2newprots.txt"
+min_uprots = 0
+NOT_ENOUGH_MAPPINGS = "Not enough mappings"
+few_maps = "few_maps.txt"
 
 compressed = lambda x: x+".tar.bz2"
 download_compressed = lambda x: download+os.path.basename(x)+".tar.bz2"
@@ -95,8 +99,8 @@ def read_params(args):
 
     arg( 'inp', metavar='PROJECT NAME', type=str, default=None, nargs='?', help=
         "The basename of the project corresponding to the name of the input data folder inside \n"
-        "input/. The input data consist of a collection of multifasta files (extension .faa)\n"
-        "containing the proteins in each genome. \n"
+        "input/. The input data consist of a collection of multifasta files (extensions allowed are:\n"
+        ".faa and .fna, or compressed: .faa.bz2 and .fna.bz2) containing the proteins in each genome.\n"
         "If the project already exists, the already executed steps are not re-ran.\n"
         "The results will be stored in a folder with the project basename in output/\n"
         "Multiple project can be generated and they safetely coexists." )
@@ -126,7 +130,7 @@ def read_params(args):
          "If specified, tells blast to use the full dataset of universal proteins\n"
          "[default False, i.e. the small dataset of universal proteins is used]\n")
 
-    # decide if you want perform the .faa cleaning
+    # decide if you want perform the faa cleaning of the .faa
     arg('--faa_cleaning', action='store_true', default=False, help=
          "When specified perform a cleaning on the number and the length of proteins, changin also\n"
          "the proteins id such that are unique among all the genomes."
@@ -142,6 +146,12 @@ def read_params(args):
          "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
          "proteins shorter that this value will be discarded.\n"
          "Default minimum length for each protein is 50.")
+
+    # minimum number of unversal proteins mapped
+    arg('--min_uprots', type=int, default=0, help=
+         "This parameter is used to filter both usearch and tblastn mapping phases.\n"
+         "Genomes that mapp less than this number of universal proteins, will be discarded\n"
+         "Default minimum number of universal proteins mapped is 0 (i.e., no genomes will be omitted).")
 
     arg('-v', '--version', action='store_true', help=
          "Prints the current PhyloPhlAn version and exit\n")
@@ -196,11 +206,14 @@ def clean_all():
     for f in files:
         if not f:
             sb.call(['rm', '-f', f])
+            # os.remove(f)
 
 
 def clean_project( proj ):
     sb.call(["rm","-rf","data/"+proj])
     sb.call(["rm","-rf","output/"+proj])
+    # os.rmdir("data/"+proj)
+    # os.rmdir("output/"+proj)
 
 
 def get_inputs(proj, params):
@@ -212,28 +225,33 @@ def get_inputs(proj, params):
         error("No "+proj+" folder found in input/")
 
     files = list(os.listdir(inp_fol))
-    faa_in = [os.path.splitext(l)[0] for l in files if os.path.splitext(l)[1] == '.faa']
-    fna_in = [os.path.splitext(l)[0] for l in files
-              if (os.path.splitext(l)[1] == '.fna') and (os.path.splitext(l)[0] not in faa_in)]
-
-    if len(faa_in) + len(fna_in) < 1:
-        error("No '.faa' or '.fna' input files found in " + str(inp_fol))
+    faa_in = [l.split('.')[0].strip() for l in files
+        if (len(l.split('.')) == 2 and l.split('.')[1] == 'faa') or
+           (len(l.split('.')) == 3 and l.split('.')[1] == 'faa' and l.split('.')[2] == 'bz2')]
+    fna_in = [l.split('.')[0].strip() for l in files
+        if (l.split('.')[0] not in faa_in) and
+           ((len(l.split('.')) == 2 and l.split('.')[1] == 'fna') or
+            (len(l.split('.')) == 3 and l.split('.')[1] == 'fna' and l.split('.')[2] == 'bz2'))]
+    if not (len(faa_in) + len(fna_in)):
+        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"")
 
     txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len( txt_in ) > 1:
         error( "More than one '.txt' input files found in input/\n"
               "[No more than one txt file (the taxonomy) allowed" )
+
     tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len( tax_in ) > 1:
         error( "More than one '.tax' input files found in input/\n"
               "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
+
     mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len( tax_in ) > 1:
         error( "More than one '.metadata' input files found in input/\n"
               "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
 
     if not os.path.isdir(dat_fol):
-        os.mkdir( dat_fol )
+        os.mkdir(dat_fol)
 
     # clean the faa files by filter on the number of proteins and their minimum length
     if faa_in and params['faa_cleaning']:
@@ -244,14 +262,21 @@ def get_inputs(proj, params):
     if not os.path.exists(dat_fol + ors2prots):
         with open(dat_fol + ors2prots, 'w') as outf:
             for f in faa_in:
-                if params['faa_cleaning']:
-                    prots = sorted([l.split()[0][1:] for l in open(cln_fol + f + '.faa') if l.startswith('>')])
+                fld = inp_fol if not params['faa_cleaning'] else cln_fol
+
+                if os.path.isfile(fld+f+'.faa'):
+                    prots = sorted([l.split()[0][1:] for l in open(fld+f+'.faa') if l.startswith('>')])
                 else:
-                    prots = sorted([l.split()[0][1:] for l in open(inp_fol + f + '.faa') if l.startswith('>')])
+                    with BZ2File(fld+f+'.faa.bz2', 'rU') as inp:
+                        prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
                 outf.write('\t'.join([f] + prots) + '\n')
 
             for f in fna_in:
-                prots = sorted([l.split()[0][1:] for l in open(inp_fol + f + '.fna') if l.startswith('>')])
+                if os.path.isfile(inp_fol+f+'.fna'):
+                    prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
+                else:
+                    with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
+                        prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
                 outf.write('\t'.join([f] + prots) + '\n')
 
     return faa_in, fna_in, txt_in[0] if txt_in else None, tax_in[0] if tax_in else None, mdt_in[0] if mdt_in else None
@@ -288,8 +313,15 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
         msg = ""
         old_id = dict()
 
-        with open(inp_fol+f+'.faa', 'rU') as h_in:
-            records = list(SeqIO.parse(h_in, "fasta"))
+        if os.path.isfile(inp_fol+f+'.faa'):
+            with open(inp_fol+f+'.faa', 'rU') as h_in:
+                records = list(SeqIO.parse(h_in, "fasta"))
+        elif os.path.isfile(inp_fol+f+'.faa.bz2'):
+            with BZ2File(inp_fol+f+'.faa.bz2', 'rU') as h_in:
+                records = list(SeqIO.parse(h_in, "fasta"))
+        else:
+            info(' '.join(["[clean_faa]", "File:", f, "not found (.faa or .faa.bz2)"]) + "\n")
+            continue
 
         if len(records) >= min_num_proteins: # check the number of proteins of the genome
             for protein in records:
@@ -308,12 +340,9 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
 
             # save the old and new mapping
             if f in protein_ids_map:
-                # for t in [(old_id[s.id], s.id) for s in out]:
-                #     protein_ids_map[f].append(t)
-
-                # protein_ids_map[f].extend([(old_id[s.id], s.id) for s in out])
-
-                protein_ids_map[f] += [(old_id[s.id], s.id) for s in out]
+                app = protein_ids_map[f].append()
+                for t in ((old_id[s.id], s.id) for s in out):
+                    app(t)
             else:
                 protein_ids_map[f] = [(old_id[s.id], s.id) for s in out]
 
@@ -336,8 +365,8 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
 
 def exe_usearch(x):
 
-    def screen_usearch_wdb( inpf ):
-        tab = ((l[0].split(' ')[0],l[1].split('_')[1],float(l[-1]))
+    def screen_usearch_wdb(inpf):
+        tab = ((l[0].split(' ')[0], l[1].split('_')[1], float(l[-1]))
                 for l in (ll.strip().split('\t')
                     for ll in open(inpf) ) )
         f2p, f2b, p2b = {}, {}, {}
@@ -352,15 +381,36 @@ def exe_usearch(x):
                         del f2p[ff]
                         del f2b[ff]
             f2p[f], f2b[f], p2b[p] = p, b, b
-        with open(inpf,"w") as outf:
-            for k,v in f2p.items():
-                outf.write( "\t".join([str(k),str(v)]) +"\n" )
+
+        with open(inpf, "w") as outf:
+            # there should be at least min_uprots of universal proteins mapped
+            if len(f2p) >= min_uprots:
+                for k, v in f2p.iteritems():
+                    outf.write("\t".join([str(k), str(v)]) + "\n")
+            else:
+                outf.write("\t".join([inpf[inpf.rfind('/')+1:], NOT_ENOUGH_MAPPINGS]) + "\n")
+
+
 
     try:
-        info( "Starting "+x[5] + "...\n" )
-        sb.call( x )
-        screen_usearch_wdb( x[5] )
-        info( x[5] + " generated!\n" )
+        info("Starting "+x[7][x[7].rfind('/')+1:]+"...\n")
+        to_rm = False
+
+        if not os.path.isfile(x[3]):
+            to_rm = True
+            with open(x[3], 'w') as h_out:
+                with BZ2File(x[3]+'.bz2', 'rU') as h_in:
+                    records = list(SeqIO.parse(h_in, "fasta"))
+
+                SeqIO.write(records, h_out, "fasta")
+
+        sb.call(x)
+
+        if to_rm:
+            os.remove(x[3])
+
+        screen_usearch_wdb(x[7])
+        info(x[7][x[7].rfind('/')+1:]+" generated!\n")
     except OSError:
         error( "OSError: fatal error running usearch." )
         return
@@ -391,7 +441,7 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         #             "-evalue","1e-40"] for i,o in mmap ] # usearch5.2.32
         us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", ppa_udb, "-blast6out", o, "-threads", "1",
             "-evalue", "1e-10", "-maxaccepts", "1", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
-        pool.map_async( exe_usearch, us_cmd )
+        pool.map_async(exe_usearch, us_cmd)
         pool.close()
         pool.join()
         info("All usearch runs performed!\n")
@@ -400,20 +450,47 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         return
     else:
         up2p = collections.defaultdict(list)
+        too_few_maps = set()
+
         for i in inps:
-            for p,up in (l.strip().split('\t')
-                    for l in open(dat_fol+i+'.b6o').readlines()):
-                up2p[up].append(p)
-        with open(dat_fol+up2prots, 'w') as outf:
-            for k,v in up2p.items():
-                outf.write( "\t".join([k]+v) + "\n" )
+            for p, up in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
+                if not up.startswith(NOT_ENOUGH_MAPPINGS):
+                    up2p[up].append(p)
+                else:
+                    too_few_maps |= set([i])
+
+        # write the skipped genomes
+        if too_few_maps:
+            with open(dat_fol+few_maps, 'w') as fout:
+                for e in too_few_maps:
+                    fout.write(e + '\n')
+
+        # write the mapping between universal proteins and proteins mapped
+        if up2p:
+            with open(dat_fol+up2prots, 'w') as outf:
+                for k, v in up2p.iteritems():
+                    outf.write("\t".join([k]+v) + "\n")
 
 
 def blastx_exe(x):
     try:
-        info("Starting " + x[6] + "...\n")
+        info("Starting "+x[6][x[6].rfind('/')+1:]+"...\n")
+        to_rm = False
+
+        if not os.path.isfile(x[2]):
+            to_rm = True
+            with open(x[2], 'w') as h_out:
+                with BZ2File(x[2]+'.bz2', 'rU') as h_in:
+                    records = list(SeqIO.parse(h_in, "fasta"))
+
+                SeqIO.write(records, h_out, "fasta")
+
         sb.call(x)
-        info(x[6] + " generated!\n")
+
+        if to_rm:
+            os.remove(x[2])
+
+        info(x[6][x[6].rfind('/')+1:]+" generated!\n")
     except OSError:
         error("OSError: fatal error running tblastn.")
         return
@@ -451,9 +528,7 @@ def blast(inps, nproc, proj, blast_full=False):
         pool.join()
         info('All tblastn runs performed!\n')
 
-    if os.path.exists(dat_fol+up2prots):
-        return
-    else:
+    if not os.path.exists(dat_fol+up2prots):
         dic = collections.defaultdict(list)
         uniq = set()
 
@@ -480,10 +555,19 @@ def blast(inps, nproc, proj, blast_full=False):
 
         updic = collections.defaultdict(list)
         p2t = dict()
+        too_few_maps = set()
 
         # open each file
         for k, v in dic.iteritems():
-            with open(inp_fol+k+'.fna', 'rU') as f:
+            # there should be at least min_uprots of universal proteins mapped
+            if len(v) >= min_uprots:
+                f = None
+
+                if os.path.isfile(inp_fol+k+'.fna'):
+                    f = open(inp_fol+k+'.fna', 'rU')
+                else:
+                    f = BZ2File(inp_fol+k+'.fna.bz2', 'rU')
+
                 # parse the fasta (nucleotides) file
                 for record in SeqIO.parse(f, 'fasta'):
                     # look for the contigs id
@@ -505,24 +589,36 @@ def blast(inps, nproc, proj, blast_full=False):
                             updic[kk].append(SeqRecord(aminoacids, id=seqid, description=''))
                             p2t[seqid] = k # save map from seqid to genome
 
-        # write the partial mapping of proteins into genomes
-        with open('data/'+proj+'/'+p2t_map, 'w') as f:
-            for k, v in p2t.iteritems():
-                f.write(str(k) + '\t' + str(v) + '\n')
+                f.close()
+            else:
+                too_few_maps |= set([k])
 
-        # write mapping file dat_fol+up2prots
-        with open(dat_fol+up2prots, 'w') as f:
-            for k in sorted(updic):
-                f.write('\t'.join([k] + [sr.id for sr in updic[k]]) + '\n')
+        # write the skipped genomes
+        if too_few_maps:
+            with open(dat_fol+few_maps, 'w') as fout:
+                for e in too_few_maps:
+                    fout.write(e + '\n')
 
-        # write a fasta file for each up
-        for k, v in updic.iteritems():
-            with open(dat_fol+k+'.faa', 'w') as f:
-                SeqIO.write(v, f, 'fasta')
+        if p2t:
+            # write the partial mapping of proteins into genomes
+            with open('data/'+proj+'/'+p2t_map, 'w') as f:
+                for k, v in p2t.iteritems():
+                    f.write(str(k) + '\t' + str(v) + '\n')
 
-        # write pickle file
-        with open(dat_fol+ups2faa_pkl, 'w') as f:
-            pickle.dump([k for k, _ in updic.iteritems()], f, pickle.HIGHEST_PROTOCOL)
+        if updic:
+            # write mapping file dat_fol+up2prots
+            with open(dat_fol+up2prots, 'w') as f:
+                for k in sorted(updic):
+                    f.write('\t'.join([k] + [sr.id for sr in updic[k]]) + '\n')
+
+            # write a fasta file for each up
+            for k, v in updic.iteritems():
+                with open(dat_fol+k+'.faa', 'w') as f:
+                    SeqIO.write(v, f, 'fasta')
+
+            # write pickle file
+            with open(dat_fol+ups2faa_pkl, 'w') as f:
+                pickle.dump([k for k, _ in updic.iteritems()], f, pickle.HIGHEST_PROTOCOL)
 
 
 def gens2prots(inps, proj, faa_cleaning):
@@ -547,15 +643,23 @@ def gens2prots(inps, proj, faa_cleaning):
     ups2faa = collections.defaultdict( set )
     e = None
     for i in inps:
-        with open(inp_fol+i+".faa", 'U') as inp:
-            for l in inp:
-                if l.startswith(">"):
-                    if e in prots2ups:
-                        ups2faa[prots2ups[e]].add(s+"\n")
-                    e, s = l.strip().split()[0][1:], ""
-                s += l
-            if e in prots2ups:
-                ups2faa[prots2ups[e]].add(s+"\n")
+        inp = None
+
+        if os.path.isfile(inp_fol+i+'.faa'):
+            inp = open(inp_fol+i+'.faa', 'rU')
+        else:
+            inp = BZ2File(inp_fol+i+'.faa.bz2', 'rU')
+
+        for l in inp:
+            if l.startswith(">"):
+                if e in prots2ups:
+                    ups2faa[prots2ups[e]].add(s+"\n")
+                e, s = l.strip().split()[0][1:], ""
+            s += l
+        if e in prots2ups:
+            ups2faa[prots2ups[e]].add(s+"\n")
+
+        inp.close()
 
     for k,v in ups2faa.items():
         with open(dat_fol+k+'.faa', 'w') as outf:
@@ -733,8 +837,10 @@ def aln_merge(proj, integrate):
             else:
                 up2p[l[0]] = set(l[1:])
 
+    genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')]
     t2p = dict([(l[0],set(l[1:])) for l in
-                (ll.strip().split('\t') for ll in open(dat_fol+ors2prots))])
+                (ll.strip().split('\t') for ll in open(dat_fol+ors2prots)) if l[0] not in genomes_to_skip])
+
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_ors2prots)):
             t2p[l[0]] = set(l[1:])
@@ -1035,18 +1141,10 @@ def merge_usearch_blast(inps, proj):
         tblastn_files = [os.path.normcase(f) for f in os.listdir(tblastn_fol)]
 
     # check if I have already copied files in dat_fol folder
-    dat_fol_num = len(os.listdir(dat_fol))
+    dat_fol_num = len(glob(dat_fol+'*.b6o'))
 
-    if usearch_files and tblastn_files:
-        dat_fol_num -= 6 # bad, need to be fixed!
-    elif usearch_files and not tblastn_files:
-        dat_fol_num -= 4 # bad, need to be fixed!
-    elif tblastn_files and not usearch_files:
-        dat_fol_num -= 3 # bad, need to be fixed!
-    else:
-        error("Merge phase, no usearch and/or tbalstn files found!")
-
-    if dat_fol_num: # if it is NON-zero I already copied
+    if dat_fol_num == len(inps):
+        info("Usearch and tblastn have been already merged!\n")
         return
 
     if usearch_files and not tblastn_files: # just usearch ran -> NO MERGE, just copy
@@ -1056,12 +1154,23 @@ def merge_usearch_blast(inps, proj):
         for f in tblastn_files:
             shutil.copy2(tblastn_fol+f, dat_fol+f)
     elif usearch_files and tblastn_files: # usearch and tblastn ran -> MERGE!
-        # copy .b6o files
-        for f in [ff for ff in usearch_files if '.b6o' in ff]:
-            shutil.copy2(usearch_fol+f, dat_fol+f)
+        # merge few_maps files
+        too_few_maps = []
 
-        for f in [ff for ff in tblastn_files if '.b6o' in ff]:
-            shutil.copy2(tblastn_fol+f, dat_fol+f)
+        if os.path.isfile(usearch_fol+few_maps) and os.path.isfile(tblastn_fol+few_maps):
+            too_few_maps = [s.strip() for s in open(usearch_fol+few_maps, 'r')]
+            too_few_maps += [s.strip() for s in open(tblastn_fol+few_maps, 'r')]
+
+            with open(dat_fol+few_maps, 'w') as f:
+                f.write('\n'.join(too_few_maps) + '\n')
+        elif os.path.isfile(usearch_fol+few_maps) and not os.path.isfile(tblastn_fol+few_maps):
+            shutil.copy2(usearch_fol+few_maps, dat_fol+few_maps)
+        elif not os.path.isfile(usearch_fol+few_maps) and os.path.isfile(tblastn_fol+few_maps):
+            shutil.copy2(tblastn_fol+few_maps, dat_fol+few_maps)
+        else:
+            with open(dat_fol+few_maps, 'w'):
+                pass
+            # error("Merge phase, neither usearch nor tblastn have the \""+few_maps+"\" file")
 
         # merge .faa files
         sett = list(set([f for f in usearch_files if '.faa' in f]) & set([f for f in tblastn_files if '.faa' in f]))
@@ -1077,45 +1186,61 @@ def merge_usearch_blast(inps, proj):
             with open(dat_fol+f, 'w') as ff:
                 SeqIO.write(records, ff, 'fasta')
 
-        for f in usearch_files:
-            if f not in sett:
-                shutil.copy2(usearch_fol+f, dat_fol+f)
-
-        for f in tblastn_files:
-            if f not in sett:
-                shutil.copy2(tblastn_fol+f, dat_fol+f)
-
         # merge up2prots files
-        up2prot = collections.defaultdict(list)
-        with open(usearch_fol+up2prots, 'r') as f:
-            for row in f:
-                up = row.split('\t')[0].strip()
-                prot = [s.strip() for s in row.split('\t')[1:]]
-                up2prot[up] = prot
+        if os.path.isfile(usearch_fol+up2prots) and os.path.isfile(tblastn_fol+up2prots):
+            up2prot = collections.defaultdict(list)
 
-        with open(tblastn_fol+up2prots, 'r') as f:
-            for row in f:
-                up = row.split('\t')[0].strip()
-                prot = [s.strip() for s in row.split('\t')[1:]]
-
-                if up in up2prot:
-                    up2prot[up] += prot
-                else:
+            with open(usearch_fol+up2prots, 'r') as f:
+                for row in f:
+                    up = row.split('\t')[0].strip()
+                    prot = [s.strip() for s in row.split('\t')[1:]]
                     up2prot[up] = prot
 
-        with open(dat_fol+up2prots, 'w') as f:
-            for k, v in up2prot.iteritems():
-                f.write('\t'.join([k] + v) + '\n')
+            with open(tblastn_fol+up2prots, 'r') as f:
+                for row in f:
+                    up = row.split('\t')[0].strip()
+                    prot = [s.strip() for s in row.split('\t')[1:]]
+
+                    if up in up2prot:
+                        up2prot[up] += prot
+                    else:
+                        up2prot[up] = prot
+
+            with open(dat_fol+up2prots, 'w') as f:
+                for k, v in up2prot.iteritems():
+                    f.write('\t'.join([k] + v) + '\n')
+        elif os.path.isfile(usearch_fol+up2prots) and not os.path.isfile(tblastn_fol+up2prots):
+            shutil.copy2(usearch_fol+up2prots, dat_fol+up2prots)
+        elif not os.path.isfile(usearch_fol+up2prots) and os.path.isfile(tblastn_fol+up2prots):
+            shutil.copy2(tblastn_fol+up2prots, dat_fol+up2prots)
+        else:
+            error("Merge phase, neither usearch nor tblastn have the \""+up2prots+"\" file")
 
         # merge ups2faa_pkl files
-        with open(usearch_fol+ups2faa_pkl, 'r') as f:
-            pckl = set(pickle.load(f))
+        if os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
+            with open(usearch_fol+ups2faa_pkl, 'r') as f:
+                pckl = set(pickle.load(f))
 
-        with open(tblastn_fol+ups2faa_pkl, 'r') as f:
-            pckl |= set(pickle.load(f))
+            with open(tblastn_fol+ups2faa_pkl, 'r') as f:
+                pckl |= set(pickle.load(f))
 
-        with open(dat_fol+ups2faa_pkl, 'w') as f:
-            pickle.dump(list(pckl), f, pickle.HIGHEST_PROTOCOL)
+            with open(dat_fol+ups2faa_pkl, 'w') as f:
+                pickle.dump(list(pckl), f, pickle.HIGHEST_PROTOCOL)
+        elif os.path.isfile(usearch_fol+ups2faa_pkl) and not os.path.isfile(tblastn_fol+ups2faa_pkl):
+            shutil.copy2(usearch_fol+ups2faa_pkl, dat_fol+ups2faa_pkl)
+        elif not os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
+            shutil.copy2(tblastn_fol+ups2faa_pkl, dat_fol+ups2faa_pkl)
+        else:
+            error("Merge phase, neither usearch nor tblastn have the \""+ups2faa_pkl+"\" file")
+
+        # copy all the rest
+        not_in = list(sett)+[up2prots, ups2faa_pkl, few_maps]+[s+'.b6o' for s in too_few_maps]
+
+        for f in (z for z in usearch_files if (z not in sett) and (z not in not_in)):
+            shutil.copy2(usearch_fol+f, dat_fol+f)
+
+        for f in (z for z in tblastn_files if (z not in sett) and (z not in not_in)):
+            shutil.copy2(tblastn_fol+f, dat_fol+f)
     else: # something very bad happened!
         error("Merge phase, no files found!")
 
@@ -1157,6 +1282,10 @@ if __name__ == '__main__':
         error("No taxonomy file found for the taxonomic analysis")
 
     check_inp(faa_in+fna_in)
+
+    if pars['min_uprots']:
+        min_uprots = pars['min_uprots']
+
     t0 = time.time()
 
     if (pars['nproc'] > 1) and faa_in and fna_in:
@@ -1165,7 +1294,7 @@ if __name__ == '__main__':
         usearch_cpus = int(round(len(faa_in) * (cores/tasks))) + 1
         blast_cpus = int(round(len(fna_in) * (cores/tasks))) + 1
 
-     # balancing cpu load
+        # balancing cpu load
         while (usearch_cpus + blast_cpus) > cores:
             if usearch_cpus > 1:
                 usearch_cpus -= 1
@@ -1181,7 +1310,7 @@ if __name__ == '__main__':
             surplus = usearch_cpus - len(faa_in)
             usearch_cpus -= surplus
             blast_cpus += surplus
-     # balancing cpu load
+        # balancing cpu load
 
         usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn, pars['faa_cleaning']))
         usearch_thr.start()
