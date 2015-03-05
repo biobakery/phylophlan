@@ -29,6 +29,7 @@ import taxcuration as taxc
 import shutil
 import time
 from bz2 import BZ2File
+from tempfile import NamedTemporaryFile
 # from collections import Counter # works only with python >= 2.7
 
 
@@ -42,7 +43,6 @@ ppa_tax = "data/ppafull.tax.txt"
 ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
-# ppa_wdb = "data/ppa.wdb"
 ppa_udb = "data/ppa.udb"
 up2prots = "up2prots.txt"
 ors2prots = "orgs2prots.txt"
@@ -67,19 +67,21 @@ def info(s):
     sys.stdout.flush()
 
 
-def error(s):
+def error(s, exit=False, exit_value=1):
     sys.stderr.write('[E] ' + str(s) + '\n')
-    sys.stderr.write('Exiting... \n')
-    sys.exit(1)
+    if exit: sys.stderr.write('Exiting...\n')
+    sys.stderr.flush()
+    if exit: sys.exit(exit_value)
 
 
 def dep_checks():
     for prog in ["FastTree", "usearch", "muscle", "tblastn"]:
         try:
             with open(os.devnull, 'w') as devnull:
-                sb.call([prog], stdout=devnull, stderr=devnull)
+                t = sb.Popen([prog], stdout=devnull, stderr=devnull)
         except OSError:
-            error(prog+" not found or not in system path")
+            t.kill()
+            error(prog+" not found or not in system path", exit=True)
 
 
 def read_params(args):
@@ -140,18 +142,18 @@ def read_params(args):
     arg('--min_num_proteins', type=int, default=100, help=
          "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
          "genomes with less than this number of proteins will be discarded.\n"
-         "Default minimum number of proteins is 100.")
+         "[default minimum number of proteins is 100]\n")
 
     arg('--min_len_protein', type=int, default=50, help=
          "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
          "proteins shorter that this value will be discarded.\n"
-         "Default minimum length for each protein is 50.")
+         "[default minimum length for each protein is 50]\n")
 
     # minimum number of unversal proteins mapped
     arg('--min_uprots', type=int, default=0, help=
          "This parameter is used to filter both usearch and tblastn mapping phases.\n"
          "Genomes that mapp less than this number of universal proteins, will be discarded\n"
-         "Default minimum number of universal proteins mapped is 0 (i.e., no genomes will be omitted).")
+         "[default minimum number of universal proteins mapped is 0, i.e., no genomes will be omitted]\n")
 
     arg('-v', '--version', action='store_true', help=
          "Prints the current PhyloPhlAn version and exit\n")
@@ -183,13 +185,8 @@ def init():
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
 
-    # if not os.path.exists( ppa_wdb ):
     if not os.path.exists(ppa_udb):
-        # info("Generating "+ppa_wdb+" (usearch indexed DB)... ")
         info("Generating "+ppa_udb+" (usearch indexed DB)...")
-        # sb.call( ["usearch","-quiet",
-        #           "--makewdb",ppa_fna,
-        #           "--output",ppa_wdb]) # usearch5.2.32
         sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1517
         info("Done!\n")
 
@@ -202,18 +199,28 @@ def clean_all():
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.txt')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.score')
     files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
+    not_rm = []
 
     for f in files:
-        if not f:
-            sb.call(['rm', '-f', f])
-            # os.remove(f)
+        if os.path.isfile(f):
+            os.remove(f)
+        else:
+            not_rm.append(f)
+
+    if not_rm:
+        msg  = "The following "
+
+        if len(not_rm) > 1:
+            msg += "files were not removed: "
+        else:
+            msg += "file was not removed: "
+
+        info(msg + ', '.join(not_rm) + "\n")
 
 
-def clean_project( proj ):
-    sb.call(["rm","-rf","data/"+proj])
-    sb.call(["rm","-rf","output/"+proj])
-    # os.rmdir("data/"+proj)
-    # os.rmdir("output/"+proj)
+def clean_project(proj):
+    if os.path.exists("data/"+proj): shutil.rmtree("data/"+proj)
+    if os.path.exists("output/"+proj): shutil.rmtree("output/"+proj)
 
 
 def get_inputs(proj, params):
@@ -222,7 +229,7 @@ def get_inputs(proj, params):
     dat_fol = "data/"+proj+"/"
 
     if not os.path.isdir(inp_fol):
-        error("No "+proj+" folder found in input/")
+        error("No "+proj+" folder found in input/", exit=True)
 
     files = list(os.listdir(inp_fol))
     faa_in = [l.split('.')[0].strip() for l in files
@@ -233,22 +240,22 @@ def get_inputs(proj, params):
            ((len(l.split('.')) == 2 and l.split('.')[1] == 'fna') or
             (len(l.split('.')) == 3 and l.split('.')[1] == 'fna' and l.split('.')[2] == 'bz2'))]
     if not (len(faa_in) + len(fna_in)):
-        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"")
+        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"", exit=True)
 
     txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len( txt_in ) > 1:
-        error( "More than one '.txt' input files found in input/\n"
-              "[No more than one txt file (the taxonomy) allowed" )
+        error("More than one '.txt' input files found in input/\n"
+              "[No more than one txt file (the taxonomy) allowed", exit=True)
 
     tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len( tax_in ) > 1:
-        error( "More than one '.tax' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
+        error("More than one '.tax' input files found in input/\n"
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", exit=True)
 
     mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len( tax_in ) > 1:
-        error( "More than one '.metadata' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed" )
+        error("More than one '.metadata' input files found in input/\n"
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", exit=True)
 
     if not os.path.isdir(dat_fol):
         os.mkdir(dat_fol)
@@ -267,6 +274,7 @@ def get_inputs(proj, params):
                 if os.path.isfile(fld+f+'.faa'):
                     prots = sorted([l.split()[0][1:] for l in open(fld+f+'.faa') if l.startswith('>')])
                 else:
+                    # NamedTemporaryFile?
                     with BZ2File(fld+f+'.faa.bz2', 'rU') as inp:
                         prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
                 outf.write('\t'.join([f] + prots) + '\n')
@@ -275,6 +283,7 @@ def get_inputs(proj, params):
                 if os.path.isfile(inp_fol+f+'.fna'):
                     prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
                 else:
+                    # NamedTemporaryFile?
                     with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
                         prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
                 outf.write('\t'.join([f] + prots) + '\n')
@@ -287,13 +296,13 @@ def check_inp(inps):
 
     if init_dig:
         error("The following genome IDs start with a digit\n" + "\n".join(init_dig) +
-             "\nPlease rename accordingly the corresponding input file names")
+             "\nPlease rename accordingly the corresponding input file names", exit=True)
 
     ppa_ids = [l[1:] for l in open(ppa_aln) if l.startswith('>')]
     init_dup = [l for l in inps if l in ppa_ids]
 
     if init_dup:
-        error("The following genome IDs are already in PhyloPhlAn\n" + "\n".join(init_dig))
+        error("The following genome IDs are already in PhyloPhlAn\n" + "\n".join(init_dig), exit=True)
 
 
 def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
@@ -363,6 +372,14 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
     return protein_ids_map.keys()
 
 
+def initt(terminating_):
+    # This places terminating in the global namespace of the worker subprocesses.
+    # This allows the worker function to access `terminating` even though it is
+    # not passed as an argument to the function.
+    global terminating
+    terminating = terminating_
+
+
 def exe_usearch(x):
 
     def screen_usearch_wdb(inpf):
@@ -381,7 +398,6 @@ def exe_usearch(x):
                         del f2p[ff]
                         del f2b[ff]
             f2p[f], f2b[f], p2b[p] = p, b, b
-
         with open(inpf, "w") as outf:
             # there should be at least min_uprots of universal proteins mapped
             if len(f2p) >= min_uprots:
@@ -391,41 +407,47 @@ def exe_usearch(x):
                 outf.write("\t".join([inpf[inpf.rfind('/')+1:], NOT_ENOUGH_MAPPINGS]) + "\n")
 
 
+    if not terminating.is_set():
+        try:
+            info("Starting "+x[7][x[7].rfind('/')+1:]+"...\n")
+            tmp_faa = None
+            t = None
 
-    try:
-        info("Starting "+x[7][x[7].rfind('/')+1:]+"...\n")
-        to_rm = False
+            if not os.path.isfile(x[3]):
+                tmp_faa = NamedTemporaryFile(suffix='.faa', prefix=x[3][x[3].rfind('/')+1:x[3].find('.')],
+                    dir=x[3][:x[3].rfind('/')+1])
+                with open(tmp_faa.name, 'w') as h_out:
+                    with BZ2File(x[3]+'.bz2', 'rU') as h_in:
+                        records = list(SeqIO.parse(h_in, "fasta"))
 
-        if not os.path.isfile(x[3]):
-            to_rm = True
-            with open(x[3], 'w') as h_out:
-                with BZ2File(x[3]+'.bz2', 'rU') as h_in:
-                    records = list(SeqIO.parse(h_in, "fasta"))
+                    SeqIO.write(records, h_out, "fasta")
 
-                SeqIO.write(records, h_out, "fasta")
+                cmd = x[:3] + [tmp_faa.name] + x[4:]
+            else:
+                cmd = x
 
-        sb.call(x)
+            t = sb.Popen(cmd)
+            t.wait()
+            screen_usearch_wdb(x[7])
+            if tmp_faa: tmp_faa.close()
+            info(x[7][x[7].rfind('/')+1:]+" generated!\n")
+        except:
+            if t: t.kill()
+            if tmp_faa: tmp_faa.close()
+            terminating.set()
+            error(' '.join(x))
+            return
+    else:
+        terminating.set()
 
-        if to_rm:
-            os.remove(x[3])
-
-        screen_usearch_wdb(x[7])
-        info(x[7][x[7].rfind('/')+1:]+" generated!\n")
-    except OSError:
-        error( "OSError: fatal error running usearch." )
-        return
-    except ValueError:
-        error( "ValueError: fatal error running usearch." )
-        return
-    except KeyboardInterrupt:
-        error( "KeyboardInterrupt: usearch process interrupted." )
-        return
+    return
 
 
 def faa2ppafaa(inps, nproc, proj, faa_cleaning):
     inp_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
     dat_fol = "data/"+proj+"/usearch/"
-    pool = mp.Pool( nproc )
+    terminating = mp.Event()
+    pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
     mmap = [(inp_fol+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
 
     if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
@@ -434,17 +456,20 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         info("All usearch runs already performed!\n")
     else:
         info("Looking for PhyloPhlAn proteins in input faa files\n")
-        # us_cmd = [ ["usearch","-quiet",
-        #             "-wdb",ppa_wdb,
-        #             "-blast6out",o,
-        #             "-query",i,
-        #             "-evalue","1e-40"] for i,o in mmap ] # usearch5.2.32
         us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", ppa_udb, "-blast6out", o, "-threads", "1",
             "-evalue", "1e-10", "-maxaccepts", "1", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
-        pool.map_async(exe_usearch, us_cmd)
-        pool.close()
-        pool.join()
-        info("All usearch runs performed!\n")
+
+        try:
+            pool.map(exe_usearch, us_cmd)
+            pool.close()
+        except:
+            pool.terminate()
+            pool.join()
+            error("Quitting faa2ppafaa()")
+            return
+
+    pool.join()
+    info("All usearch runs performed!\n")
 
     if os.path.exists(dat_fol+up2prots):
         return
@@ -473,39 +498,48 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
 
 
 def blastx_exe(x):
-    try:
-        info("Starting "+x[6][x[6].rfind('/')+1:]+"...\n")
-        to_rm = False
+    if not terminating.is_set():
+        try:
+            info("Starting "+x[6][x[6].rfind('/')+1:]+"...\n")
+            tmp_fna = None
+            t = None
 
-        if not os.path.isfile(x[2]):
-            to_rm = True
-            with open(x[2], 'w') as h_out:
-                with BZ2File(x[2]+'.bz2', 'rU') as h_in:
-                    records = list(SeqIO.parse(h_in, "fasta"))
+            if not os.path.isfile(x[2]):
+                tmp_fna = NamedTemporaryFile(suffix='.fna', prefix=x[2][x[2].rfind('/')+1:x[2].find('.')],
+                    dir=x[2][:x[2].rfind('/')+1])
+                with open(tmp_fna.name, 'w') as h_out:
+                    with BZ2File(x[2]+'.bz2', 'rU') as h_in:
+                        records = list(SeqIO.parse(h_in, "fasta"))
 
-                SeqIO.write(records, h_out, "fasta")
+                    SeqIO.write(records, h_out, "fasta")
 
-        sb.call(x)
+                cmd = x[:2] + [tmp_fna.name] + x[3:]
+            else:
+                cmd = x
 
-        if to_rm:
-            os.remove(x[2])
+            with open(os.devnull, 'w') as devnull:
+                t = sb.Popen(cmd, stderr=devnull) # tblastn quiet homemade!
 
-        info(x[6][x[6].rfind('/')+1:]+" generated!\n")
-    except OSError:
-        error("OSError: fatal error running tblastn.")
-        return
-    except ValueError:
-        error("ValueError: fatal error running tblastn.")
-        return
-    except KeyboardInterrupt:
-        error("KeyboardInterrupt: tblastn process interrupted.")
-        return
+            t.wait()
+            if tmp_fna: tmp_fna.close()
+            info(x[6][x[6].rfind('/')+1:]+" generated!\n")
+        except:
+            if t: t.kill()
+            if tmp_fna: tmp_fna.close()
+            terminating.set()
+            error(' '.join(x))
+            return
+    else:
+        terminating.set()
+
+    return
 
 
 def blast(inps, nproc, proj, blast_full=False):
     inp_fol = 'input/' + proj + '/'
     dat_fol = 'data/' + proj + '/tblastn/'
-    pool = mp.Pool(nproc)
+    terminating = mp.Event()
+    pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
     mmap = [(inp_fol+i+'.fna', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
 
     if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
@@ -523,8 +557,15 @@ def blast(inps, nproc, proj, blast_full=False):
         us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-40']
                   for i, o in mmap]
 
-        pool.map_async(blastx_exe, us_cmd)
-        pool.close()
+        try:
+            pool.map(blastx_exe, us_cmd)
+            pool.close()
+        except:
+            pool.terminate()
+            pool.join()
+            error("Quitting blast()")
+            return
+
         pool.join()
         info('All tblastn runs performed!\n')
 
@@ -638,7 +679,7 @@ def gens2prots(inps, proj, faa_cleaning):
     for k,v in ups2prots.items():
         for vv in v:
             if vv in prots2ups:
-                error(str(vv) + " already in dict!")
+                error(str(vv) + " already in dict!", exit=True)
             prots2ups[vv] = k
     ups2faa = collections.defaultdict( set )
     e = None
@@ -715,32 +756,35 @@ def aln_subsample( inp_f, out_f, scores, unknown_fraction, namn ):
 
 
 def exe_muscle(x):
-    try:
-        if len(x) < 13:
-            info( "Running muscle on "+x[3] + "...\n" )
-        else:
-            info( "Running muscle on "+x[4] + " and "+x[6]+"...\n" )
-        sb.call( x[:-2] )
-        pn = max( int( max( int((400.0-int(x[-1][1:]))*30.0/400.0),1)**2 / 30.0), 3)
-        if len(x) < 13:
-            aln_subsample( x[5], x[-2], x[7], 0.1, pn )
-            info( x[-2] + " generated (from "+x[3]+")!\n" )
-        else:
-            aln_subsample( x[8], x[-2], x[10], 0.1, pn )
-            info( x[-2] + " generated (from "+x[4]+" and "+x[6]+")!\n" )
+    if not terminating.is_set():
+        try:
+            if len(x) < 13:
+                info("Running muscle on "+x[3] + "...\n")
+            else:
+                info("Running muscle on "+x[4] + " and "+x[6]+"...\n")
 
-    except OSError, e:
-        error( "OSError: fatal error running muscle." )
-        raise e
-    except ValueError, e:
-        error( "ValueError: fatal error running muscle." )
-        raise e
-    except KeyboardInterrupt, e:
-        error( "KeyboardInterrupt: usearch process muscle." )
-        raise e
-    except Exception, e:
-        error( e )
-        raise e
+            t = None
+            with open(os.devnull, 'w') as devnull:
+                t = sb.Popen(x[:-2], stderr=devnull)
+
+            t.wait()
+            pn = max(int(max(int((400.0-int(x[-1][1:]))*30.0/400.0), 1)**2 /30.0), 3)
+
+            if len(x) < 13:
+                aln_subsample(x[5], x[-2], x[7], 0.1, pn)
+                info(x[-2] + " generated (from "+x[3]+")!\n")
+            else:
+                aln_subsample(x[8], x[-2], x[10], 0.1, pn)
+                info(x[-2] + " generated (from "+x[4]+" and "+x[6]+")!\n")
+        except:
+            if t: t.kill()
+            terminating.set()
+            error(' '.join(x))
+            return
+    else:
+        terminating.set()
+
+    return
 
 
 def faa2aln( nproc, proj, integrate = False ):
@@ -765,11 +809,21 @@ def faa2aln( nproc, proj, integrate = False ):
         if us_cmd:
             info("Looking for PhyloPhlAn proteins to align\n")
             info(str(len(us_cmd))+" alignments to be performed\n")
-            pool = mp.Pool( nproc )
-            pool.map_async( exe_muscle, us_cmd )
-            pool.close()
+            terminating = mp.Event()
+            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+
+            try:
+                pool.map(exe_muscle, us_cmd)
+                pool.close()
+            except:
+                pool.terminate()
+                pool.join()
+                error("Quitting faa2aln()")
+                return
+
             pool.join()
             info("All alignments performed!\n")
+
     if integrate:
         us_cmd = [ ["muscle","-quiet",
                     "-profile",
@@ -787,9 +841,18 @@ def faa2aln( nproc, proj, integrate = False ):
         if us_cmd:
             info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
             info(str(len(us_cmd))+" alignments to be merged\n")
-            pool = mp.Pool( nproc )
-            pool.map_async( exe_muscle, us_cmd )
-            pool.close()
+            terminating = mp.Event()
+            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+
+            try:
+                pool.map(exe_muscle, us_cmd)
+                pool.close()
+            except:
+                pool.terminate()
+                pool.join()
+                error("Quitting faa2aln() - integrate")
+                return
+
             pool.join()
             info("All alignments already merged with PhyloPhlAn alignments!\n")
 
@@ -815,7 +878,7 @@ def aln_merge(proj, integrate):
     dat_fol = "data/"+proj+"/"
     outf = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
 
-    if os.path.exists( outf ):
+    if os.path.exists(outf):
         info("All alignments already merged!\n")
         return
 
@@ -837,7 +900,7 @@ def aln_merge(proj, integrate):
             else:
                 up2p[l[0]] = set(l[1:])
 
-    genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')]
+    genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')] if os.path.isfile(dat_fol+few_maps) else []
     t2p = dict([(l[0],set(l[1:])) for l in
                 (ll.strip().split('\t') for ll in open(dat_fol+ors2prots)) if l[0] not in genomes_to_skip])
 
@@ -871,32 +934,6 @@ def aln_merge(proj, integrate):
                 aln[g] += g2aln[g]
             else: # otherwise add gaps
                 aln[g] += SeqRecord(Seq('-' * lenal), id=str(g))
-
-###########################################################
-    # faas = []
-    # faas = SeqIO.to_dict( faas )
-    # aln = dict([(t,"") for t in t2p.keys()])
-    # salnk = sorted(aln.keys())
-
-    # for up,pts in sorted(up2p.items(),key=lambda x:x[0]):
-    #     toadd, ll = [], -1
-    #     for k in salnk:
-    #         ppp = []
-    #         for x in list(t2p[k]):
-    #             for y in list(pts):
-    #                 if str(x) in str(y):
-    #                     ppp += [y]
-    #         if ppp:
-    #             if ll < 0:
-    #                 ll = len( faas[ppp[0]] )
-    #             aln[k] += faas[ppp[0]]
-    #         else:
-    #             toadd.append(k)
-    #     for k in toadd:
-    #         ss = SeqRecord( Seq("".join( '-' * ll )) )
-    #         ss.id = k
-    #         aln[k] += ss
-###########################################################
 
     out_faas = []
     for k, v in aln.iteritems():
@@ -1214,7 +1251,7 @@ def merge_usearch_blast(inps, proj):
         elif not os.path.isfile(usearch_fol+up2prots) and os.path.isfile(tblastn_fol+up2prots):
             shutil.copy2(tblastn_fol+up2prots, dat_fol+up2prots)
         else:
-            error("Merge phase, neither usearch nor tblastn have the \""+up2prots+"\" file")
+            error("Merge phase, neither usearch nor tblastn have the \""+up2prots+"\" file", exit=True)
 
         # merge ups2faa_pkl files
         if os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
@@ -1231,7 +1268,7 @@ def merge_usearch_blast(inps, proj):
         elif not os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
             shutil.copy2(tblastn_fol+ups2faa_pkl, dat_fol+ups2faa_pkl)
         else:
-            error("Merge phase, neither usearch nor tblastn have the \""+ups2faa_pkl+"\" file")
+            error("Merge phase, neither usearch nor tblastn have the \""+ups2faa_pkl+"\" file", exit=True)
 
         # copy all the rest
         not_in = list(sett)+[up2prots, ups2faa_pkl, few_maps]+[s+'.b6o' for s in too_few_maps]
@@ -1242,7 +1279,7 @@ def merge_usearch_blast(inps, proj):
         for f in (z for z in tblastn_files if (z not in sett) and (z not in not_in)):
             shutil.copy2(tblastn_fol+f, dat_fol+f)
     else: # something very bad happened!
-        error("Merge phase, no files found!")
+        error("Merge phase, no files found!", exit=True)
 
 
 if __name__ == '__main__':
@@ -1253,14 +1290,11 @@ if __name__ == '__main__':
         info("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
         sys.exit(0)
 
-    if projn is None:
-        error("Project name not provided.")
-
     if pars['cleanall']:
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
                 'user_tree' in pars and pars['user_tree']) or (
                         'integrate' in pars and pars['integrate']):
-            error("--cleanall is in conflict with -t, -u, and -i")
+            error("--cleanall is in conflict with -t, -u, and -i", exit=True)
         else:
             clean_all()
         sys.exit(0)
@@ -1269,66 +1303,88 @@ if __name__ == '__main__':
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or (
                 'user_tree' in pars and pars['user_tree']) or (
                         'integrate' in pars and pars['integrate']):
-            error("--cleanall is in conflict with -t, -u, and -i")
+            error("-c/--clean is in conflict with -t, -u, and -i", exit=True)
         else:
+            info("Cleaning project \""+projn+"\"... ")
             clean_project(projn)
+            info("Done!\n")
         sys.exit(0)
+
+    if not projn:
+        error("Project name not provided.", exit=True)
 
     dep_checks()
     init()
+    info("Loading input files...\n")
+    t0 = time.time()
     faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn, pars)
+    info(str(len(faa_in)+len(fna_in))+" input files loaded in "+str(int(time.time()-t0))+" s!\n")
 
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
-        error("No taxonomy file found for the taxonomic analysis")
+        error("No taxonomy file found for the taxonomic analysis", exit=True)
 
+    info("Checking input files... ")
+    t0 = time.time()
     check_inp(faa_in+fna_in)
+    info("Input files checked in "+str(int(time.time()-t0))+" s!\n")
 
     if pars['min_uprots']:
         min_uprots = pars['min_uprots']
 
     t0 = time.time()
 
-    if (pars['nproc'] > 1) and faa_in and fna_in:
-        cores = float(pars['nproc'])
-        tasks = len(faa_in) + len(fna_in)
-        usearch_cpus = int(round(len(faa_in) * (cores/tasks))) + 1
-        blast_cpus = int(round(len(fna_in) * (cores/tasks))) + 1
+    # if (pars['nproc'] > (len(faa_in)+len(fna_in))) or ((pars['nproc'] > len(faa_in)) or (pars['nproc'] > len(fna_in))):
+    #     tasks = float(len(faa_in)+len(fna_in))
+    #     usearch_cpus = int(round(len(faa_in) * (pars['nproc']/tasks))) + 1
+    #     blast_cpus = int(round(len(fna_in) * (pars['nproc']/tasks))) + 1
 
-        # balancing cpu load
-        while (usearch_cpus + blast_cpus) > cores:
-            if usearch_cpus > 1:
-                usearch_cpus -= 1
-            else:
-                blast_cpus -= 1
+    #     # balancing cpu load
+    #     while (usearch_cpus+blast_cpus) > pars['nproc']:
+    #         if usearch_cpus > 1:
+    #             usearch_cpus -= 1
+    #         else:
+    #             blast_cpus -= 1
 
-        if (blast_cpus > len(fna_in)) and (usearch_cpus < len(faa_in)):
-            surplus = blast_cpus - len(fna_in)
-            blast_cpus -= surplus
-            usearch_cpus += surplus
+    #     if (blast_cpus > len(fna_in)) and (usearch_cpus < len(faa_in)):
+    #         surplus = blast_cpus-len(fna_in)
+    #         blast_cpus -= surplus
+    #         usearch_cpus += surplus
 
-        if (usearch_cpus > len(faa_in)) and (blast_cpus < len(fna_in)):
-            surplus = usearch_cpus - len(faa_in)
-            usearch_cpus -= surplus
-            blast_cpus += surplus
-        # balancing cpu load
+    #     if (usearch_cpus > len(faa_in)) and (blast_cpus < len(fna_in)):
+    #         surplus = usearch_cpus - len(faa_in)
+    #         usearch_cpus -= surplus
+    #         blast_cpus += surplus
+    #     # balancing cpu load
 
-        usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn, pars['faa_cleaning']))
-        usearch_thr.start()
+    #     blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn, pars['blast_full']))
+    #     usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn, pars['faa_cleaning']))
 
-        blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn, pars['blast_full']))
-        blast_thr.start()
+    #     try:
+    #         blast_thr.start()
+    #         usearch_thr.start()
+    #     except:
+    #         blast_thr.terminate()
+    #         blast_thr.join()
+    #         usearch_thr.terminate()
+    #         usearch_thr.join()
+    #         error("Quitting PhyloPhlAn [multi-threads]", exit=True)
 
-        usearch_thr.join()
-        blast_thr.join()
-
-        gens2prots(faa_in, projn, pars['faa_cleaning'])
-    else:
-        if fna_in:
+    #     usearch_thr.join()
+    #     blast_thr.join()
+    #     gens2prots(faa_in, projn, pars['faa_cleaning'])
+    # else:
+    if fna_in:
+        try:
             blast(fna_in, pars['nproc'], projn, pars['blast_full'])
+        except:
+            error("Quitting PhyloPhlAn [blast error]", exit=True)
 
-        if faa_in:
+    if faa_in:
+        try:
             faa2ppafaa(faa_in, pars['nproc'], projn, pars['faa_cleaning'])
             gens2prots(faa_in, projn, pars['faa_cleaning'])
+        except:
+            error("Quitting PhyloPhlAn [usearch error]", exit=True)
 
     # merging phase for .faa and .fna files
     merge_usearch_blast(faa_in+fna_in, projn)
@@ -1336,7 +1392,10 @@ if __name__ == '__main__':
     t1 = time.time()
     info("Mapping finished in "+str(int(t1-t0))+" secs.\n")
 
-    faa2aln( pars['nproc'], projn, pars['integrate'] )
+    try:
+        faa2aln(pars['nproc'], projn, pars['integrate'])
+    except:
+        error("Quitting PhyloPhlAn [muscle error]", exit=True)
 
     t2 = time.time()
     info("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n")
