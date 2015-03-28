@@ -30,6 +30,7 @@ import shutil
 import time
 from bz2 import BZ2File
 from tempfile import NamedTemporaryFile
+import traceback
 # from collections import Counter # works only with python >= 2.7
 
 
@@ -67,8 +68,10 @@ def info(s):
     sys.stdout.flush()
 
 
-def error(s, exit=False, exit_value=1):
-    sys.stderr.write('[E] ' + str(s) + '\n')
+def error(s, init_new_line=False, exit=False, exit_value=1):
+    err = '\n' if init_new_line else ''
+    err += '[e] '
+    sys.stderr.write(err + str(s) + '\n')
     if exit: sys.stderr.write('Exiting...\n')
     sys.stderr.flush()
     if exit: sys.exit(exit_value)
@@ -79,6 +82,7 @@ def dep_checks():
         try:
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen([prog], stdout=devnull, stderr=devnull)
+                t.wait()
         except OSError:
             t.kill()
             error(prog+" not found or not in system path", exit=True)
@@ -208,13 +212,9 @@ def clean_all():
             not_rm.append(f)
 
     if not_rm:
-        msg  = "The following "
-
-        if len(not_rm) > 1:
-            msg += "files were not removed: "
-        else:
-            msg += "file was not removed: "
-
+        msg  = "The following file"
+        msg += "s were" if len(not_rm) > 1 else " was"
+        msg += " not removed: "
         info(msg + ', '.join(not_rm) + "\n")
 
 
@@ -229,33 +229,50 @@ def get_inputs(proj, params):
     dat_fol = "data/"+proj+"/"
 
     if not os.path.isdir(inp_fol):
-        error("No "+proj+" folder found in input/", exit=True)
+        error("No "+proj+" folder found in input/", init_new_line=True, exit=True)
 
     files = list(os.listdir(inp_fol))
-    faa_in = [l.split('.')[0].strip() for l in files
-        if (len(l.split('.')) == 2 and l.split('.')[1] == 'faa') or
-           (len(l.split('.')) == 3 and l.split('.')[1] == 'faa' and l.split('.')[2] == 'bz2')]
-    fna_in = [l.split('.')[0].strip() for l in files
-        if (l.split('.')[0] not in faa_in) and
-           ((len(l.split('.')) == 2 and l.split('.')[1] == 'fna') or
-            (len(l.split('.')) == 3 and l.split('.')[1] == 'fna' and l.split('.')[2] == 'bz2'))]
+    faa_in = []
+    fna_in = []
+
+    for f in files:
+        if 'faa' in f.split('.'):
+            cut = -2 if f.endswith('.bz2') else -1
+            faa_in.append('.'.join(f.split('.')[:cut]))
+
+        if 'fna' in f.split('.'):
+            cut = -2 if f.endswith('.bz2') else -1
+            fna_in.append('.'.join(f.split('.')[:cut]))
+
+    # faa_in = [l.split('.')[0].strip() for l in files
+    # #      if (len(l.split('.')) == 2 and l.split('.')[1] == 'faa') or
+    # #         (len(l.split('.')) == 3 and l.split('.')[1] == 'faa' and l.split('.')[2] == 'bz2')]
+    #     if (l.split('.')[-1] == 'faa') or
+    #        (l.split('.')[-2] == 'faa' and l.split('.')[-1] == 'bz2')]
+    # fna_in = [l.split('.')[0].strip() for l in files
+    #     if (l.split('.')[0] not in faa_in) and
+    # #         ((len(l.split('.')) == 2 and l.split('.')[1] == 'fna') or
+    # #          (len(l.split('.')) == 3 and l.split('.')[1] == 'fna' and l.split('.')[2] == 'bz2'))]
+    #        ((l.split('.')[-1] == 'fna') or
+    #         (l.split('.')[-2] == 'fna' and l.split('.')[-1] == 'bz2'))]
+
     if not (len(faa_in) + len(fna_in)):
-        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"", exit=True)
+        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"", init_new_line=True, exit=True)
 
     txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len( txt_in ) > 1:
         error("More than one '.txt' input files found in input/\n"
-              "[No more than one txt file (the taxonomy) allowed", exit=True)
+              "[No more than one txt file (the taxonomy) allowed", init_new_line=True, exit=True)
 
     tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len( tax_in ) > 1:
         error("More than one '.tax' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", exit=True)
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
 
     mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len( tax_in ) > 1:
         error("More than one '.metadata' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", exit=True)
+              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
 
     if not os.path.isdir(dat_fol):
         os.mkdir(dat_fol)
@@ -264,7 +281,7 @@ def get_inputs(proj, params):
     if faa_in and params['faa_cleaning']:
         t0 = time.time()
         faa_in = clean_faa(proj, faa_in, params['min_num_proteins'], params['min_len_protein'])#, verbose=True)
-        info("Cleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
+        info("\nCleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
 
     if not os.path.exists(dat_fol + ors2prots):
         with open(dat_fol + ors2prots, 'w') as outf:
@@ -295,14 +312,15 @@ def check_inp(inps):
     init_dig = [l for l in inps if l[0].isdigit()]
 
     if init_dig:
-        error("The following genome IDs start with a digit\n" + "\n".join(init_dig) +
-             "\nPlease rename accordingly the corresponding input file names", exit=True)
+        error("The following genome IDs start with a digit:\n    "+"\n    ".join(init_dig) +
+              "\nPlease rename accordingly the corresponding input file names", init_new_line=True, exit=True)
 
     ppa_ids = [l[1:] for l in open(ppa_aln) if l.startswith('>')]
     init_dup = [l for l in inps if l in ppa_ids]
 
     if init_dup:
-        error("The following genome IDs are already in PhyloPhlAn\n" + "\n".join(init_dig), exit=True)
+        error("The following genome IDs are already in PhyloPhlAn:\n    "+"\n    ".join(init_dig),
+              init_new_line=True, exit=True)
 
 
 def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
@@ -519,8 +537,8 @@ def blastx_exe(x):
 
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen(cmd, stderr=devnull) # tblastn quiet homemade!
+                t.wait()
 
-            t.wait()
             if tmp_fna: tmp_fna.close()
             info(x[6][x[6].rfind('/')+1:]+" generated!\n")
         except:
@@ -667,22 +685,21 @@ def gens2prots(inps, proj, faa_cleaning):
     dat_fol = "data/"+proj+"/usearch/"
 
     if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
+    if os.path.exists(dat_fol+ups2faa_pkl): return
 
-    if os.path.exists( dat_fol+ups2faa_pkl ):
-        return
-
-    ups2prots = dict([ (ll[0],set([i for i in ll[1:]])) for ll in
-                            (l.strip().split('\t')
-                                for l in open(dat_fol+up2prots))])
-
+    # ups2prots = dict([(ll[0], set([i for i in ll[1:]])) for ll in (l.strip().split('\t') for l in open(dat_fol+up2prots))])
+    ups2prots = dict([(ll[0], set(ll[1:])) for ll in (l.strip().split('\t') for l in open(dat_fol+up2prots))])
     prots2ups = {}
-    for k,v in ups2prots.items():
+
+    for k, v in ups2prots.items():
         for vv in v:
             if vv in prots2ups:
-                error(str(vv) + " already in dict!", exit=True)
+                error(str(vv) + " already in dict!")
             prots2ups[vv] = k
-    ups2faa = collections.defaultdict( set )
+
+    ups2faa = collections.defaultdict(set)
     e = None
+
     for i in inps:
         inp = None
 
@@ -695,64 +712,76 @@ def gens2prots(inps, proj, faa_cleaning):
             if l.startswith(">"):
                 if e in prots2ups:
                     ups2faa[prots2ups[e]].add(s+"\n")
+
                 e, s = l.strip().split()[0][1:], ""
+
             s += l
+
         if e in prots2ups:
             ups2faa[prots2ups[e]].add(s+"\n")
 
-        inp.close()
+        if inp: inp.close()
 
-    for k,v in ups2faa.items():
+    for k, v in ups2faa.items():
         with open(dat_fol+k+'.faa', 'w') as outf:
             for vv in v:
-                outf.write( "".join(vv) )
+                outf.write("".join(vv))
+
     with open(dat_fol+ups2faa_pkl, 'w') as outf:
         pickle.dump(ups2faa, outf, pickle.HIGHEST_PROTOCOL)
 
 
-def screen( stat, cols, sf = None, unknown_fraction = 0.5, n = 10 ):
+def screen(stat, cols, sf=None, unknown_fraction=0.5, n=10):
     lena, nsc = len(cols[0]), []
+
     if sf and os.path.exists(sf):
         with open(sf) as sfinp:
-            scores = [(float(ll[:12]),ll[12:]) for ll in [l for l in sfinp.readlines()]]
+            scores = [(ll[:12], ll[12:]) for ll in [l for l in sfinp.readlines()]]
     else:
-        scores = [(1.0,c) for c in cols]
-    for sc,st in zip(scores,stat):
-        if len(st) == 1:
+        scores = [("1.0", c) for c in cols]
+
+    for sc, st in zip(scores, stat):
+        ssc, lsc = sc
+
+        try:
+            float(ssc)
+        except:
             continue
-        if "-" in st and len(st) == 2:
+
+        if (len(st) == 1) or \
+           (len(st) == 2 and ("-" in st or "X" in st)) or \
+           (len(st) == 3 and "X" in st and "-" in st):
             continue
-        if "X" in st and len(st) == 2:
-            continue
-        if "X" in st and "-" in st and len(st) == 3:
-            continue
+
         nn = 0
         for k in ["-","X"]:
             if k in st:
                 nn += st[k]
+
         if nn > lena*unknown_fraction:
             continue
-        nsc.append( sc )
-    nsc = sorted(nsc,key=lambda x:x[0],reverse = True)
-    ret = [v for s,v in nsc][-n:]
-    return ret if ret else [list(['-']*lena+['\n'])]
+
+        nsc.append((float(ssc), lsc.strip()))
+
+    nsc = sorted(nsc, key=lambda x: x[0], reverse=True)
+    ret = [v for _, v in nsc][-n:]
+    return ret if ret else [list(['-']*lena+['\n'])] # I'm not sure about the '\n', I believe that SeqIO.write() will complain!
 
 
-def aln_subsample( inp_f, out_f, scores, unknown_fraction, namn ):
+def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
     with open(inp_f) as inp:
         fnas = list(SeqIO.parse(inp, "fasta"))
+
     ids = [f.id for f in fnas]
     cols = zip(*[f.seq for f in fnas])
-    # l = len(cols[0])
     col_alf = [set(x) for x in cols]
-    col_sta = [dict([(a,seq.count(a)) for a in s]) for s,seq in zip(col_alf,cols)]
-    col_sta_ok = screen(col_sta,cols, sf = scores,
-                        unknown_fraction = unknown_fraction, n = namn )
+    col_sta = [dict([(a, seq.count(a)) for a in s]) for s, seq in zip(col_alf, cols)]
+    col_sta_ok = screen(col_sta, cols, sf=scores, unknown_fraction=unknown_fraction, n=namn)
     raws = zip(*col_sta_ok)
-    recs = [SeqRecord(seq=Seq("".join(r)),id=nid,description=nid)
-                for r,nid in zip(raws,ids)]
+    recs = [SeqRecord(seq=Seq("".join(r)), id=nid, description=nid) for r, nid in zip(raws, ids)]
+
     with open(out_f,"w") as out:
-        SeqIO.write( recs, out, "fasta")
+        SeqIO.write(recs, out, "fasta")
 
 
 def exe_muscle(x):
@@ -765,9 +794,9 @@ def exe_muscle(x):
 
             t = None
             with open(os.devnull, 'w') as devnull:
-                t = sb.Popen(x[:-2], stderr=devnull)
+                t = sb.Popen(x[:-2], stderr=devnull) # quiet mode
+                t.wait()
 
-            t.wait()
             pn = max(int(max(int((400.0-int(x[-1][1:]))*30.0/400.0), 1)**2 /30.0), 3)
 
             if len(x) < 13:
@@ -798,6 +827,7 @@ def faa2aln( nproc, proj, integrate = False ):
                 i)
                 for i in ('p{num:04d}'.format(num=aa) for aa in range(400))
                         ]
+
     if mmap:
         us_cmd = [ ["muscle","-quiet",
                     "-in",i,
@@ -815,7 +845,14 @@ def faa2aln( nproc, proj, integrate = False ):
             try:
                 pool.map(exe_muscle, us_cmd)
                 pool.close()
-            except:
+            except Exception as e:
+                info("\n\n"+ "*"*80 +
+                     "\n\nDOC: \""+str(e.__doc__)+"\"" +
+                     "\n\nMSG: \""+str(e.message)+"\"" +
+                     "\n\nTRB: \""+str(traceback.format_exc())+"\"" +
+                     "\n\nNFO: \""+str(sys.exc_info()[0])+"\"" +
+                     "\n\n"+ "*"*80 +"\n\n")
+
                 pool.terminate()
                 pool.join()
                 error("Quitting faa2aln()")
@@ -882,16 +919,7 @@ def aln_merge(proj, integrate):
         info("All alignments already merged!\n")
         return
 
-    up2p = dict([(l[0], set(l[1:])) for l in
-                    (ll.strip().split('\t') for ll in
-                        open(dat_fol+up2prots))])
-
-    all_prots = set.union(*up2p.values()) # all proteins id
-
-    # check if there are proteins id duplicate and if yes warn the user and exit
-    # [k for k, v in Counter(sum(*up2p.values(), [])).iteritems() if v > 1] # THIS NEED TO BE TESTED
-    # [k for k, v in Counter(sum(list(list(x) for x in up2p.values()), [])).iteritems() if v > 1] # this one should work
-    # [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
+    up2p = dict([(l[0], set(l[1:])) for l in (ll.strip().split('\t') for ll in open(dat_fol+up2prots))])
 
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_up2prots)):
@@ -900,9 +928,15 @@ def aln_merge(proj, integrate):
             else:
                 up2p[l[0]] = set(l[1:])
 
+    # check if there are proteins id duplicate and if yes warn the user and exit
+    # [k for k, v in Counter(sum(*up2p.values(), [])).iteritems() if v > 1] # THIS NEED TO BE TESTED
+    # [k for k, v in Counter(sum(list(list(x) for x in up2p.values()), [])).iteritems() if v > 1] # this one should work
+    # [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
+
+    all_prots = set.union(*up2p.values()) # all proteins id
     genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')] if os.path.isfile(dat_fol+few_maps) else []
-    t2p = dict([(l[0],set(l[1:])) for l in
-                (ll.strip().split('\t') for ll in open(dat_fol+ors2prots)) if l[0] not in genomes_to_skip])
+    t2p = dict([(l[0], set(l[1:])) for l in (ll.strip().split('\t') for ll in
+                                                               open(dat_fol+ors2prots)) if l[0] not in genomes_to_skip])
 
     if integrate:
         for l in (ll.strip().split('\t') for ll in open(ppa_ors2prots)):
@@ -919,9 +953,12 @@ def aln_merge(proj, integrate):
                 p2t[pp] = t  # map proteins to their genome
 
     all_g = set(t2p.keys()) # all genomes id
-    aln = dict([(t,"") for t in t2p.keys()]) # dictionary that will contains all alignments
+    aln = dict([(t, "") for t in t2p.keys()]) # dictionary that will contains all alignments
 
-    for f in sorted((dat_fol+ff for ff in os.listdir(dat_fol) if (ff.endswith(".int.sub.aln") and integrate) or (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln")))):
+    for f in sorted((dat_fol+ff for ff in os.listdir(dat_fol)
+            if (ff.endswith(".int.sub.aln") and integrate) or
+               (not integrate and ff.endswith(".sub.aln") and not ff.endswith(".int.sub.aln")))):
+
         g2aln = dict()
         lenal = 0 # keep the lenght of the current alignments
 
@@ -933,7 +970,7 @@ def aln_merge(proj, integrate):
             if g in g2aln: # if there is alignment
                 aln[g] += g2aln[g]
             else: # otherwise add gaps
-                aln[g] += SeqRecord(Seq('-' * lenal), id=str(g))
+                aln[g] += SeqRecord(Seq('-'*lenal), id=str(g))
 
     out_faas = []
     for k, v in aln.iteritems():
@@ -955,17 +992,14 @@ def fasttree( proj, integrate ):
     if os.path.exists( outt ):
         info("Final tree already built ("+outt+")!\n")
         return
-    info("Start building the tree with FastTree ... \n")
-    cmd = [ "FastTree", "-quiet",
-            # "-fastest","-noml"
-            # "-gamma",
-            "-bionj","-slownni",
-            "-mlacc","2", # "-pseudo",
-            "-spr","4"
-            ]
-    sb.call( cmd,
-             stdin =  open(aln_in),
-             stdout = open(outt,"w") )
+    info("Start building the tree with FastTree...\n")
+    cmd = ["FastTree", "-quiet",
+            # "-fastest", "-noml", "-gamma", "-pseudo",
+            "-bionj", "-slownni", "-mlacc", "2", "-spr", "4"]
+    t = None
+    with open(os.devnull, 'w') as devnull:
+        t = sb.Popen(cmd, stdin=open(aln_in), stdout=open(outt, 'w'), stderr=devnull) # quiet mode
+        t.wait()
 
     # convert aln_in from fasta to phylip format
     # cmd = [ "raxmlHPC-PTHREADS-SSE3",
@@ -1104,8 +1138,8 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
     if integrate:
         pass
     elif mtdt:
-        taxCleaner.write_report( out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images = True, typ = "refined" )
-        taxCleaner.write_report( out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images = True, typ = "corrected" )
+        taxCleaner.write_report(out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images=True, typ="refined")
+        taxCleaner.write_report(out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images=True, typ="corrected")
 
     if not integrate:
         taxCleaner.write_new_taxonomy( taxout, taxdiffs, taxboth )
@@ -1315,7 +1349,7 @@ if __name__ == '__main__':
 
     dep_checks()
     init()
-    info("Loading input files...\n")
+    info("Loading input files... ")
     t0 = time.time()
     faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn, pars)
     info(str(len(faa_in)+len(fna_in))+" input files loaded in "+str(int(time.time()-t0))+" s!\n")
@@ -1333,46 +1367,6 @@ if __name__ == '__main__':
 
     t0 = time.time()
 
-    # if (pars['nproc'] > (len(faa_in)+len(fna_in))) or ((pars['nproc'] > len(faa_in)) or (pars['nproc'] > len(fna_in))):
-    #     tasks = float(len(faa_in)+len(fna_in))
-    #     usearch_cpus = int(round(len(faa_in) * (pars['nproc']/tasks))) + 1
-    #     blast_cpus = int(round(len(fna_in) * (pars['nproc']/tasks))) + 1
-
-    #     # balancing cpu load
-    #     while (usearch_cpus+blast_cpus) > pars['nproc']:
-    #         if usearch_cpus > 1:
-    #             usearch_cpus -= 1
-    #         else:
-    #             blast_cpus -= 1
-
-    #     if (blast_cpus > len(fna_in)) and (usearch_cpus < len(faa_in)):
-    #         surplus = blast_cpus-len(fna_in)
-    #         blast_cpus -= surplus
-    #         usearch_cpus += surplus
-
-    #     if (usearch_cpus > len(faa_in)) and (blast_cpus < len(fna_in)):
-    #         surplus = usearch_cpus - len(faa_in)
-    #         usearch_cpus -= surplus
-    #         blast_cpus += surplus
-    #     # balancing cpu load
-
-    #     blast_thr = mp.Process(target=blast, args=(fna_in, blast_cpus, projn, pars['blast_full']))
-    #     usearch_thr = mp.Process(target=faa2ppafaa, args=(faa_in, usearch_cpus, projn, pars['faa_cleaning']))
-
-    #     try:
-    #         blast_thr.start()
-    #         usearch_thr.start()
-    #     except:
-    #         blast_thr.terminate()
-    #         blast_thr.join()
-    #         usearch_thr.terminate()
-    #         usearch_thr.join()
-    #         error("Quitting PhyloPhlAn [multi-threads]", exit=True)
-
-    #     usearch_thr.join()
-    #     blast_thr.join()
-    #     gens2prots(faa_in, projn, pars['faa_cleaning'])
-    # else:
     if fna_in:
         try:
             blast(fna_in, pars['nproc'], projn, pars['blast_full'])
