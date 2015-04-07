@@ -247,18 +247,6 @@ def get_inputs(proj, params):
             cut = -2 if f.endswith('.bz2') else -1
             fna_in.append('.'.join(f.split('.')[:cut]))
 
-    # faa_in = [l.split('.')[0].strip() for l in files
-    # #      if (len(l.split('.')) == 2 and l.split('.')[1] == 'faa') or
-    # #         (len(l.split('.')) == 3 and l.split('.')[1] == 'faa' and l.split('.')[2] == 'bz2')]
-    #     if (l.split('.')[-1] == 'faa') or
-    #        (l.split('.')[-2] == 'faa' and l.split('.')[-1] == 'bz2')]
-    # fna_in = [l.split('.')[0].strip() for l in files
-    #     if (l.split('.')[0] not in faa_in) and
-    # #         ((len(l.split('.')) == 2 and l.split('.')[1] == 'fna') or
-    # #          (len(l.split('.')) == 3 and l.split('.')[1] == 'fna' and l.split('.')[2] == 'bz2'))]
-    #        ((l.split('.')[-1] == 'fna') or
-    #         (l.split('.')[-2] == 'fna' and l.split('.')[-1] == 'bz2'))]
-
     if not (len(faa_in) + len(fna_in)):
         error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"", init_new_line=True, exit=True)
 
