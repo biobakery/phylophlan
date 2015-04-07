@@ -19,7 +19,7 @@ except:
     import pickle
 import urllib2
 from contextlib import closing
-from glob import glob
+from glob import iglob
 from StringIO import StringIO
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -31,6 +31,7 @@ import time
 from bz2 import BZ2File
 from tempfile import NamedTemporaryFile
 import traceback
+from itertools import chain
 # from collections import Counter # works only with python >= 2.7
 
 
@@ -196,16 +197,18 @@ def init():
 
 
 def clean_all():
-    files = glob('data/*.txt')
-    files += glob('data/*.faa')
-    files += glob('data/*.xml')
-    files += glob('data/*.wdb')
-    files += glob(os.path.dirname(ppa_alns[1]) + '/*.txt')
-    files += glob(os.path.dirname(ppa_alns[1]) + '/*.score')
-    files += glob(os.path.dirname(ppa_alns[1]) + '/*.aln')
+    # files = iglob('data/*.txt')
+    # files += iglob('data/*.faa')
+    # files += iglob('data/*.xml')
+    # files += iglob('data/*.wdb')
+    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.txt')
+    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.score')
+    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.aln')
     not_rm = []
 
-    for f in files:
+    for f in chain(iglob('data/*.txt'), iglob('data/*.faa'), iglob('data/*.xml'), iglob('data/*.wdb'),
+            iglob(os.path.dirname(ppa_alns[1])+'/*.txt'), iglob(os.path.dirname(ppa_alns[1])+'/*.score'),
+            iglob(os.path.dirname(ppa_alns[1])+'/*.aln')):
         if os.path.isfile(f):
             os.remove(f)
         else:
