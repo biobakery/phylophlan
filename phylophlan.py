@@ -41,7 +41,7 @@ ppa_aln = "data/ppafull.aln.faa"
 ppa_up2prots = "data/ppafull.up2prots.txt"
 ppa_ors2prots = "data/ppafull.orgs2prots.txt"
 ppa_tax = "data/ppafull.tax.txt"
-ppa_alns = ("data/ppaalns/list.txt","data/ppaalns/ppa.aln.tar.bz2")
+ppa_alns = ("data/ppaalns/list.txt", "data/ppaalns/ppa.aln.tar.bz2")
 ppa_alns_fol = "data/ppaalns/"
 ppa_xml = "data/ppafull.xml"
 ppa_udb = "data/ppa.udb"
@@ -593,6 +593,7 @@ def blast(inps, nproc, proj, blast_full=False):
 
         for i in inps:
             dicc = collections.defaultdict(list)
+            longest = collections.defaultdict(list)
 
             # for each universal protein found tuples
             for lst in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
@@ -602,6 +603,11 @@ def blast(inps, nproc, proj, blast_full=False):
                 send = int(lst[9])
                 bitscore = float(lst[-1])
 
+                if upid not in longest:
+                    longest[upid] = lst
+                elif (sstart-send) > (int(longest[upid][8])-int(longest[upid][9])):
+                    longest[upid] = lst
+
                 if (contig_id, sstart, send) not in uniq:
                     uniq.add((contig_id, sstart, send))
 
@@ -610,7 +616,15 @@ def blast(inps, nproc, proj, blast_full=False):
                     elif bitscore > float(dicc[upid][-1]):
                         dicc[upid] = lst
 
-            dic[i] = dicc
+            # for each genome i, take the longest blast alignment (if there is)
+            bests = collections.defaultdict(list)
+            for k, v in dicc.iteritems():
+                if k in longest:
+                    bests[k] = longest[k]
+                else:
+                    bests[k] = v
+
+            dic[i] = bests
 
         updic = collections.defaultdict(list)
         p2t = dict()
