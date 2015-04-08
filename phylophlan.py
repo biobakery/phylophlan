@@ -197,18 +197,11 @@ def init():
 
 
 def clean_all():
-    # files = iglob('data/*.txt')
-    # files += iglob('data/*.faa')
-    # files += iglob('data/*.xml')
-    # files += iglob('data/*.wdb')
-    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.txt')
-    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.score')
-    # files += iglob(os.path.dirname(ppa_alns[1])+'/*.aln')
     not_rm = []
 
-    for f in chain(iglob('data/*.txt'), iglob('data/*.faa'), iglob('data/*.xml'), iglob('data/*.wdb'),
-            iglob(os.path.dirname(ppa_alns[1])+'/*.txt'), iglob(os.path.dirname(ppa_alns[1])+'/*.score'),
-            iglob(os.path.dirname(ppa_alns[1])+'/*.aln')):
+    for f in chain(iglob('data/*.txt'), iglob('data/*.faa'), iglob('data/*.xml'), iglob('data/*.udb'),
+            iglob('data/*.wdb'), iglob(os.path.dirname(ppa_alns[1])+'/*.txt'),
+            iglob(os.path.dirname(ppa_alns[1])+'/*.score'), iglob(os.path.dirname(ppa_alns[1])+'/*.aln')):
         if os.path.isfile(f):
             os.remove(f)
         else:
@@ -1335,7 +1328,9 @@ if __name__ == '__main__':
                         'integrate' in pars and pars['integrate']):
             error("--cleanall is in conflict with -t, -u, and -i", exit=True)
         else:
+            info("Cleaning \"data/\" and \"data/ppaalns/\" folders... ")
             clean_all()
+            info("Done!\n")
         sys.exit(0)
 
     if pars['clean']:
