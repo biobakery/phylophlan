@@ -178,20 +178,20 @@ def init():
     else:
         for f in [ppa_fna, ppa_fna_40, ppa_tax, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
             if not os.path.exists( f ):
-                info("Extracting "+f+" ... ")
+                info("Extracting \""+f+"\"... ")
                 with closing(tarfile.open( compressed(f)  )) as inp:
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
 
         for t,f in [ppa_alns]:
             if not os.path.exists( t ):
-                info("Extracting "+f+" ... ")
+                info("Extracting \""+f+"\"... ")
                 with closing(tarfile.open( f )) as inp:
                     inp.extractall(path=os.path.dirname(f))
                 info("Done!\n")
 
     if not os.path.exists(ppa_udb):
-        info("Generating "+ppa_udb+" (usearch indexed DB)...")
+        info("Generating \""+ppa_udb+"\" (usearch indexed DB)...")
         sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1517
         info("Done!\n")
 
