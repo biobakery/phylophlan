@@ -596,7 +596,7 @@ def blast(inps, nproc, proj, blast_full=False):
 
                 if upid not in longest:
                     longest[upid] = lst
-                elif (sstart-send) > (int(longest[upid][8])-int(longest[upid][9])):
+                elif abs(sstart-send) > abs(int(longest[upid][8])-int(longest[upid][9])):
                     longest[upid] = lst
 
                 if (contig_id, sstart, send) not in uniq:
