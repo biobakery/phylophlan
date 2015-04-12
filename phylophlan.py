@@ -19,7 +19,7 @@ except:
     import pickle
 import urllib2
 from contextlib import closing
-from glob import iglob
+from glob import glob, iglob
 from StringIO import StringIO
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -30,7 +30,6 @@ import shutil
 import time
 from bz2 import BZ2File
 from tempfile import NamedTemporaryFile
-import traceback
 from itertools import chain
 # from collections import Counter # works only with python >= 2.7
 
@@ -556,7 +555,7 @@ def blast(inps, nproc, proj, blast_full=False):
         else: # small dataset
             dataset = ppa_fna_40
 
-        us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-40']
+        us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-20']
                   for i, o in mmap]
 
         try:
@@ -583,13 +582,14 @@ def blast(inps, nproc, proj, blast_full=False):
             for lst in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
                 upid = lst[0].split('_')[1]
                 contig_id = str(lst[1])
+                length = int(lst[3])
                 sstart = int(lst[8])
                 send = int(lst[9])
                 bitscore = float(lst[-1])
 
                 if upid not in longest:
                     longest[upid] = lst
-                elif abs(sstart-send) > abs(int(longest[upid][8])-int(longest[upid][9])):
+                elif length > int(longest[upid][3]):
                     longest[upid] = lst
 
                 if (contig_id, sstart, send) not in uniq:
@@ -843,14 +843,7 @@ def faa2aln( nproc, proj, integrate = False ):
             try:
                 pool.map(exe_muscle, us_cmd)
                 pool.close()
-            except Exception as e:
-                info("\n\n"+ "*"*80 +
-                     "\n\nDOC: \""+str(e.__doc__)+"\"" +
-                     "\n\nMSG: \""+str(e.message)+"\"" +
-                     "\n\nTRB: \""+str(traceback.format_exc())+"\"" +
-                     "\n\nNFO: \""+str(sys.exc_info()[0])+"\"" +
-                     "\n\n"+ "*"*80 +"\n\n")
-
+            except:
                 pool.terminate()
                 pool.join()
                 error("Quitting faa2aln()")
