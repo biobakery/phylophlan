@@ -555,7 +555,7 @@ def blast(inps, nproc, proj, blast_full=False):
         else: # small dataset
             dataset = ppa_fna_40
 
-        us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-20']
+        us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', '1e-30']
                   for i, o in mmap]
 
         try:
@@ -641,7 +641,7 @@ def blast(inps, nproc, proj, blast_full=False):
                             sequence = Seq(str(record.seq)[sstart-1:send])
                             if reverse: sequence = sequence.reverse_complement()
                             rev = ':c' if reverse else ':' # reverse or not
-                            seqid = record.id+rev+str(sstart)+'-'+str(send)
+                            seqid = k+'_'+record.id+rev+str(sstart)+'-'+str(send)
                             aminoacids = Seq.translate(sequence)
                             updic[kk].append(SeqRecord(aminoacids, id=seqid, description=''))
                             p2t[seqid] = k # save map from seqid to genome
