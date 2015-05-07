@@ -138,7 +138,7 @@ def read_params(args):
 
     # decide if you want perform the faa cleaning of the .faa
     arg('--faa_cleaning', action='store_true', default=False, help=
-         "When specified perform a cleaning on the number and the length of proteins, changin also\n"
+         "When specified perform a cleaning on the number and the length of proteins, changing also\n"
          "the proteins id such that are unique among all the genomes."
          "If you believe that your genomes have unique ids you can skip this step.")
 
@@ -429,6 +429,7 @@ def exe_usearch(x):
 
             t = sb.Popen(cmd)
             t.wait()
+            shutil.copy2(x[7], x[7]+'.bkp') # copy the results of usearch
             screen_usearch_wdb(x[7])
             if tmp_faa: tmp_faa.close()
             info(x[7][x[7].rfind('/')+1:]+" generated!\n")
