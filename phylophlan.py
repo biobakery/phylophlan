@@ -34,7 +34,7 @@ from itertools import chain
 import hashlib
 from collections import Counter # works only with python >= 2.7
 # from random import randint
-import traceback
+# import traceback
 
 download = ""
 ppa_fna = "data/ppa.seeds.faa"
@@ -932,7 +932,7 @@ def aln_merge(proj, integrate):
                 up2p[l[0]] = set(l[1:])
 
     # check if there are proteins id duplicate and if yes warn the user and exit
-    # [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
+    print [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
 
     all_prots = set.union(*up2p.values()) # all proteins id
     genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')] if os.path.isfile(dat_fol+few_maps) else []
