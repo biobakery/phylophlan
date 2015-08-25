@@ -32,7 +32,11 @@ from bz2 import BZ2File
 from tempfile import NamedTemporaryFile
 from itertools import chain
 import hashlib
-from collections import Counter # works only with python >= 2.7
+try:
+    from collections import Counter # works only with python >= 2.7
+    collections_counter = True
+except:
+    collections_counter = False
 # from random import randint
 # import traceback
 
@@ -194,7 +198,7 @@ def init():
 
     if not os.path.exists(ppa_udb):
         info("Generating \""+ppa_udb+"\" (usearch indexed DB)...")
-        sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1517
+        sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1623
         info("Done!\n")
 
 
@@ -269,10 +273,9 @@ def get_inputs(proj, params):
         faa_in = clean_faa(proj, faa_in, params['min_num_proteins'], params['min_len_protein'])#, verbose=True)
         info("\nCleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
 
-    # make uniq filename for fna inputs
-    fna_in = uniq_filenames(faa_in, fna_in)
-
     if not os.path.exists(dat_fol + ors2prots):
+        fna_in = uniq_filenames(faa_in, fna_in) # make uniq filename for fna inputs
+
         with open(dat_fol + ors2prots, 'w') as outf:
             for f in faa_in:
                 fld = inp_fol if not params['faa_cleaning'] else cln_fol
@@ -470,7 +473,7 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
     else:
         info("Looking for PhyloPhlAn proteins in input faa files\n")
         us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", ppa_udb, "-blast6out", o, "-threads", "1",
-            "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1623
+            "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
 
         try:
             pool.map(exe_usearch, us_cmd)
@@ -569,7 +572,7 @@ def blast(inps, nproc, proj, blast_full=False):
             evalue = '1e-30'
 
         us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', evalue]
-                  for i, o in mmap]
+                  for i, o in mmap] # tblastn2.2.28+
 
         try:
             pool.map(blastx_exe, us_cmd)
@@ -916,6 +919,7 @@ def faa2aln( nproc, proj, integrate = False ):
 
 def aln_merge(proj, integrate):
     dat_fol = "data/"+proj+"/"
+    out_fol = "output/"+proj+"/"
     outf = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
 
     if os.path.exists(outf):
@@ -931,8 +935,9 @@ def aln_merge(proj, integrate):
             else:
                 up2p[l[0]] = set(l[1:])
 
-    # check if there are proteins id duplicate and if yes warn the user and exit
-    print [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1] # this one should work, but need to be checked
+    # check if there are proteins id duplicated and if yes warn the user and exit
+    if collections_counter:
+        print "TEST", [k for k, v in Counter(sum([list(x) for x in up2p.values()], [])).iteritems() if v > 1]
 
     all_prots = set.union(*up2p.values()) # all proteins id
     genomes_to_skip = [r.strip() for r in open(dat_fol+few_maps, 'r')] if os.path.isfile(dat_fol+few_maps) else []
@@ -954,6 +959,7 @@ def aln_merge(proj, integrate):
 
     all_g = set(t2p.keys()) # all genomes id
     aln = dict([(t, "") for t in t2p.keys()]) # dictionary that will contains all alignments
+    up = dict([(t, 0) for t in t2p.keys()]) # dictionary that will contains the number of universal proteins mapped
 
     for f in sorted((dat_fol+ff for ff in os.listdir(dat_fol)
             if (ff.endswith(".int.sub.aln") and integrate) or
@@ -968,6 +974,7 @@ def aln_merge(proj, integrate):
 
         for g in all_g: # for all genomes
             if g in g2aln: # if there is alignment
+                up[g] += 1
                 aln[g] += g2aln[g]
             else: # otherwise add gaps
                 aln[g] += SeqRecord(Seq('-'*lenal), id=str(g))
@@ -980,6 +987,20 @@ def aln_merge(proj, integrate):
 
     SeqIO.write(out_faas, outf, "fasta")
     info("All alignments merged into "+outf+"!\n")
+
+    if not os.path.isdir(out_fol): os.mkdir(out_fol) # create output directory if does not exists
+
+    # write statistics file
+    info("Writing stats file... ")
+    with open(out_fol+'aln_stats.csv', 'w') as f:
+        f.write(','.join(['id', 'tot_length', 'aln_length', 'tot_gaps', 'up_mapped'])+'\n')
+
+        for k, v in aln.iteritems():
+            tot_len = len(v)
+            tot_gaps = str(v.seq).count('-')
+            f.write(','.join([str(k), str(tot_len), str(tot_len-tot_gaps), str(tot_gaps), str(up[k])])+'\n')
+
+    info("Done!\n")
 
 
 def fasttree( proj, integrate ):
@@ -1345,6 +1366,7 @@ def longest_not_overlapping(points):
             if not (((a < x) and (b < x) and (a < y) and (b < y)) or
                     ((a > x) and (b > x) and (a > y) and (b > y))):
                 to_add = False
+                break
 
         if to_add: lno.append((a, b))
 
@@ -1353,29 +1375,46 @@ def longest_not_overlapping(points):
 
 def find_clusters(reprs, points, f1, f2, reverse=True):
     clusters = set()
+    changes = True
 
-    for x, y in reprs:
-        xyrev = False
-        if x > y: xyrev = True
+    while changes:
+        changes = False
         tmp_clusters = set()
 
-        if (not reverse) and (not xyrev):
-            for a, b in points:
-                if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
-                    if ((a >= x) and (a <= y)) and ((b >= x) and (b <= y)) or \
-                       ((a <= x)) and ((b >= x) and (b <= y)) or \
-                       ((a >= x) and (a <= y)) and ((b >= y)):
-                        tmp_clusters |= set([(f1(x, a), f2(y, b))])
-        elif reverse and xyrev:
-            for a, b in points:
-                if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
-                    if ((a >= x) and (a <= y)) and ((b >= x) and (b <= y)) or \
-                       ((a <= x)) and ((b >= x) and (b <= y)) or \
-                       ((a >= x) and (a <= y)) and ((b >= y)):
-                        tmp_clusters |= set([(f1(x, a), f2(y, b))])
+        for x, y in set(reprs).difference(clusters):
+            xyrev = False
+            if x > y: xyrev = True
 
-        if not tmp_clusters: tmp_clusters |= set([(x, y)])
-        clusters |= set([(f1([a for a, _ in tmp_clusters]), f2([b for _, b in tmp_clusters]))])
+            if (not reverse) and (not xyrev):
+                for a, b in points:
+                    if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
+                        if ((a <= x) and (b >= x) and (b <= y)) or ((a >= x) and (a <= y) and (b >= y)):
+                            tmp_clusters = tmp_clusters.union( set( [(f1(x, a), f2(y, b))] ) )
+            elif reverse and xyrev:
+                for a, b in points:
+                    if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
+                        if ((a >= x)) and ((b <= x) and (b >= y)) or ((a <= x) and (a >= y)) and ((b <= y)):
+                            tmp_clusters = tmp_clusters.union( set( [(f1(x, a), f2(y, b))] ) )
+
+            if tmp_clusters:
+                break
+            else:
+                if (x, y) not in clusters:
+                    clusters = clusters.union( set( [(x, y)] ) )
+
+
+        if tmp_clusters:
+            changes = True
+            to_remove = set( [(x, y)] )
+
+            for a, b in reprs:
+                for x, y in tmp_clusters:
+                    if (a >= x and a <= y and b >= x and b <= y) and ((a, b) not in to_remove):
+                        to_remove = to_remove.union(set( [(a, b)] ) )
+
+            reprs = list(set(reprs).difference(to_remove))
+            reprs.append((f1([a for a, _ in tmp_clusters]), f2([b for _, b in tmp_clusters])))
+            tmp_clusters = set()
 
     return clusters
 
@@ -1383,8 +1422,9 @@ def find_clusters(reprs, points, f1, f2, reverse=True):
 def fake_proteome(proj, fna_out, faa_cleaning):
     inp_fol = 'input/'+proj+'/'
     dat_fol = 'data/'+proj+'/'
-    out_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
+    out_fol = 'data/'+proj+'/'+cleanfaa_fld if faa_cleaning else 'input/'+proj+'/'
     b6o_files = iglob(dat_fol+'tblastn/*.b6o')
+    fake_proteomes = []
     contigs = {}
     done = True
     p2t = dict()
@@ -1396,16 +1436,15 @@ def fake_proteome(proj, fna_out, faa_cleaning):
             done = False
 
     if done: return
-
     if not os.path.isdir(out_fol): os.mkdir(out_fol) # create the directory if it does not exists
-
-    info('Reading tblastn output files (.b6o)\n')
+    info('Reading tblastn output files (.b6o)')
 
     for f in b6o_files:
         key = f[f.rfind('/')+1:f.rfind('.')]
 
         with open(f) as hf:
             for r in hf:
+                if key not in fake_proteomes: fake_proteomes.append(key)
                 tmp_lst = r.strip().split()
                 dic = {} if key not in contigs else contigs[key]
 
@@ -1422,7 +1461,8 @@ def fake_proteome(proj, fna_out, faa_cleaning):
 
                 contigs[key] = dic
 
-    info('Clustering\n')
+    info(': '+str(len(contigs))+' files loaded!\n')
+    info('Creating a proteome\n')
 
     for f, cc in contigs.items():
         fin = fin_dict[f]
@@ -1475,12 +1515,15 @@ def fake_proteome(proj, fna_out, faa_cleaning):
                             sequence1 = Seq(str(record.seq)[s:e])
 
                             if s-1 < 0:
-                                sequence2 = Seq('N' + str(record.seq)[s:e+1])
+                                sequence2 = Seq('N' + str(record.seq)[s:e])
                             else:
                                 sequence2 = Seq(str(record.seq)[s-1:e])
 
                             if s-2 < 0:
-                                sequence3 = Seq('NN' + str(record.seq)[s-2:e])
+                                if s-1 < 0:
+                                    sequence3 = Seq('NN' + str(record.seq)[s:e])
+                                else:
+                                    sequence3 = Seq('N' + str(record.seq)[s:e+1])
                             else:
                                 sequence3 = Seq(str(record.seq)[s-2:e])
 
@@ -1525,6 +1568,8 @@ def fake_proteome(proj, fna_out, faa_cleaning):
         with open(dat_fol+p2t_map, 'w') as f:
             for k, v in p2t.iteritems():
                 f.write(str(k)+'\t'+str(v)+'\n')
+
+    return fake_proteomes
 
 
 def uniq_filenames(faa_in, fna_in):
@@ -1576,18 +1621,16 @@ if __name__ == '__main__':
 
     dep_checks()
     init()
-    info("Loading input files... ")
+    info("Loading and checking input files... ")
     t0 = time.time()
     faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn, pars)
+    # check faa and fna
+    # check output files to see if ...
+    check_inp(faa_in + [f for _, f in fna_in])
     info(str(len(faa_in)+len(fna_in))+" input files loaded in "+str(int(time.time()-t0))+" s!\n")
 
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
         error("No taxonomy file found for the taxonomic analysis", exit=True)
-
-    info("Checking input files... ")
-    t0 = time.time()
-    check_inp(faa_in + [f for _, f in fna_in])
-    info("Input files checked in "+str(int(time.time()-t0))+" s!\n")
 
     if pars['min_uprots']:
         min_uprots = pars['min_uprots']
@@ -1600,8 +1643,7 @@ if __name__ == '__main__':
         except:
             error("Quitting PhyloPhlAn [blast error]", exit=True)
 
-        fake_proteome(projn, dict(fna_in), pars['faa_cleaning'])
-        faa_in += [f for _, f in fna_in]
+        faa_in += fake_proteome(projn, dict(fna_in), pars['faa_cleaning'])
 
     if faa_in:
         try:
@@ -1612,7 +1654,6 @@ if __name__ == '__main__':
 
     # merging phase for .faa and .fna files
     # merge_usearch_blast(faa_in+fna_in, projn)
-
     t1 = time.time()
     info("Mapping finished in "+str(int(t1-t0))+" secs.\n")
 
