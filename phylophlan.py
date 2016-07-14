@@ -24,7 +24,7 @@ from StringIO import StringIO
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-sys.path.insert(0, 'taxcuration/')
+# sys.path.insert(0, 'taxcuration/')
 import taxcuration as taxc
 import shutil
 import time
@@ -39,6 +39,7 @@ except:
     collections_counter = False
 # from random import randint
 # import traceback
+
 
 download = ""
 ppa_fna = "data/ppa.seeds.faa"
@@ -61,7 +62,6 @@ o_inttree = "tree.int.nwk"
 p2t_map = "p2t_map.txt"
 cleanfaa_fld = "clean_faa/"
 old2newprots = "old2newprots.txt"
-min_uprots = 0
 NOT_ENOUGH_MAPPINGS = "Not enough mappings"
 few_maps = "few_maps.txt"
 f_protein_ids_map = "protein_ids_map.pkl"
@@ -88,9 +88,14 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
     err = '\n' if init_new_line else ''
     err += '[e] '
     sys.stderr.write(err + str(s) + '\n')
-    if exit: sys.stderr.write('Exiting...\n')
+
+    if exit:
+        sys.stderr.write('Exiting...\n')
+
     sys.stderr.flush()
-    if exit: sys.exit(exit_value)
+
+    if exit:
+        sys.exit(exit_value)
 
 
 def dep_checks():
@@ -105,7 +110,7 @@ def dep_checks():
 
 
 def read_params(args):
-    p = ap.ArgumentParser( description=
+    p = ap.ArgumentParser(description=
             "NAME AND VERSION:\n"
             "PhyloPhlAn version "+__version__+" ("+__date__+")\n\n"
             "AUTHORS:\n"
@@ -116,93 +121,110 @@ def read_params(args):
             "to thousands of genomes and uses the most conserved 400 proteins for extracting the \n"
             "phylogenetic signal.\n"
             "PhyloPhlAn also implements taxonomic curation, estimation, and insertion operations.\n\n",
-             formatter_class=ap.RawTextHelpFormatter )
+             formatter_class=ap.RawTextHelpFormatter)
     arg = p.add_argument
 
-    arg( 'inp', metavar='PROJECT NAME', type=str, default=None, nargs='?', help=
+    arg('inp', metavar='PROJECT NAME', type=str, default=None, nargs='?', help=
         "The basename of the project corresponding to the name of the input data folder inside \n"
         "input/. The input data consist of a collection of multifasta files (extensions allowed are:\n"
         ".faa and .fna, or compressed: .faa.bz2 and .fna.bz2) containing the proteins in each genome.\n"
         "If the project already exists, the already executed steps are not re-ran.\n"
         "The results will be stored in a folder with the project basename in output/\n"
-        "Multiple project can be generated and they safetely coexists." )
+        "Multiple project can be generated and they safetely coexists.")
 
-    arg( '-i','--integrate', action='store_true', help=
-         "Integrate user genomes into the PhyloPhlAn tree \n")
-    arg( '-u','--user_tree', action='store_true', help=
-         "Build a phylogenetic tree using user genomes only \n" )
-    arg( '-t','--taxonomic_analysis', action='store_true', help=
-         "Check taxonomic inconsistencies and refine/correct taxonomic labels\n")
-    arg( '--tax_test', type=str, default = None, help=
-         "nerrors:type:taxl:tmin:tex:name (alpha version, experimental!)\n" )
+    arg('-i','--integrate', action='store_true', help=
+        "Integrate user genomes into the PhyloPhlAn tree \n")
+    arg('-u','--user_tree', action='store_true', help=
+        "Build a phylogenetic tree using user genomes only \n")
+    arg('-t','--taxonomic_analysis', action='store_true', help=
+        "Check taxonomic inconsistencies and refine/correct taxonomic labels\n")
+    arg('--tax_test', type=str, default = None, help=
+        "nerrors:type:taxl:tmin:tex:name (alpha version, experimental!)\n")
 
-    arg( '-c','--clean', action='store_true', help=
-         "Clean the final and partial data produced for the specified project.\n"
-         " (use --cleanall for removing general installation and database files)\n")
-    arg( '--cleanall', action='store_true', help=
-            "Remove all instalation and database file leaving untouched the initial compressed data \n"
-            "that is automatically extracted and formatted at the first pipeline run.\n"
-            "Projects are not remove (specify a project and use -c for removing projects).\n")
+    arg('-c','--clean', action='store_true', help=
+        "Clean the final and partial data produced for the specified project.\n"
+        " (use --cleanall for removing general installation and database files)\n")
+    arg('--cleanall', action='store_true', help=
+        "Remove all instalation and database file leaving untouched the initial compressed data \n"
+        "that is automatically extracted and formatted at the first pipeline run.\n"
+        "Projects are not remove (specify a project and use -c for removing projects).\n")
 
-    arg( '--nproc', metavar="N", type=int, default=1, help=
-         "The number of CPUs to use for parallelizing the blasting\n"
-         "[default 1, i.e. no parallelism]\n" )
-
+    arg('--nproc', metavar="N", type=int, default=1, help=
+        "The number of CPUs to use for parallelizing the blasting\n"
+        "[default 1, i.e. no parallelism]\n")
+    # decide which database to use with blast
     arg('--blast_full', action='store_true', default=False, help=
-         "If specified, tells blast to use the full dataset of universal proteins\n"
-         "[default False, i.e. the small dataset of universal proteins is used]\n")
-
+        "If specified, tells blast to use the full dataset of universal proteins\n"
+        "[default False, i.e. the small dataset of universal proteins is used]\n")
     # decide if you want perform the faa cleaning of the .faa
     arg('--faa_cleaning', action='store_true', default=False, help=
-         "When specified perform a cleaning on the number and the length of proteins, changing also\n"
-         "the proteins id such that are unique among all the genomes."
-         "If you believe that your genomes have unique ids you can skip this step.")
-
+        "When specified perform a cleaning on the number and the length of proteins, changing also\n"
+        "the proteins id such that are unique among all the genomes."
+        "If you believe that your genomes have unique ids you can skip this step.")
     # protein filtering params
     arg('--min_num_proteins', type=int, default=100, help=
-         "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
-         "genomes with less than this number of proteins will be discarded.\n"
-         "[default minimum number of proteins is 100]\n")
-
+        "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
+        "genomes with less than this number of proteins will be discarded.\n"
+        "[default minimum number of proteins is 100]\n")
     arg('--min_len_protein', type=int, default=50, help=
-         "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
-         "proteins shorter that this value will be discarded.\n"
-         "[default minimum length for each protein is 50]\n")
-
+     "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
+     "proteins shorter that this value will be discarded.\n"
+     "[default minimum length for each protein is 50]\n")
     # minimum number of unversal proteins mapped
     arg('--min_uprots', type=int, default=0, help=
-         "This parameter is used to filter both usearch and tblastn mapping phases.\n"
-         "Genomes that mapp less than this number of universal proteins, will be discarded\n"
-         "[default minimum number of universal proteins mapped is 0, i.e., no genomes will be omitted]\n")
+        "This parameter is used to filter both usearch and tblastn mapping phases.\n"
+        "Genomes that mapp less than this number of universal proteins, will be discarded\n"
+        "[default minimum number of universal proteins mapped is 0, i.e., no genomes will be omitted]\n")
+    # user defined data folder
+    arg('--c_dat', type=str, default=None, help=
+        'Custom path to the folder where to store the intermediate files\n')
+    # user defined input folder
+    arg('--c_in', type=str, default=None, help=
+        'Custom path to the folder containing the folder with the input data\n')
+    # user defined output folder
+    arg('--c_out', type=str, default=None, help=
+        'Custom path to the output folder where to save the results\n')
+    # user defined universal protenis folder
+    arg('--c_up', type=str, default=None, help=
+        'Path to the file (fasta) or folder containing the *.faa files to use as universal proteins. Default None.\n')
 
     arg('-v', '--version', action='store_true', help=
-         "Prints the current PhyloPhlAn version and exit\n")
+        "Prints the current PhyloPhlAn version and exit\n")
 
     return vars(p.parse_args())
 
 
 def init():
+    cf_fna, cf_udb = None, None
+
     if download:
-        for f in [ppa_fna,ppa_aln,ppa_xml,ppa_up2prots,ppa_ors2prots]:
-            u = urllib2.urlopen( download_compressed(f)  )
-            if not os.path.exists( f ):
-                info("Downloading and extracting "+f+" ... ")
-                with closing(tarfile.open( fileobj = StringIO(u.read()) )) as inp:
+        for f in [ppa_fna, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
+            u = urllib2.urlopen(download_compressed(f))
+
+            if not os.path.exists(f):
+                info("Downloading and extracting "+f+"... ")
+
+                with closing(tarfile.open(fileobj=StringIO(u.read()))) as inp:
                     inp.extractall(path=os.path.dirname(f))
+
                 info("Done!\n")
     else:
         for f in [ppa_fna, ppa_fna_40, ppa_tax, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
-            if not os.path.exists( f ):
+            if not os.path.exists(f):
                 info("Extracting \""+f+"\"... ")
-                with closing(tarfile.open( compressed(f)  )) as inp:
+
+                with closing(tarfile.open(compressed(f))) as inp:
                     inp.extractall(path=os.path.dirname(f))
+
                 info("Done!\n")
 
-        for t,f in [ppa_alns]:
+        for t, f in [ppa_alns]:
             if not os.path.exists(t):
                 info("Extracting \""+f+"\"... ")
+
                 with closing(tarfile.open(f)) as inp:
                     inp.extractall(path=os.path.dirname(f))
+
                 info("Done!\n")
 
     if not os.path.exists(ppa_udb):
@@ -210,13 +232,47 @@ def init():
         sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1623
         info("Done!\n")
 
+    if cf_up:
+        if os.path.isfile(cf_up): # it is the fasta file containing all the universal proteins
+            cf_fna = cf_up
+            cf_udb = cf_up[:cf_up.rfind('.')+1]+'udb'
+        elif os.path.isdir(cf_up): # it is a folder with a fasta file for each universal protein
+            if (cf_up == './') or (cf_up == '../'):
+                cf_up_filename = 'cf_up'
+            else:
+                cf_up_filename = [i for i in cf_up.split('/') if i][-1]
 
-def clean_all():
+            cf_fna = cf_up+cf_up_filename+'.fna'
+            cf_udb = cf_up+cf_up_filename+'.udb'
+
+            if not os.path.isfile(cf_fna):
+                with open(cf_fna, 'w') as f:
+                    for i in iglob(cf_up+'*'):
+                        with open(i) as g:
+                            f.write(g.read())
+            else:
+                info('File "'+cf_fna+'" already present in "'+cf_up+'" folder.\n')
+        else: # what's that??
+            error("Not sure about the format of your custom set of universal proteins. I'll use the default ones!\n")
+            return None, None
+
+        if cf_fna and cf_udb:
+            if not os.path.isfile(cf_udb):
+                info("Generating custom \""+cf_udb+"\" (usearch indexed DB)...")
+                sb.call(["usearch", "-quiet", "-makeudb_ublast", cf_fna, "-output", cf_udb])
+                info("Done!\n")
+            else:
+                info('usearch database "'+cf_udb+'" already present in "'+cf_up+'" folder.\n')
+
+    return cf_fna, cf_udb
+
+
+def clean_all(loc_dat):
     not_rm = []
 
-    for f in chain(iglob('data/*.txt'), iglob('data/*.faa'), iglob('data/*.xml'), iglob('data/*.udb'),
-            iglob('data/*.wdb'), iglob(os.path.dirname(ppa_alns[1])+'/*.txt'),
-            iglob(os.path.dirname(ppa_alns[1])+'/*.score'), iglob(os.path.dirname(ppa_alns[1])+'/*.aln')):
+    for f in chain(iglob(loc_dat+'*.txt'), iglob(loc_dat+'*.faa'), iglob(loc_dat+'*.xml'),
+                   iglob(loc_dat+'*.udb'), iglob(loc_dat+'*.wdb'), iglob(os.path.dirname(ppa_alns[1])+'/*.txt'),
+                   iglob(os.path.dirname(ppa_alns[1])+'/*.score'), iglob(os.path.dirname(ppa_alns[1])+'/*.aln')):
         if os.path.isfile(f):
             os.remove(f)
         else:
@@ -229,21 +285,17 @@ def clean_all():
         info(msg + ', '.join(not_rm) + "\n")
 
 
-def clean_project(proj):
-    if os.path.exists("data/"+proj):
-        shutil.rmtree("data/"+proj)
+def clean_project():
+    if os.path.exists(dat_fol):
+        shutil.rmtree(dat_fol)
 
-    if os.path.exists("output/"+proj):
-        shutil.rmtree("output/"+proj)
+    if os.path.exists(out_fol):
+        shutil.rmtree(out_fol)
 
 
 def get_inputs(proj, params):
-    inp_fol = "input/"+proj+"/"
-    cln_fol = "data/"+proj+"/"+cleanfaa_fld
-    dat_fol = "data/"+proj+"/"
-
     if not os.path.isdir(inp_fol):
-        error("No "+proj+" folder found in input/", init_new_line=True, exit=True)
+        error("No "+proj+" folder found in '"+inp_fol+"'", init_new_line=True, exit=True)
 
     files = list(os.listdir(inp_fol))
     faa_in = []
@@ -259,7 +311,7 @@ def get_inputs(proj, params):
             fna_in.append('.'.join(f.split('.')[:cut]))
 
     if not (len(faa_in) + len(fna_in)):
-        error("No '.faa' or '.fna' input files found in \""+str(inp_fol)+"\"", init_new_line=True, exit=True)
+        error("No '.faa' or '.fna' input files found in '"+inp_fol+"'", init_new_line=True, exit=True)
 
     txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len(txt_in) > 1:
@@ -269,12 +321,12 @@ def get_inputs(proj, params):
     tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len(tax_in) > 1:
         error("More than one '.tax' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
+              "[No more than one tax file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
 
     mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len(tax_in) > 1:
         error("More than one '.metadata' input files found in input/\n"
-              "[No more than one txt file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
+              "[No more than one metadata file allowed", init_new_line=True, exit=True)
 
     if not os.path.isdir(dat_fol):
         os.mkdir(dat_fol)
@@ -286,10 +338,10 @@ def get_inputs(proj, params):
         info("\nCleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
 
     fna_in = uniq_filenames(faa_in, fna_in) # make uniq filename for fna inputs
-    if not os.path.exists(dat_fol + ors2prots):
-        with open(dat_fol + ors2prots, 'w') as outf:
+    if not os.path.exists(dat_fol+ors2prots):
+        with open(dat_fol+ors2prots, 'w') as outf:
             for f in faa_in:
-                fld = inp_fol if not params['faa_cleaning'] else cln_fol
+                fld = inp_fol if not params['faa_cleaning'] else dat_cln_fol
 
                 if os.path.isfile(fld+f+'.faa'):
                     prots = sorted([l.split()[0][1:] for l in open(fld+f+'.faa') if l.startswith('>')])
@@ -325,12 +377,8 @@ def check_inp(inps):
 
 
 def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
-    inp_fol = "input/"+proj+"/"
-    dat_fol = "data/"+proj+"/"
-    cln_fol = "data/"+proj+"/"+cleanfaa_fld
-
-    if not os.path.isdir(cln_fol): # create the directory if it does not exists
-        os.mkdir(cln_fol)
+    if not os.path.isdir(dat_cln_fol): # create the directory if it does not exists
+        os.mkdir(dat_cln_fol)
     elif os.path.isfile(dat_fol+f_protein_ids_map): # load the protein_ids_map mapping and return it
         with open(dat_fol+f_protein_ids_map) as f:
             return pickle.load(f).keys()
@@ -378,7 +426,7 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
                 protein_ids_map[f] = [(old_id[s.id], s.id) for s in out]
 
             # write the new .faa
-            with open(cln_fol+f+'.faa', 'w') as h_out:
+            with open(dat_cln_fol+f+'.faa', 'w') as h_out:
                 SeqIO.write(out, h_out, "fasta")
         else:
             msg = "not enough good proteins!"
@@ -436,7 +484,7 @@ def exe_usearch(x):
     #
     if not terminating.is_set():
         try:
-            info("Starting "+x[7][x[7].rfind('/')+1:]+"...\n")
+            info("Starting "+x[7][x[7].rfind('/')+1:]+"\n")
             tmp_faa = None
             t = None
 
@@ -457,11 +505,18 @@ def exe_usearch(x):
             t.wait()
             shutil.copy2(x[7], x[7]+'.bkp') # copy the results of usearch
             screen_usearch_wdb(x[7])
-            if tmp_faa: tmp_faa.close()
+
+            if tmp_faa:
+                tmp_faa.close()
+
             info(x[7][x[7].rfind('/')+1:]+" generated!\n")
         except:
-            if t: t.kill()
-            if tmp_faa: tmp_faa.close()
+            if t:
+                t.kill()
+
+            if tmp_faa:
+                tmp_faa.close()
+
             terminating.set()
             error(' '.join(x))
             return
@@ -472,19 +527,20 @@ def exe_usearch(x):
 
 
 def faa2ppafaa(inps, nproc, proj, faa_cleaning):
-    inp_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
-    dat_fol = "data/"+proj+"/"
+    loc_inp = dat_cln_fol if faa_cleaning else inp_fol
+
     terminating = mp.Event()
     pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-    mmap = [(inp_fol+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
+    mmap = [(loc_inp+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
 
-    if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the data folder if does not exists
+    if not os.path.isdir(dat_fol): # create the data folder if does not exists
+        os.mkdir(dat_fol)
 
     if not mmap:
         info("All usearch runs already performed!\n")
     else:
         info("Looking for PhyloPhlAn proteins in input faa files\n")
-        us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", ppa_udb, "-blast6out", o, "-threads", "1",
+        us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", cf_udb if cf_udb else ppa_udb, "-blast6out", o, "-threads", "1",
             "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
 
         try:
@@ -527,7 +583,7 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
 def blastx_exe(x):
     if not terminating.is_set():
         try:
-            info("Starting "+x[6][x[6].rfind('/')+1:]+"...\n")
+            info("Starting "+x[6][x[6].rfind('/')+1:]+"\n")
             tmp_fna = None
             t = None
 
@@ -563,20 +619,23 @@ def blastx_exe(x):
 
 
 def blast(inps, nproc, proj, blast_full=False):
-    inp_fol = 'input/'+proj+'/'
-    dat_fol = 'data/'+proj+'/tblastn/'
+    loc_dat = dat_fol+"tblastn/"
     terminating = mp.Event()
     pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-    mmap = [(inp_fol+i+'.fna', dat_fol+io+'.b6o') for i, io in inps.iteritems() if (not os.path.exists(dat_fol+io+'.b6o'))]
+    mmap = [(inp_fol+i+'.fna', loc_dat+io+'.b6o') for i, io in inps.iteritems() if (not os.path.exists(loc_dat+io+'.b6o'))]
 
-    if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
+    if not os.path.isdir(loc_dat): # create the tmp directory if does not exists
+        os.mkdir(loc_dat)
 
     if not mmap:
         info('All tblastn runs already performed!\n')
     else:
         info('Looking for PhyloPhlAn proteins in input fna files\n')
 
-        if blast_full: # full dataset
+        if cf_up: # custom set of universal proteins
+            dataset = cf_fna
+            evalue = '1e-40'
+        elif blast_full: # full dataset
             dataset = ppa_fna
             evalue = '1e-60'
         else: # small dataset
@@ -598,120 +657,15 @@ def blast(inps, nproc, proj, blast_full=False):
         pool.join()
         info('All tblastn runs performed!\n')
 
-    # if not os.path.exists(dat_fol+up2prots):
-    #     dic = collections.defaultdict(list)
-    #     uniq = set()
-
-    #     for i in inps:
-    #         dicc = collections.defaultdict(list)
-    #         longest = collections.defaultdict(list)
-
-    #         # for each universal protein found tuples
-    #         for lst in (l.strip().split('\t') for l in open(dat_fol+i+'.b6o').readlines()):
-    #             upid = lst[0].split('_')[1]
-    #             contig_id = str(lst[1])
-    #             length = int(lst[3])
-    #             sstart = int(lst[8])
-    #             send = int(lst[9])
-    #             bitscore = float(lst[-1])
-
-    #             if upid not in longest:
-    #                 longest[upid] = lst
-    #             elif length > int(longest[upid][3]):
-    #                 longest[upid] = lst
-
-    #             if (contig_id, sstart, send) not in uniq:
-    #                 uniq.add((contig_id, sstart, send))
-
-    #                 if upid not in dicc:
-    #                     dicc[upid] = lst
-    #                 elif bitscore > float(dicc[upid][-1]):
-    #                     dicc[upid] = lst
-
-    #         # for each genome i, take the longest blast alignment (if there is)
-    #         bests = collections.defaultdict(list)
-    #         for k, v in dicc.iteritems():
-    #             if k in longest:
-    #                 bests[k] = longest[k]
-    #             else:
-    #                 bests[k] = v
-
-    #         dic[i] = bests
-
-    #     updic = collections.defaultdict(list)
-    #     p2t = dict()
-    #     too_few_maps = set()
-
-    #     # open each file
-    #     for k, v in dic.iteritems():
-    #         # there should be at least min_uprots of universal proteins mapped
-    #         if len(v) >= min_uprots:
-    #             f = None
-
-    #             if os.path.isfile(inp_fol+k+'.fna'):
-    #                 f = open(inp_fol+k+'.fna', 'rU')
-    #             else:
-    #                 f = BZ2File(inp_fol+k+'.fna.bz2', 'rU')
-
-    #             # parse the fasta (nucleotides) file
-    #             for record in SeqIO.parse(f, 'fasta'):
-    #                 # look for the contigs id
-    #                 for kk, vv in v.iteritems():
-    #                     if str(vv[1]) in record.id:
-    #                         sstart = int(vv[8])
-    #                         send = int(vv[9])
-    #                         reverse = False
-
-    #                         if sstart > send:
-    #                             sstart, send = send, sstart
-    #                             reverse = True
-
-    #                         sequence = Seq(str(record.seq)[sstart-1:send])
-    #                         if reverse: sequence = sequence.reverse_complement()
-    #                         rev = ':c' if reverse else ':' # reverse or not
-    #                         seqid = k+'_'+record.id+rev+str(sstart)+'-'+str(send)
-    #                         aminoacids = Seq.translate(sequence)
-    #                         updic[kk].append(SeqRecord(aminoacids, id=seqid, description=''))
-    #                         p2t[seqid] = k # save map from seqid to genome
-
-    #             f.close()
-    #         else:
-    #             too_few_maps |= set([k])
-
-    #     # write the skipped genomes
-    #     if too_few_maps:
-    #         with open(dat_fol+few_maps, 'w') as fout:
-    #             for e in too_few_maps:
-    #                 fout.write(e + '\n')
-
-    #     if p2t:
-    #         # write the partial mapping of proteins into genomes
-    #         with open('data/'+proj+'/'+p2t_map, 'w') as f:
-    #             for k, v in p2t.iteritems():
-    #                 f.write(str(k) + '\t' + str(v) + '\n')
-
-    #     if updic:
-    #         # write mapping file dat_fol+up2prots
-    #         with open(dat_fol+up2prots, 'w') as f:
-    #             for k in sorted(updic):
-    #                 f.write('\t'.join([k] + [sr.id for sr in updic[k]]) + '\n')
-
-    #         # write a fasta file for each up
-    #         for k, v in updic.iteritems():
-    #             with open(dat_fol+k+'.faa', 'w') as f:
-    #                 SeqIO.write(v, f, 'fasta')
-
-    #         # write pickle file
-    #         with open(dat_fol+ups2faa_pkl, 'w') as f:
-    #             pickle.dump([k for k, _ in updic.iteritems()], f, pickle.HIGHEST_PROTOCOL)
-
 
 def gens2prots(inps, proj, faa_cleaning):
-    inp_fol = "data/"+proj+"/"+cleanfaa_fld if faa_cleaning else "input/"+proj+"/"
-    dat_fol = "data/"+proj+"/"
+    loc_inp = dat_cln_fol if faa_cleaning else inp_fol
 
-    if not os.path.isdir(dat_fol): os.mkdir(dat_fol) # create the tmp directory if does not exists
-    if os.path.exists(dat_fol+ups2faa_pkl): return
+    if not os.path.isdir(dat_fol): # create the tmp directory if does not exists
+        os.mkdir(dat_fol)
+
+    if os.path.exists(dat_fol+ups2faa_pkl):
+        return
 
     ups2prots = dict([(ll[0], set(ll[1:])) for ll in (l.strip().split('\t') for l in open(dat_fol+up2prots))])
     prots2ups = {}
@@ -728,10 +682,10 @@ def gens2prots(inps, proj, faa_cleaning):
     for i in inps:
         inp = None
 
-        if os.path.isfile(inp_fol+i+'.faa'):
-            inp = open(inp_fol+i+'.faa', 'rU')
+        if os.path.isfile(loc_inp+i+'.faa'):
+            inp = open(loc_inp+i+'.faa', 'rU')
         else:
-            inp = BZ2File(inp_fol+i+'.faa.bz2', 'rU')
+            inp = BZ2File(loc_inp+i+'.faa.bz2', 'rU')
 
         for l in inp:
             if l.startswith(">"):
@@ -815,19 +769,22 @@ def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
 def exe_muscle(x):
     if not terminating.is_set():
         try:
-            if len(x) < 13:
-                info("Running muscle on "+x[3] + "...\n")
+            if len(x) < 14:
+                info("Running muscle on "+x[3] + "\n")
             else:
-                info("Running muscle on "+x[4] + " and "+x[6]+"...\n")
+                info("Running muscle on "+x[4] + " and "+x[6]+"\n")
 
             t = None
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen(x[:-2], stderr=devnull) # quiet mode
                 t.wait()
 
-            pn = max(int(max(int((400.0-int(x[-1][1:]))*30.0/400.0), 1)**2 /30.0), 3)
+            if x[9]:
+                pn = 20
+            else:
+                pn = max(int(max(int((400.0-int(x[-1][1:]))*30.0/400.0), 1)**2 /30.0), 3)
 
-            if len(x) < 13:
+            if len(x) < 14:
                 aln_subsample(x[5], x[-2], x[7], 0.1, pn)
                 info(x[-2] + " generated (from "+x[3]+")!\n")
             else:
@@ -845,23 +802,27 @@ def exe_muscle(x):
 
 
 def faa2aln(nproc, proj, integrate=False):
-    dat_fol = "data/"+proj+"/"
+    ppa_fol = cf_up if cf_up else ppa_alns_fol
 
-    with open(dat_fol + ups2faa_pkl) as inp:
+    with open(dat_fol+ups2faa_pkl) as inp:
         prots = pickle.load(inp)
 
-    mmap = [(dat_fol+i+".faa",dat_fol+i+".aln",dat_fol+i+".sc",
-             ppa_alns_fol+i+".aln",ppa_alns_fol+i+".aln.score",
-             dat_fol+i+".int.aln",dat_fol+i+".int.sc",
-             dat_fol+i+".sub.aln",dat_fol+i+".int.sub.aln",
-             i in prots,
-             i) for i in ('p{num:04d}'.format(num=aa) for aa in range(400))]
+    if cf_up:
+        up_list = (i[i.rfind('/')+1:i.rfind('.')] for i in iglob(cf_up+'*')) # assumes the folder contains all and only the needed files
+    else:
+        up_list = ('p{num:04d}'.format(num=aa) for aa in range(400))
+
+    mmap = [(dat_fol+i+".faa", dat_fol+i+".aln", dat_fol+i+".sc",
+             ppa_fol+i+".aln", ppa_fol+i+".aln.score",
+             dat_fol+i+".int.aln", dat_fol+i+".int.sc",
+             dat_fol+i+".sub.aln", dat_fol+i+".int.sub.aln",
+             cf_up, i in prots, i) for i in up_list]
 
     if mmap:
         if integrate:
-            for _, _, _, _, _, _, _, _, _, _, i in mmap:
+            for _, _, _, _, _, _, _, _, _, _, _, i in mmap:
                 with open(dat_fol+i+".faa", 'a') as f:
-                    with open(ppa_alns_fol+i+".faa", 'r') as g:
+                    with open(ppa_fol+i+".faa", 'r') as g:
                         f.write(g.read())
 
         us_cmd = [["muscle", "-quiet",
@@ -869,7 +830,8 @@ def faa2aln(nproc, proj, integrate=False):
                    "-out", o,
                    "-scorefile", s,
                    "-maxiters", "2",
-                   so, pn] for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap if not os.path.exists(o) and pres]
+                   so, pn] for i,o,s,o2,s2,oi,si,so,soi,up,pres,pn in mmap if not os.path.exists(o) and pres]
+
         if us_cmd:
             info("Looking for PhyloPhlAn proteins to align\n")
             info(str(len(us_cmd))+" alignments to be performed\n")
@@ -888,41 +850,42 @@ def faa2aln(nproc, proj, integrate=False):
             pool.join()
             info("All alignments performed!\n")
 
-#    if integrate:
-#        us_cmd = [ ["muscle","-quiet",
-#                    "-profile",
-#                    "-in1",o,
-#                    "-in2",o2,
-#                    "-out",oi,
-#                    "-scorefile",si,
-#                    "-maxiters","2",
-#                    soi,pn] for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap
-#                        if not os.path.exists(soi) and pres]
-#        for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap: #paralellizable
-#            if not os.path.exists(soi) and not pres:
-#                pnn = max( int( max( int((400.0-int(pn[1:]))*30.0/400.0),1)**2 / 30.0), 3)
-#                aln_subsample( o2, soi, s2, 0.1, pnn )
-#        if us_cmd:
-#            info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
-#            info(str(len(us_cmd))+" alignments to be merged\n")
-#            terminating = mp.Event()
-#            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-#
-#            try:
-#                pool.map(exe_muscle, us_cmd)
-#                pool.close()
-#            except:
-#                pool.terminate()
-#                pool.join()
-#                error("Quitting faa2aln() - integrate")
-#                return
-#
-#            pool.join()
-#            info("All alignments already merged with PhyloPhlAn alignments!\n")
+    # if integrate:
+    #     us_cmd = [ ["muscle","-quiet",
+    #                 "-profile",
+    #                 "-in1",o,
+    #                 "-in2",o2,
+    #                 "-out",oi,
+    #                 "-scorefile",si,
+    #                 "-maxiters","2",
+    #                 soi,pn] for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap
+    #                     if not os.path.exists(soi) and pres]
+    #     for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap: #paralellizable
+    #         if not os.path.exists(soi) and not pres:
+    #             pnn = max( int( max( int((400.0-int(pn[1:]))*30.0/400.0),1)**2 / 30.0), 3)
+    #             aln_subsample( o2, soi, s2, 0.1, pnn )
+    #     if us_cmd:
+    #         info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
+    #         info(str(len(us_cmd))+" alignments to be merged\n")
+    #         terminating = mp.Event()
+    #         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+
+    #         try:
+    #             pool.map(exe_muscle, us_cmd)
+    #             pool.close()
+    #         except:
+    #             pool.terminate()
+    #             pool.join()
+    #             error("Quitting faa2aln() - integrate")
+    #             return
+
+    #         pool.join()
+    #         info("All alignments already merged with PhyloPhlAn alignments!\n")
 
     if os.path.exists(dat_fol+up2prots):
         info("All alignments already computed!\n")
         return
+
     # up2p = collections.defaultdict( list )
     # for i in inps:
     #     for p,up in (l.strip().split('\t')
@@ -939,11 +902,9 @@ def faa2aln(nproc, proj, integrate=False):
 
 
 def aln_merge(proj, integrate):
-    dat_fol = "data/"+proj+"/"
-    out_fol = "output/"+proj+"/"
-    outf = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
+    loc_dat = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
 
-    if os.path.exists(outf):
+    if os.path.exists(loc_dat):
         info("All alignments already merged!\n")
         return
 
@@ -1005,14 +966,14 @@ def aln_merge(proj, integrate):
         v.description = ""
         out_faas.append(v)
 
-    SeqIO.write(out_faas, outf, "fasta")
-    info("All alignments merged into "+outf+"!\n")
+    SeqIO.write(out_faas, loc_dat, "fasta")
+    info("All alignments merged into "+loc_dat+"!\n")
 
     if not os.path.isdir(out_fol):
         os.mkdir(out_fol) # create output directory if does not exists
 
     # write statistics file
-    info("Writing "+out_fol+"aln_stats.tsv... ")
+    info("Writing "+out_fol+"aln_stats.tsv ")
     with open(out_fol+'aln_stats.tsv', 'w') as f:
         f.write('\t'.join(['id', 'tot_length', 'aln_length', 'tot_gaps', 'up_mapped'])+'\n')
 
@@ -1025,44 +986,49 @@ def aln_merge(proj, integrate):
 
 
 def fasttree(proj, integrate):
-    out_fol = "output/"+proj+"/"
-    dat_fol = "data/"+proj+"/"
-    outt = out_fol+proj+"."+ (o_inttree if integrate else o_tree)
+    # dat_fol = cf_data if cf_data else "data/"
+    # dat_fol += proj+"/"
+    # out_fol = cf_output if cf_output else "output/"
+    # out_fol += proj+"/"
+    loc_out = out_fol+proj+"."+ (o_inttree if integrate else o_tree)
 
     if not os.path.isdir(out_fol):
         os.mkdir(out_fol)
 
     aln_in = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
 
-    if os.path.exists(outt):
-        info("Final tree already built ("+outt+")!\n")
+    if os.path.exists(loc_out):
+        info("Final tree already built ("+loc_out+")!\n")
         return
 
-    info("Start building the tree with FastTree...\n")
+    info("Start building the tree with FastTree\n")
     cmd = ["FastTree", "-quiet",
            # "-fastest", "-noml", "-gamma", "-pseudo",
            "-bionj", "-slownni", "-mlacc", "2", "-spr", "4"]
     t = None
     with open(os.devnull, 'w') as devnull:
-        t = sb.Popen(cmd, stdin=open(aln_in), stdout=open(outt, 'w'), stderr=devnull) # quiet mode
+        t = sb.Popen(cmd, stdin=open(aln_in), stdout=open(loc_out, 'w'), stderr=devnull) # quiet mode
         t.wait()
 
     # convert aln_in from fasta to phylip format
     # cmd = [ "raxmlHPC-PTHREADS-SSE3",
     #         "-T","#threads",
     #         "-s","alignment in phylip format",
-    #         "-n",outt,
+    #         "-n",loc_out,
     #         "-m","PROTCATWAG",
     #         "-p","1982"
     #         ]
     # sb.call( cmd )
-    info("Tree built! The output newick file is in "+outt+"\n")
+    info("Tree built! The output newick file is in "+loc_out+"\n")
 
 
 def circlader(proj, integrate, tax=None):
-    inp_fol = "input/"+proj+"/"
-    dat_fol = "data/"+proj+"/"
-    out_fol = "output/"+proj+"/"
+    # inp_fol = cf_input if cf_input else "input/"
+    # inp_fol += proj+"/"
+    # dat_fol = cf_data if cf_data else "data/"
+    # dat_fol += proj+"/"
+    # out_fol = cf_output if cf_output else "output/"
+    # out_fol += proj+"/"
     # out_img = "output/"+proj+"/imgs/"
 
     tree = out_fol+proj+"."+ (o_inttree if integrate else o_tree)
@@ -1071,7 +1037,6 @@ def circlader(proj, integrate, tax=None):
     pngtree = out_fol+proj+".tree"+ (".int" if integrate else "")+".png"
     annotation_f = dat_fol+proj+(".int" if integrate else "")+".annot.txt"
     archaea_f = dat_fol+proj+(".int" if integrate else "")+".archaea.txt"
-
     tax_d = [l.strip().split('\t') for l in open(inp_fol+tax)] if tax else []
     # o2t = dict([(o,t.split('.')) for t,o in tax_d])
     t2o = dict(tax_d)
@@ -1084,103 +1049,100 @@ def circlader(proj, integrate, tax=None):
     c_circ = "circlader/circlader.py"
     c_circ_an = "circlader/circlader_annotate.py"
     c_reroot = "./taxcuration/tree_reroot.py"
-
     names = [l.strip().split('\t')[0] for l in open(dat_fol+ors2prots)]
 
     if integrate:
         return
-        int_names = [l.strip().split('\t')[0] for l in open(ppa_ors2prots)]
 
+        int_names = [l.strip().split('\t')[0] for l in open(ppa_ors2prots)]
         mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)]
         # mt4o2t = dict([(o,t.split('.')) for t,o in mt4tax_d])
         mt4t2o = dict(mt4tax_d)
-
         mt4archaea = [o for t,o in mt4t2o.items() if t.split(".")[0] == "d__Archaea"]
-        with open( archaea_f, "w" ) as out:
-            out.write( "\n".join( mt4archaea ) +"\n" )
-        sb.call( [  c_reroot, "-s", "lca", "-f", archaea_f,
-                    tree, xtree_rr ] )
 
+        with open(archaea_f, "w") as out:
+            out.write("\n".join(mt4archaea) +"\n")
+
+        sb.call([c_reroot, "-s", "lca", "-f", archaea_f, tree, xtree_rr])
         annotation_f = dat_fol+proj+".annot.txt"
-        with open( annotation_f, "w") as outf:
-            for v1,v2 in [('clade_fill_color','r')]:
-                outf.write( "\n".join(["\t".join([nn,v1,v2]) for nn in names]) + "\n" )
-            for v1,v2 in [  ('clade_size','7.0'),
-                         ]:
-                outf.write( "\n".join(["\t".join([nn,v1,v2]) for nn in names+int_names]) + "\n" )
-            for v1,v2 in [('clade_size','2.0')]:
-                outf.write( "\t".join(["*",v1,v2]) + "\n" )
-            for v1,v2 in [  ('sub_branches_angle_reduction','0.0'),
-                            ('clade_edge_line_width','0.2'),
-                            ('branch_line_width','0.45'),
-                         ]:
-                outf.write( "\t".join([v1,v2]) + "\n" )
 
+        with open(annotation_f, "w") as outf:
+            for v1,v2 in [('clade_fill_color','r')]:
+                outf.write("\n".join(["\t".join([nn,v1,v2]) for nn in names]) + "\n")
+
+            for v1,v2 in [('clade_size','7.0'), ]:
+                outf.write("\n".join(["\t".join([nn,v1,v2]) for nn in names+int_names]) + "\n")
+
+            for v1,v2 in [('clade_size','2.0')]:
+                outf.write("\t".join(["*",v1,v2]) + "\n")
+
+            for v1,v2 in [('sub_branches_angle_reduction','0.0'), ('clade_edge_line_width','0.2'), ('branch_line_width','0.45'), ]:
+                outf.write("\t".join([v1,v2]) + "\n")
     else:
-        n = 1 if len(names) <  4 else int(round(min(len(names)*0.05,100)))
+        n = 1 if len(names) < 4 else int(round(min(len(names)*0.05,100)))
         archaea = [o for t,o in t2o.items() if t.split(".")[0] == "d__Archaea"]
+
         if t2o and archaea:
-            with open( archaea_f, "w" ) as out:
-                out.write( "\n".join( archaea ) +"\n" )
-            sb.call( [  c_reroot, "-s", "lca", "-f", archaea_f,
-                        tree, xtree_rr ] )
+            with open(archaea_f, "w") as out:
+                out.write("\n".join(archaea) +"\n")
+
+            sb.call([c_reroot, "-s", "lca", "-f", archaea_f, tree, xtree_rr])
         elif n == 1 and len(names) < 8:
-            sb.call( [ c_reroot, "-s","longest_edge", tree, xtree_rr ] )
+            sb.call([c_reroot, "-s","longest_edge", tree, xtree_rr])
         elif n == 1:
-            sb.call( [  c_reroot, "-s", "longest_internal_edge",
-                        tree, xtree_rr ] )
+            sb.call([c_reroot, "-s", "longest_internal_edge", tree, xtree_rr])
         else:
-            sb.call( [  c_reroot, "-s", "longest_internal_edge_n", "-n",
-                        str(n), tree, xtree_rr ] )
+            sb.call([c_reroot, "-s", "longest_internal_edge_n", "-n", str(n), tree, xtree_rr])
 
         return
-        with open( annotation_f, "w") as outf:
-            for v1,v2 in [  ('clade_fill_color','r'),
-                            ('clade_size','7.0'),
-                         ]:
-                outf.write( "\n".join(["\t".join([nn,v1,v2]) for nn in names]) + "\n" )
+
+        with open(annotation_f, "w") as outf:
+            for v1,v2 in [('clade_fill_color','r'), ('clade_size','7.0'), ]:
+                outf.write("\n".join(["\t".join([nn,v1,v2]) for nn in names]) + "\n")
+
             for v1,v2 in [('clade_size','2.0')]:
-                outf.write( "\t".join(["*",v1,v2]) + "\n" )
-            for v1,v2 in [  ('sub_branches_angle_reduction','0.0'),
-                            ('clade_edge_line_width','0.2'),
-                            ('branch_line_width','0.45'),
-                         ]:
-                outf.write( "\t".join([v1,v2]) + "\n" )
+                outf.write("\t".join(["*",v1,v2]) + "\n")
 
-    sb.call( [ c_circ_an, "--annot", annotation_f, xtree_rr, xtree_an ] )
-    sb.call( [ c_circ, "--dpi", "300", xtree_an, pngtree ] )
-    info( "Done!\n" )
+            for v1,v2 in [('sub_branches_angle_reduction','0.0'), ('clade_edge_line_width','0.2'), ('branch_line_width','0.45'), ]:
+                outf.write("\t".join([v1,v2]) + "\n")
+
+    sb.call([c_circ_an, "--annot", annotation_f, xtree_rr, xtree_an])
+    sb.call([c_circ, "--dpi", "300", xtree_an, pngtree])
+    info("Done!\n")
 
 
-def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
-    inp_fol = "input/"+proj+"/"
-    out_fol = "output/"+proj+"/"
+def tax_curation(proj, tax, integrate=False, mtdt=None, inps=None):
+    # inp_fol = cf_input if cf_input else "input/"
+    # inp_fol += proj+"/"
+    # out_fol = cf_output if cf_output else "output/"
+    # out_fol += proj+"/"
     taxin = ppa_tax if integrate else inp_fol+tax
     taxout = None if integrate else out_fol+"new."+tax
     taxdiffs = None if integrate else out_fol+"diff."+tax
     taxboth = None if integrate else out_fol+"comp."+tax
-    intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
-    if not os.path.exists(intree):
-        intree = out_fol+proj+".tree."+ ( "int." if integrate else "")+"nwk"
+    intree = out_fol+proj+".tree.reroot."+ ("int." if integrate else "")+"annot.xml"
     operation = "imputation" if integrate else "curation"
 
+    if not os.path.exists(intree):
+        intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
+
     if tax:
-        info("Starting taxonomic curation: detecting suspicious taxonomic labels ... ")
-        taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, to_integrate = inp_fol+tax )
+        info("Starting taxonomic curation: detecting suspicious taxonomic labels ")
+        taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, to_integrate=inp_fol+tax)
         taxCleaner.remove_tlabels()
         info("Done!\n")
-        info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ... ")
+        info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ")
     else:
-        taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, inps = inps  )
-        info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
+        taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, inps=inps)
+        info("Trying to impute taxonomic labels for taxa newly integrated into the tree ")
 
     taxCleaner.infer_tlabels()
     info("Done!\n")
 
-    info("Writing taxonomic "+operation+" outputs ... ")
-    tid2img = taxCleaner.write_output( proj, images = False )
+    info("Writing taxonomic "+operation+" outputs ")
+    tid2img = taxCleaner.write_output(proj, images=False)
     info("Done!\n")
-    info("Writing final pdf reports ... ")
+    info("Writing final pdf reports ")
     if integrate:
         pass
     elif mtdt:
@@ -1188,181 +1150,54 @@ def tax_curation( proj, tax, integrate = False, mtdt = None, inps = None ):
         taxCleaner.write_report(out_fol+"/"+"tax"+operation+"_report", tid2img, inp_fol+mtdt, images=True, typ="corrected")
 
     if not integrate:
-        taxCleaner.write_new_taxonomy( taxout, taxdiffs, taxboth )
+        taxCleaner.write_new_taxonomy(taxout, taxdiffs, taxboth)
 
     info("Done!\n")
 
 
-def tax_imputation( proj, tax, integrate = False, mtdt = None, inps = None ):
-    inp_fol = "input/"+proj+"/"
-    out_fol = "output/"+proj+"/"
+def tax_imputation(proj, tax, integrate=False, mtdt=None, inps=None):
+    # inp_fol = cf_input if cf_input else "input/"
+    # inp_fol += proj+"/"
+    # out_fol = cf_output if cf_output else "output/"
+    # out_fol += proj+"/"
     taxin = ppa_tax if integrate else inp_fol+tax
     # taxout = None if integrate else out_fol+"new."+tax
     # taxdiffs = None if integrate else out_fol+"diff."+tax
     # taxboth = None if integrate else out_fol+"comp."+tax
-    intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
-    if not os.path.exists(intree):
-        intree = out_fol+proj+".tree."+ ( "int." if integrate else "")+"nwk"
+    intree = out_fol+proj+".tree.reroot."+ ("int." if integrate else "")+"annot.xml"
     operation = "imputation" if integrate else "curation"
 
-    info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
-    taxCleaner = taxc.TaxCleaner( taxin, intree, integrate = integrate, inps = inps  )
+    if not os.path.exists(intree):
+        intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
 
+    info("Trying to impute taxonomic labels for taxa newly integrated into the tree ")
+    taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, inps=inps)
     taxCleaner.infer_tlabels()
     info("Done!\n")
-
-    info("Writing taxonomic "+operation+" outputs ... ")
-    taxCleaner.write_output( proj, images = False, imp_only = True )
+    info("Writing taxonomic "+operation+" outputs ")
+    taxCleaner.write_output(proj, images=False, imp_only=True)
     info("Done!\n")
 
 
-def tax_curation_test( proj, tax,
-                       nerrorrs = 10, error_type = 'wrong',
-                       taxl = 's', tmin = 3, tex = None,
-                       name = 'err.txt',
-                       integrate = False, descr = None ):
-    inp_fol = "input/"+proj+"/"
-    out_fol = "output/"+proj+"/"
+def tax_curation_test(proj, tax, nerrorrs=10, error_type='wrong', taxl='s', tmin=3, tex=None, name='err.txt', integrate=False, descr=None):
     err_tax = out_fol+name
-    intree = out_fol+proj+".tree.reroot."+ ( "int." if integrate else "")+"annot.xml"
-
-
-    taxCleaner = taxc.TaxCleaner( inp_fol+tax, intree )
-    taxCleaner.introduce_errors( nerrorrs, err_tax, error_type, taxl, tmin, tex )
-    taxCleaner = taxc.TaxCleaner( err_tax, intree )
-
-    info("Starting taxonomic curation: detecting suspicious taxonomic labels ... ")
+    intree = out_fol+proj+".tree.reroot."+ ("int." if integrate else "")+"annot.xml"
+    taxCleaner = taxc.TaxCleaner(inp_fol+tax, intree)
+    taxCleaner.introduce_errors(nerrorrs, err_tax, error_type, taxl, tmin, tex)
+    taxCleaner = taxc.TaxCleaner(err_tax, intree)
+    info("Starting taxonomic curation: detecting suspicious taxonomic labels ")
     taxCleaner.remove_tlabels()
     info("Done!\n")
-    info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ... ")
+    info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ")
     taxCleaner.infer_tlabels()
     info("Done!\n")
-
-    info("Writing taxonomic curation outputs and evaluations... ")
-    taxCleaner.write_output( "log.txt", proj, outname = name ) # , images = True )
-    taxCleaner.evaluate( proj, inp_fol+tax, err_tax, name, descr = descr )
+    info("Writing taxonomic curation outputs and evaluations ")
+    taxCleaner.write_output("log.txt", proj, outname=name) # , images=True )
+    taxCleaner.evaluate(proj, inp_fol+tax, err_tax, name, descr=descr)
     info("Done!\n")
 
 
-# def merge_usearch_blast(inps, proj):
-#     dat_fol = 'data/'+proj+'/'
-#     usearch_fol = 'data/'+proj+'/usearch/'
-#     tblastn_fol = 'data/'+proj+'/tblastn/'
-#     usearch_files = []
-#     tblastn_files = []
-
-#     if os.path.isdir(usearch_fol):
-#         usearch_files = [os.path.normcase(f) for f in os.listdir(usearch_fol)]
-
-#     if os.path.isdir(tblastn_fol):
-#         tblastn_files = [os.path.normcase(f) for f in os.listdir(tblastn_fol)]
-
-#     # check if I have already copied files in dat_fol folder
-#     dat_fol_num = len(glob(dat_fol+'*.b6o'))
-
-#     if dat_fol_num == len(inps):
-#         info("Usearch and tblastn have been already merged!\n")
-#         return
-
-#     if usearch_files and not tblastn_files: # just usearch ran -> NO MERGE, just copy
-#         for f in usearch_files:
-#             shutil.copy2(usearch_fol+f, dat_fol+f)
-#     elif tblastn_files and not usearch_files: # just tblastn ran -> NO MERGE, just copy
-#         for f in tblastn_files:
-#             shutil.copy2(tblastn_fol+f, dat_fol+f)
-#     elif usearch_files and tblastn_files: # usearch and tblastn ran -> MERGE!
-#         # merge few_maps files
-#         too_few_maps = []
-
-#         if os.path.isfile(usearch_fol+few_maps) and os.path.isfile(tblastn_fol+few_maps):
-#             too_few_maps = [s.strip() for s in open(usearch_fol+few_maps, 'r')]
-#             too_few_maps += [s.strip() for s in open(tblastn_fol+few_maps, 'r')]
-
-#             with open(dat_fol+few_maps, 'w') as f:
-#                 f.write('\n'.join(too_few_maps) + '\n')
-#         elif os.path.isfile(usearch_fol+few_maps) and not os.path.isfile(tblastn_fol+few_maps):
-#             shutil.copy2(usearch_fol+few_maps, dat_fol+few_maps)
-#         elif not os.path.isfile(usearch_fol+few_maps) and os.path.isfile(tblastn_fol+few_maps):
-#             shutil.copy2(tblastn_fol+few_maps, dat_fol+few_maps)
-#         else:
-#             with open(dat_fol+few_maps, 'w'):
-#                 pass
-#             # error("Merge phase, neither usearch nor tblastn have the \""+few_maps+"\" file")
-
-#         # merge .faa files
-#         sett = list(set([f for f in usearch_files if '.faa' in f]) & set([f for f in tblastn_files if '.faa' in f]))
-
-#         for f in sett:
-#             records = []
-#             with open(usearch_fol+f, 'rU') as ff:
-#                 records = list(SeqIO.parse(ff, 'fasta'))
-
-#             with open(tblastn_fol+f, 'rU') as ff:
-#                 records += list(SeqIO.parse(ff, 'fasta'))
-
-#             with open(dat_fol+f, 'w') as ff:
-#                 SeqIO.write(records, ff, 'fasta')
-
-#         # merge up2prots files
-#         if os.path.isfile(usearch_fol+up2prots) and os.path.isfile(tblastn_fol+up2prots):
-#             up2prot = collections.defaultdict(list)
-
-#             with open(usearch_fol+up2prots, 'r') as f:
-#                 for row in f:
-#                     up = row.split('\t')[0].strip()
-#                     prot = [s.strip() for s in row.split('\t')[1:]]
-#                     up2prot[up] = prot
-
-#             with open(tblastn_fol+up2prots, 'r') as f:
-#                 for row in f:
-#                     up = row.split('\t')[0].strip()
-#                     prot = [s.strip() for s in row.split('\t')[1:]]
-
-#                     if up in up2prot:
-#                         up2prot[up] += prot
-#                     else:
-#                         up2prot[up] = prot
-
-#             with open(dat_fol+up2prots, 'w') as f:
-#                 for k, v in up2prot.iteritems():
-#                     f.write('\t'.join([k] + v) + '\n')
-#         elif os.path.isfile(usearch_fol+up2prots) and not os.path.isfile(tblastn_fol+up2prots):
-#             shutil.copy2(usearch_fol+up2prots, dat_fol+up2prots)
-#         elif not os.path.isfile(usearch_fol+up2prots) and os.path.isfile(tblastn_fol+up2prots):
-#             shutil.copy2(tblastn_fol+up2prots, dat_fol+up2prots)
-#         else:
-#             error("Merge phase, neither usearch nor tblastn have the \""+up2prots+"\" file", exit=True)
-
-#         # merge ups2faa_pkl files
-#         if os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
-#             with open(usearch_fol+ups2faa_pkl, 'r') as f:
-#                 pckl = set(pickle.load(f))
-
-#             with open(tblastn_fol+ups2faa_pkl, 'r') as f:
-#                 pckl |= set(pickle.load(f))
-
-#             with open(dat_fol+ups2faa_pkl, 'w') as f:
-#                 pickle.dump(list(pckl), f, pickle.HIGHEST_PROTOCOL)
-#         elif os.path.isfile(usearch_fol+ups2faa_pkl) and not os.path.isfile(tblastn_fol+ups2faa_pkl):
-#             shutil.copy2(usearch_fol+ups2faa_pkl, dat_fol+ups2faa_pkl)
-#         elif not os.path.isfile(usearch_fol+ups2faa_pkl) and os.path.isfile(tblastn_fol+ups2faa_pkl):
-#             shutil.copy2(tblastn_fol+ups2faa_pkl, dat_fol+ups2faa_pkl)
-#         else:
-#             error("Merge phase, neither usearch nor tblastn have the \""+ups2faa_pkl+"\" file", exit=True)
-
-#         # copy all the rest
-#         not_in = list(sett)+[up2prots, ups2faa_pkl, few_maps]+[s+'.b6o' for s in too_few_maps]
-
-#         for f in (z for z in usearch_files if (z not in sett) and (z not in not_in)):
-#             shutil.copy2(usearch_fol+f, dat_fol+f)
-
-#         for f in (z for z in tblastn_files if (z not in sett) and (z not in not_in)):
-#             shutil.copy2(tblastn_fol+f, dat_fol+f)
-#     else: # something very bad happened!
-#         error("Merge phase, no files found!", exit=True)
-
-
-def notinclusters((xx, yy), clusters):
+def notinclusters(xx, yy, clusters):
     reverse = True if xx > yy else False
 
     for x, y in clusters:
@@ -1405,20 +1240,14 @@ def find_clusters(reprs, points, f1, f2, reverse=True):
         for x, y in set(reprs).difference(clusters):
             xyrev = True if x > y else False
 
-            # if (not reverse) and (not xyrev):
             for a, b in points:
 
                 if reverse and xyrev:
                     a, b = b, a
 
-                if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
+                if ((x != a) and (y != b)) and notinclusters(a, b, tmp_clusters):
                     if ((a <= x) and (b >= x) and (b <= y)) or ((a >= x) and (a <= y) and (b >= y)):
                         tmp_clusters = tmp_clusters.union(set([(f1(x, a), f2(y, b))]))
-            # elif reverse and xyrev:
-            #     for a, b in points:
-            #         if ((x != a) and (y != b)) and notinclusters((a, b), tmp_clusters):
-            #             if ((a >= x)) and ((b <= x) and (b >= y)) or ((a <= x) and (a >= y)) and ((b <= y)):
-            #                 tmp_clusters = tmp_clusters.union( set( [(f1(x, a), f2(y, b))] ) )
 
             if tmp_clusters:
                 break
@@ -1443,9 +1272,7 @@ def find_clusters(reprs, points, f1, f2, reverse=True):
 
 
 def fake_proteome(proj, fna_out, faa_cleaning):
-    inp_fol = 'input/'+proj+'/'
-    dat_fol = 'data/'+proj+'/'
-    out_fol = 'data/'+proj+'/'+cleanfaa_fld if faa_cleaning else 'input/'+proj+'/'
+    loc_inp = dat_cln_fol if faa_cleaning else inp_fol
     b6o_files = iglob(dat_fol+'tblastn/*.b6o')
     fake_proteomes = []
     contigs = {}
@@ -1455,14 +1282,14 @@ def fake_proteome(proj, fna_out, faa_cleaning):
 
     # check if there are already present the result files
     for _, f in fna_out.iteritems():
-        if not os.path.isfile(out_fol+f+'.faa') and done:
+        if not os.path.isfile(loc_inp+f+'.faa') and done:
             done = False
 
     if done:
         return None
 
-    if not os.path.isdir(out_fol):
-        os.mkdir(out_fol) # create the directory if it does not exists
+    if not os.path.isdir(loc_inp):
+        os.mkdir(loc_inp) # create the directory if it does not exists
 
     info('Reading tblastn output files (.b6o)')
 
@@ -1471,7 +1298,9 @@ def fake_proteome(proj, fna_out, faa_cleaning):
 
         with open(f) as hf:
             for r in hf:
-                if key not in fake_proteomes: fake_proteomes.append(key)
+                if key not in fake_proteomes:
+                    fake_proteomes.append(key)
+
                 tmp_lst = r.strip().split('\t')
                 dic = {} if key not in contigs else contigs[key]
 
@@ -1488,7 +1317,6 @@ def fake_proteome(proj, fna_out, faa_cleaning):
                 contigs[key] = dic
 
     info(': '+str(len(contigs))+' files loaded!\n')
-    info('Creating a proteome\n')
 
     for f, cc in contigs.items():
         fin = fin_dict[f]
@@ -1522,7 +1350,7 @@ def fake_proteome(proj, fna_out, faa_cleaning):
             info('Reading input file: '+inp_fol+fin+'.fna\n')
         elif os.path.isfile(inp_fol+fin+'.fna.bz2'):
             ff = BZ2File(inp_fol+fin+'.fna.bz2')
-            info('Reading input file: '+inp_fol+fin+'.fna.bz2\n')
+            info('Starting '+inp_fol+fin+'.fna.bz2\n')
         else:
             info('File not found: '+inp_fol+fin+'.fna(.bz2)\n')
 
@@ -1553,9 +1381,14 @@ def fake_proteome(proj, fna_out, faa_cleaning):
                                 sequence3 = Seq(str(record.seq)[s-2:e])
 
                             # if sequence no div by 3, add Ns
-                            while (len(sequence1) % 3) != 0: sequence1 += Seq('N')
-                            while (len(sequence2) % 3) != 0: sequence2 += Seq('N')
-                            while (len(sequence3) % 3) != 0: sequence3 += Seq('N')
+                            while (len(sequence1) % 3) != 0:
+                                sequence1 += Seq('N')
+
+                            while (len(sequence2) % 3) != 0:
+                                sequence2 += Seq('N')
+
+                            while (len(sequence3) % 3) != 0:
+                                sequence3 += Seq('N')
 
                             if reverse:
                                 sequence1 = sequence1.reverse_complement()
@@ -1584,9 +1417,9 @@ def fake_proteome(proj, fna_out, faa_cleaning):
             ff.close()
 
             # write output file
-            with open(out_fol+f+'.faa', 'w') as ff:
+            with open(loc_inp+f+'.faa', 'w') as ff:
                 SeqIO.write(proteome, ff, 'fasta')
-                info('Written output file: '+out_fol+f+'.faa\n')
+                info(loc_inp+f+'.faa generated!\n')
 
     # write the partial mapping of proteins into genomes
     if p2t:
@@ -1613,22 +1446,56 @@ def uniq_filenames(faa_in, fna_in):
 
 if __name__ == '__main__':
     pars = read_params(sys.argv)
-    projn = pars['inp']
 
     if ('v' in pars and pars['v']) or ('version' in pars and pars['version']):
         info("PhyloPhlAn version "+__version__+" ("+__date__+")\n")
         sys.exit(0)
 
+    global cf_data
+    cf_data = pars['c_dat']
+    if cf_data:
+        cf_data += '/' if not cf_data.endswith('/') else ''
+
     if pars['cleanall']:
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or \
-           ('user_tree' in pars and pars['user_tree']) or \
-           ('integrate' in pars and pars['integrate']):
+           ('user_tree' in pars and pars['user_tree']) or ('integrate' in pars and pars['integrate']):
             error("--cleanall is in conflict with -t, -u, and -i", exit=True)
         else:
             info("Cleaning \"data/\" and \"data/ppaalns/\" folders... ")
-            clean_all()
+            clean_all(cf_data if cf_data else 'data/')
             info("Done!\n")
+
         sys.exit(0)
+
+    projn = pars['inp']
+    if not projn:
+        error("Project name not provided.", exit=True)
+
+    global cf_input
+    cf_input = pars['c_in']
+    if cf_input:
+        cf_input += '/' if not cf_input.endswith('/') else ''
+
+    global cf_output
+    cf_output = pars['c_out']
+    if cf_output:
+        cf_output += '/' if not cf_output.endswith('/') else ''
+
+    global dat_fol
+    global dat_cln_fol
+    dat_fol = cf_data if cf_data else 'data/'
+    dat_fol += projn+'/'
+    dat_cln_fol = dat_fol+cleanfaa_fld
+
+    global inp_fol
+    global inp_cln_fol
+    inp_fol = cf_input if cf_input else 'input/'
+    inp_fol += projn+'/'
+    inp_cln_fol = inp_fol+cleanfaa_fld
+
+    global out_fol
+    out_fol = cf_output if cf_output else 'output/'
+    out_fol += projn+'/'
 
     if pars['clean']:
         if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or \
@@ -1637,29 +1504,33 @@ if __name__ == '__main__':
             error("-c/--clean is in conflict with -t, -u, and -i", exit=True)
         else:
             info("Cleaning project \""+projn+"\"... ")
-            clean_project(projn)
+            clean_project()
             info("Done!\n")
+
         sys.exit(0)
 
-    if not projn:
-        error("Project name not provided.", exit=True)
+    global cf_up
+    cf_up = pars['c_up']
+    if cf_up:
+        cf_up += '/' if not cf_up.endswith('/') else ''
 
     dep_checks()
-    init()
-    info("Loading and checking input files... ")
+
+    global cf_fna
+    global cf_udb
+    cf_fna, cf_udb = init()
+
+    info("Loading and checking input files: ")
     t0 = time.time()
     faa_in, fna_in, tax, rtax, mtdt = get_inputs(projn, pars)
-    # check faa and fna
-    # check output files to see if ...
     check_inp(faa_in + [f for _, f in fna_in])
     info(str(len(faa_in)+len(fna_in))+" input files loaded in "+str(int(time.time()-t0))+" s!\n")
 
     if not tax and pars['taxonomic_analysis'] and not pars['integrate']:
         error("No taxonomy file found for the taxonomic analysis", exit=True)
 
-    if pars['min_uprots']:
-        min_uprots = pars['min_uprots']
-
+    global min_uprots
+    min_uprots = pars['min_uprots']
     t0 = time.time()
 
     if fna_in:
@@ -1680,8 +1551,6 @@ if __name__ == '__main__':
         except:
             error("Quitting PhyloPhlAn [usearch error]", exit=True)
 
-    # merging phase for .faa and .fna files
-    # merge_usearch_blast(faa_in+fna_in, projn)
     t1 = time.time()
     info("Mapping finished in "+str(int(t1-t0))+" secs.\n")
 
@@ -1692,17 +1561,15 @@ if __name__ == '__main__':
 
     t2 = time.time()
     info("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n")
-
     aln_merge(projn, pars['integrate'])
     fasttree(projn, pars['integrate'])
-
     t4 = time.time()
     info("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+" total time).\n")
-
     circlader(projn, pars['integrate'], tax)
 
     # if pars['integrate'] and tax and not pars['taxonomic_analysis']:
     #     tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
+
     if pars['integrate'] and pars['taxonomic_analysis']:
         tax_imputation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
         sys.exit()
@@ -1712,13 +1579,13 @@ if __name__ == '__main__':
 
     if pars['tax_test']:
         nerrorrs, error_type, taxl, tmin, tex, name = pars['tax_test'].split(":")
-        tax_curation_test( projn, tax,
-                           nerrorrs = int(nerrorrs),
-                           error_type = error_type,
-                           taxl = taxl,
-                           tmin = int(tmin),
-                           tex = int(tex) if tex else None,
-                           name = name,
-                           descr = pars['tax_test'] )
+        tax_curation_test(projn, tax,
+                          nerrorrs=int(nerrorrs),
+                          error_type=error_type,
+                          taxl=taxl,
+                          tmin=int(tmin),
+                          tex=int(tex) if tex else None,
+                          name=name,
+                          descr=pars['tax_test'])
     else:
         tax_curation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
