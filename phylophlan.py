@@ -98,15 +98,48 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
         sys.exit(exit_value)
 
 
-def dep_checks():
-    for prog in ["FastTree", "usearch", "muscle", "tblastn"]:
+def dep_checks(mafft, raxml, nproc):
+    progs = [["usearch"], ["tblastn"], ["muscle"]]
+
+    if mafft:
+        progs.append(["mafft", "--version"])
+
+    if raxml:
+        if nproc > 1:
+            progs.append(["raxmlHPC-PTHREADS-SSE3"])
+        else:
+            progs.append(["raxmlHPC"])
+    else:
+        progs.append(["FastTree"])
+
+    for prog in progs:
+        t = None
+
         try:
             with open(os.devnull, 'w') as devnull:
-                t = sb.Popen([prog], stdout=devnull, stderr=devnull)
+                t = sb.Popen(prog, stdout=devnull, stderr=devnull)
+
+            if t:
                 t.wait()
         except OSError:
-            t.kill()
-            error(prog+" not found or not in system path", exit=True)
+            if t:
+                t.kill()
+
+            error(prog+" not found or not present in system path", exit=True)
+
+
+def wait_for(it):
+    timeout = 1
+
+    while (timeout <= 32) and (not os.path.isfile(it)):
+            time.sleep(timeout)
+            timeout *= 2
+
+    if not os.path.isfile(it):
+        error('File "'+it+'" has not been created, there should be an error somewhere!')
+        return False
+
+    return True
 
 
 def read_params(args):
@@ -132,19 +165,19 @@ def read_params(args):
         "The results will be stored in a folder with the project basename in output/\n"
         "Multiple project can be generated and they safetely coexists.")
 
-    arg('-i','--integrate', action='store_true', help=
+    arg('-i','--integrate', action='store_true', default=False, help=
         "Integrate user genomes into the PhyloPhlAn tree \n")
-    arg('-u','--user_tree', action='store_true', help=
+    arg('-u','--user_tree', action='store_true', default=False, help=
         "Build a phylogenetic tree using user genomes only \n")
-    arg('-t','--taxonomic_analysis', action='store_true', help=
+    arg('-t','--taxonomic_analysis', action='store_true', default=False, help=
         "Check taxonomic inconsistencies and refine/correct taxonomic labels\n")
-    arg('--tax_test', type=str, default = None, help=
+    arg('--tax_test', type=str, default=None, help=
         "nerrors:type:taxl:tmin:tex:name (alpha version, experimental!)\n")
 
-    arg('-c','--clean', action='store_true', help=
+    arg('-c','--clean', action='store_true', default=False, help=
         "Clean the final and partial data produced for the specified project.\n"
         " (use --cleanall for removing general installation and database files)\n")
-    arg('--cleanall', action='store_true', help=
+    arg('--cleanall', action='store_true', default=False, help=
         "Remove all instalation and database file leaving untouched the initial compressed data \n"
         "that is automatically extracted and formatted at the first pipeline run.\n"
         "Projects are not remove (specify a project and use -c for removing projects).\n")
@@ -152,44 +185,56 @@ def read_params(args):
     arg('--nproc', metavar="N", type=int, default=1, help=
         "The number of CPUs to use for parallelizing the blasting\n"
         "[default 1, i.e. no parallelism]\n")
+
     # decide which database to use with blast
     arg('--blast_full', action='store_true', default=False, help=
-        "If specified, tells blast to use the full dataset of universal proteins\n"
-        "[default False, i.e. the small dataset of universal proteins is used]\n")
+        "If specified, tells blast to use the full dataset of universal proteins. As default the small "
+        "dataset of universal proteins is used.\n")
     # decide if you want perform the faa cleaning of the .faa
     arg('--faa_cleaning', action='store_true', default=False, help=
-        "When specified perform a cleaning on the number and the length of proteins, changing also\n"
-        "the proteins id such that are unique among all the genomes."
-        "If you believe that your genomes have unique ids you can skip this step.")
+        "When specified perform a cleaning on the number and the length of proteins, changing also the "
+        "proteins id such that are unique among all the genomes. As default this step will be skipped.\n")
     # protein filtering params
     arg('--min_num_proteins', type=int, default=100, help=
-        "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
-        "genomes with less than this number of proteins will be discarded.\n"
-        "[default minimum number of proteins is 100]\n")
+        "This parameter is used when the --faa_cleaning is specified. When performing the cleaning, genomes "
+        "with less than this number of proteins will be discarded. The default minimum number of proteins is "
+        "100.\n")
     arg('--min_len_protein', type=int, default=50, help=
-     "This parameter is used when the --faa_cleaning is specified. When performing the cleaning,\n"
-     "proteins shorter that this value will be discarded.\n"
-     "[default minimum length for each protein is 50]\n")
+        "This parameter is used when the --faa_cleaning is specified. When performing the cleaning, proteins "
+        "shorter that this value will be discarded. The default minimum length for each protein is 50.\n")
     # minimum number of unversal proteins mapped
     arg('--min_uprots', type=int, default=0, help=
-        "This parameter is used to filter both usearch and tblastn mapping phases.\n"
-        "Genomes that mapp less than this number of universal proteins, will be discarded\n"
-        "[default minimum number of universal proteins mapped is 0, i.e., no genomes will be omitted]\n")
+        "This parameter is used to filter both usearch and tblastn mapping phases."
+        "Genomes that map less than this number of universal proteins, will be discarded."
+        "As default minimum number of universal proteins required is 0, i.e., no genomes will be omitted.\n")
     # user defined data folder
     arg('--c_dat', type=str, default=None, help=
-        'Custom path to the folder where to store the intermediate files\n')
+        'Custom path to the folder where to store the intermediate files. As default the "data/" directory '
+        'will be used.\n')
     # user defined input folder
     arg('--c_in', type=str, default=None, help=
-        'Custom path to the folder containing the folder with the input data\n')
+        'Custom path to the folder containing the folder with the input data. As default the "input/" '
+        'directory will be used.\n')
     # user defined output folder
     arg('--c_out', type=str, default=None, help=
-        'Custom path to the output folder where to save the results\n')
+        'Custom path to the output folder where to save the results. As default the "output/" directory '
+        'will be used.\n')
     # user defined universal protenis folder
     arg('--c_up', type=str, default=None, help=
-        'Path to the file (fasta) or folder containing the *.faa files to use as universal proteins. Default None.\n')
+        'Path to the file (fasta) or folder containing the *.faa files to use as universal proteins.'
+        'As default the PhyloPhlAn set of universal proteins will be used.\n')
+    # decide to use mafft instead of muscle
+    arg('--mafft', action='store_true', default=False, help=
+        'If specified, PhyloPhlAn will use mafft instead of muscle to perform the multiple alignments.'
+        'As default muscle will be used.\n')
+    # decide to use RAxML instead of FastTree
+    arg('--raxml', action='store_true', default=False, help=
+        'If specified, PhyloPhlAn will use raxmlHPC (or raxmlHPC-PTHREADS-SSE3, depending on the number '
+        'of cores available) instead of FastTree to build the phylogenetic tree. As default FastTree will '
+        'be used.\n')
 
-    arg('-v', '--version', action='store_true', help=
-        "Prints the current PhyloPhlAn version and exit\n")
+    arg('-v', '--version', action='store_true', default=False, help=
+        "Prints the current PhyloPhlAn version and exit.\n")
 
     return vars(p.parse_args())
 
@@ -265,6 +310,23 @@ def init():
                 info('usearch database "'+cf_udb+'" already present in "'+cf_up+'" folder.\n')
 
     return cf_fna, cf_udb
+
+
+def delete_fake_proteomes(torm_sol):
+    not_rm = []
+
+    for f in torm_sol:
+        if os.path.isfile(f):
+            shutil.copy2(f, f+'_'+str(time.time())+'.bkp')
+            os.remove(f)
+        else:
+            not_rm.append(f)
+
+    if not_rm:
+        msg = "The following fake proteome"
+        msg += "s were" if len(not_rm) > 1 else " was"
+        msg += " not removed: "
+        info(msg + ', '.join(not_rm) + "\n")
 
 
 def clean_all(loc_dat):
@@ -454,6 +516,19 @@ def initt(terminating_):
     terminating = terminating_
 
 
+def initu(terminating_, loc_inp_, dat_fol_, fin_dict_, fake_proteomes_):
+    global terminating
+    global loc_inp
+    global dat_fol
+    global fin_dict
+    global fake_proteomes
+    terminating = terminating_
+    loc_inp = loc_inp_
+    dat_fol = dat_fol_
+    fin_dict = fin_dict_
+    fake_proteomes = fake_proteomes_
+
+
 def exe_usearch(x):
 
     def screen_usearch_wdb(inpf):
@@ -489,8 +564,8 @@ def exe_usearch(x):
             t = None
 
             if not os.path.isfile(x[3]):
-                tmp_faa = NamedTemporaryFile(suffix='.faa', prefix=x[3][x[3].rfind('/')+1:x[3].find('.')],
-                    dir=x[3][:x[3].rfind('/')+1])
+                tmp_faa = NamedTemporaryFile(suffix='.faa', prefix=x[3][x[3].rfind('/')+1:x[3].find('.')], dir=x[3][:x[3].rfind('/')+1])
+
                 with open(tmp_faa.name, 'w') as h_out:
                     with BZ2File(x[3]+'.bz2', 'rU') as h_in:
                         records = list(SeqIO.parse(h_in, "fasta"))
@@ -502,7 +577,10 @@ def exe_usearch(x):
                 cmd = x
 
             t = sb.Popen(cmd)
-            t.wait()
+
+            if t:
+                t.wait()
+
             shutil.copy2(x[7], x[7]+'.bkp') # copy the results of usearch
             screen_usearch_wdb(x[7])
 
@@ -539,7 +617,8 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
     if not mmap:
         info("All usearch runs already performed!\n")
     else:
-        info("Looking for PhyloPhlAn proteins in input faa files\n")
+        sw = 'your custom set of' if cf_up else 'PhyloPhlAn'
+        info('Looking for ' + sw + ' proteins in input .faa files ('+str(len(mmap))+')\n')
         us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", cf_udb if cf_udb else ppa_udb, "-blast6out", o, "-threads", "1",
             "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
 
@@ -588,8 +667,8 @@ def blastx_exe(x):
             t = None
 
             if not os.path.isfile(x[2]):
-                tmp_fna = NamedTemporaryFile(suffix='.fna', prefix=x[2][x[2].rfind('/')+1:x[2].find('.')],
-                    dir=x[2][:x[2].rfind('/')+1])
+                tmp_fna = NamedTemporaryFile(suffix='.fna', prefix=x[2][x[2].rfind('/')+1:x[2].find('.')], dir=x[2][:x[2].rfind('/')+1])
+
                 with open(tmp_fna.name, 'w') as h_out:
                     with BZ2File(x[2]+'.bz2', 'rU') as h_in:
                         records = list(SeqIO.parse(h_in, "fasta"))
@@ -602,13 +681,21 @@ def blastx_exe(x):
 
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen(cmd, stderr=devnull) # tblastn quiet homemade!
+
+            if t:
                 t.wait()
 
-            if tmp_fna: tmp_fna.close()
+            if tmp_fna:
+                tmp_fna.close()
+
             info(x[6][x[6].rfind('/')+1:]+" generated!\n")
         except:
-            if t: t.kill()
-            if tmp_fna: tmp_fna.close()
+            if t:
+                t.kill()
+
+            if tmp_fna:
+                tmp_fna.close()
+
             terminating.set()
             error(' '.join(x))
             return
@@ -630,17 +717,18 @@ def blast(inps, nproc, proj, blast_full=False):
     if not mmap:
         info('All tblastn runs already performed!\n')
     else:
-        info('Looking for PhyloPhlAn proteins in input fna files\n')
+        sw = 'your custom set of' if cf_up else 'PhyloPhlAn'
+        info('Looking for ' + sw + ' proteins in input .fna files ('+str(len(mmap))+')\n')
+
+        # small dataset
+        dataset = ppa_fna_40
+        evalue = '1e-40'
 
         if cf_up: # custom set of universal proteins
             dataset = cf_fna
-            evalue = '1e-40'
         elif blast_full: # full dataset
             dataset = ppa_fna
             evalue = '1e-60'
-        else: # small dataset
-            dataset = ppa_fna_40
-            evalue = '1e-40'
 
         us_cmd = [['tblastn', '-subject', i, '-query', dataset, '-out', o, '-outfmt', '6', '-evalue', evalue]
                   for i, o in mmap] # tblastn2.2.28+
@@ -670,7 +758,7 @@ def gens2prots(inps, proj, faa_cleaning):
     ups2prots = dict([(ll[0], set(ll[1:])) for ll in (l.strip().split('\t') for l in open(dat_fol+up2prots))])
     prots2ups = {}
 
-    for k, v in ups2prots.items():
+    for k, v in ups2prots.iteritems():
         for vv in v:
             if vv in prots2ups:
                 error(str(vv) + " already in dict!")
@@ -702,10 +790,19 @@ def gens2prots(inps, proj, faa_cleaning):
         if inp:
             inp.close()
 
-    for k, v in ups2faa.items():
-        with open(dat_fol+k+'.faa', 'w') as outf:
-            for vv in v:
-                outf.write("".join(vv))
+    not_enough_seqs = []
+
+    for k, v in ups2faa.iteritems():
+        if len(v) > 1: # write only ups with at least 2 sequences!
+            with open(dat_fol+k+'.faa', 'w') as outf:
+                for vv in v:
+                    outf.write("".join(vv))
+        else:
+            not_enough_seqs.append(k)
+
+    if not_enough_seqs:
+        for k in not_enough_seqs:
+            ups2faa.pop(k, None)
 
     with open(dat_fol+ups2faa_pkl, 'w') as outf:
         pickle.dump(ups2faa, outf, pickle.HIGHEST_PROTOCOL)
@@ -768,30 +865,59 @@ def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
 
 def exe_muscle(x):
     if not terminating.is_set():
+        i1, i2, i3, i4, t = None, None, None, None, None
+
         try:
-            if len(x) < 14:
-                info("Running muscle on "+x[3] + "\n")
-            else:
-                info("Running muscle on "+x[4] + " and "+x[6]+"\n")
+            if x[0] == 'muscle':
+                info("Running muscle on "+x[3]+"\n")
+                i4 = x[3]
 
-            t = None
-            with open(os.devnull, 'w') as devnull:
-                t = sb.Popen(x[:-2], stderr=devnull) # quiet mode
-                t.wait()
+                with open(os.devnull, 'w') as devnull:
+                    t = sb.Popen(x[:-3], stderr=devnull) # quiet mode
 
-            if x[9]:
-                pn = 20
-            else:
-                pn = max(int(max(int((400.0-int(x[-1][1:]))*30.0/400.0), 1)**2 /30.0), 3)
+                if t:
+                    t.wait()
 
-            if len(x) < 14:
-                aln_subsample(x[5], x[-2], x[7], 0.1, pn)
-                info(x[-2] + " generated (from "+x[3]+")!\n")
+                i1, i3 = x[5], x[-6]
+            elif x[0] == 'mafft':
+                info("Running mafft on "+x[2]+"\n")
+                i4 = x[2]
+
+                with open(os.devnull, 'w') as devnull:
+                    t = sb.Popen(x[:3], stdout=open(x[3]+'.refine', 'w'), stderr=devnull) # quiet mode
+
+                if t:
+                    t.wait()
+                    wait_for(x[3]+'.refine')
+
+                t = None
+
+                # compute the score file with muscle (in any case, for the moment)
+                with open(os.devnull, 'w') as devnull:
+                    t = sb.Popen(['muscle',
+                                  '-in', x[3]+'.refine',
+                                  '-out', x[3],
+                                  '-refine',
+                                  '-scorefile', x[-4]],
+                                 stderr=devnull) # quiet mode
+
+                if t:
+                    t.wait()
+                    wait_for(x[-4])
+
+                i1, i3 = x[3], x[-4]
+
+            if x[-1]:
+                pn = 80
             else:
-                aln_subsample(x[8], x[-2], x[10], 0.1, pn)
-                info(x[-2] + " generated (from "+x[4]+" and "+x[6]+")!\n")
+                pn = max(int(max(int((400.0-int(x[-2][1:]))*30.0/400.0), 1)**2 /30.0), 3)
+
+            aln_subsample(i1, x[-3], i3, 0.1, pn)
+            info(x[-3] + " generated (from "+i4+")\n")
         except:
-            if t: t.kill()
+            if t:
+                t.kill()
+
             terminating.set()
             error(' '.join(x))
             return
@@ -801,7 +927,7 @@ def exe_muscle(x):
     return
 
 
-def faa2aln(nproc, proj, integrate=False):
+def faa2aln(nproc, proj, integrate, mafft):
     ppa_fol = cf_up if cf_up else ppa_alns_fol
 
     with open(dat_fol+ups2faa_pkl) as inp:
@@ -825,16 +951,19 @@ def faa2aln(nproc, proj, integrate=False):
                     with open(ppa_fol+i+".faa", 'r') as g:
                         f.write(g.read())
 
-        us_cmd = [["muscle", "-quiet",
-                   "-in", i,
-                   "-out", o,
-                   "-scorefile", s,
-                   "-maxiters", "2",
-                   so, pn] for i,o,s,o2,s2,oi,si,so,soi,up,pres,pn in mmap if not os.path.exists(o) and pres]
+        if mafft:
+            us_cmd = [["mafft", "--quiet",
+                       i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+        else:
+            us_cmd = [["muscle", "-quiet",
+                       "-in", i,
+                       "-out", o,
+                       "-scorefile", s,
+                       "-maxiters", "2",
+                       so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
 
         if us_cmd:
-            info("Looking for PhyloPhlAn proteins to align\n")
-            info(str(len(us_cmd))+" alignments to be performed\n")
+            info("There are "+str(len(us_cmd))+" proteins to align\n")
             terminating = mp.Event()
             pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
 
@@ -850,41 +979,9 @@ def faa2aln(nproc, proj, integrate=False):
             pool.join()
             info("All alignments performed!\n")
 
-    # if integrate:
-    #     us_cmd = [ ["muscle","-quiet",
-    #                 "-profile",
-    #                 "-in1",o,
-    #                 "-in2",o2,
-    #                 "-out",oi,
-    #                 "-scorefile",si,
-    #                 "-maxiters","2",
-    #                 soi,pn] for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap
-    #                     if not os.path.exists(soi) and pres]
-    #     for i,o,s,o2,s2,oi,si,so,soi,pres,pn in mmap: #paralellizable
-    #         if not os.path.exists(soi) and not pres:
-    #             pnn = max( int( max( int((400.0-int(pn[1:]))*30.0/400.0),1)**2 / 30.0), 3)
-    #             aln_subsample( o2, soi, s2, 0.1, pnn )
-    #     if us_cmd:
-    #         info("Merging alignments from user genomes with all the PhyloPhlAn alignments\n")
-    #         info(str(len(us_cmd))+" alignments to be merged\n")
-    #         terminating = mp.Event()
-    #         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-
-    #         try:
-    #             pool.map(exe_muscle, us_cmd)
-    #             pool.close()
-    #         except:
-    #             pool.terminate()
-    #             pool.join()
-    #             error("Quitting faa2aln() - integrate")
-    #             return
-
-    #         pool.join()
-    #         info("All alignments already merged with PhyloPhlAn alignments!\n")
-
-    if os.path.exists(dat_fol+up2prots):
-        info("All alignments already computed!\n")
-        return
+    # if os.path.exists(dat_fol+up2prots):
+    #     info("All alignments already computed!\n")
+    #     return
 
     # up2p = collections.defaultdict( list )
     # for i in inps:
@@ -973,7 +1070,6 @@ def aln_merge(proj, integrate):
         os.mkdir(out_fol) # create output directory if does not exists
 
     # write statistics file
-    info("Writing "+out_fol+"aln_stats.tsv ")
     with open(out_fol+'aln_stats.tsv', 'w') as f:
         f.write('\t'.join(['id', 'tot_length', 'aln_length', 'tot_gaps', 'up_mapped'])+'\n')
 
@@ -982,44 +1078,45 @@ def aln_merge(proj, integrate):
             tot_gaps = str(v.seq).count('-')
             f.write('\t'.join([str(k), str(tot_len), str(tot_len-tot_gaps), str(tot_gaps), str(up[k])])+'\n')
 
-    info('Done!\n')
+    info(out_fol+'aln_stats.tsv generated!\n')
 
 
-def fasttree(proj, integrate):
-    # dat_fol = cf_data if cf_data else "data/"
-    # dat_fol += proj+"/"
-    # out_fol = cf_output if cf_output else "output/"
-    # out_fol += proj+"/"
-    loc_out = out_fol+proj+"."+ (o_inttree if integrate else o_tree)
-
-    if not os.path.isdir(out_fol):
-        os.mkdir(out_fol)
-
-    aln_in = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
+def build_phylo_tree(proj, integrate, nproc, raxml):
+    loc_out = proj+"."+ (o_inttree if integrate else o_tree)
 
     if os.path.exists(loc_out):
         info("Final tree already built ("+loc_out+")!\n")
         return
 
-    info("Start building the tree with FastTree\n")
-    cmd = ["FastTree", "-quiet",
-           # "-fastest", "-noml", "-gamma", "-pseudo",
-           "-bionj", "-slownni", "-mlacc", "2", "-spr", "4"]
+    if not os.path.isdir(out_fol):
+        os.mkdir(out_fol)
+
+    aln_in = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
+    info("Building the phylogenetic tree with ")
+
+    if raxml:
+        if nproc > 1:
+            info("raxmlHPC-PTHREADS-SSE3\n")
+            cmd = ["raxmlHPC-PTHREADS-SSE3", "-T", str(nproc)]
+        else:
+            info("raxmlHPC\n")
+            cmd = ["raxmlHPC"]
+
+        cmd += ["-m", "PROTCATWAG", "-n", loc_out, "-s", aln_in, "-w", os.getcwd()+'/'+out_fol, "-p", "1989"]
+    else:
+        info("FastTree\n")
+        cmd = ['FastTree', "-quiet", "-fastest", "-bionj", "-slownni", "-mlacc", "2", "-spr", "4",
+               '-out', out_fol+loc_out, aln_in]
+
     t = None
+
     with open(os.devnull, 'w') as devnull:
-        t = sb.Popen(cmd, stdin=open(aln_in), stdout=open(loc_out, 'w'), stderr=devnull) # quiet mode
+        t = sb.Popen(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
+
+    if t:
         t.wait()
 
-    # convert aln_in from fasta to phylip format
-    # cmd = [ "raxmlHPC-PTHREADS-SSE3",
-    #         "-T","#threads",
-    #         "-s","alignment in phylip format",
-    #         "-n",loc_out,
-    #         "-m","PROTCATWAG",
-    #         "-p","1982"
-    #         ]
-    # sb.call( cmd )
-    info("Tree built! The output newick file is in "+loc_out+"\n")
+    info("Tree built! The output newick file is in "+out_fol+"\n")
 
 
 def circlader(proj, integrate, tax=None):
@@ -1058,7 +1155,7 @@ def circlader(proj, integrate, tax=None):
         mt4tax_d = [l.strip().split('\t')[::-1] for l in open(ppa_tax)]
         # mt4o2t = dict([(o,t.split('.')) for t,o in mt4tax_d])
         mt4t2o = dict(mt4tax_d)
-        mt4archaea = [o for t,o in mt4t2o.items() if t.split(".")[0] == "d__Archaea"]
+        mt4archaea = [o for t,o in mt4t2o.iteritems() if t.split(".")[0] == "d__Archaea"]
 
         with open(archaea_f, "w") as out:
             out.write("\n".join(mt4archaea) +"\n")
@@ -1080,7 +1177,7 @@ def circlader(proj, integrate, tax=None):
                 outf.write("\t".join([v1,v2]) + "\n")
     else:
         n = 1 if len(names) < 4 else int(round(min(len(names)*0.05,100)))
-        archaea = [o for t,o in t2o.items() if t.split(".")[0] == "d__Archaea"]
+        archaea = [o for t,o in t2o.iteritems() if t.split(".")[0] == "d__Archaea"]
 
         if t2o and archaea:
             with open(archaea_f, "w") as out:
@@ -1111,7 +1208,7 @@ def circlader(proj, integrate, tax=None):
     info("Done!\n")
 
 
-def tax_curation(proj, tax, integrate=False, mtdt=None, inps=None):
+def tax_curation(proj, tax, integrate, mtdt=None, inps=None):
     # inp_fol = cf_input if cf_input else "input/"
     # inp_fol += proj+"/"
     # out_fol = cf_output if cf_output else "output/"
@@ -1127,22 +1224,22 @@ def tax_curation(proj, tax, integrate=False, mtdt=None, inps=None):
         intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
 
     if tax:
-        info("Starting taxonomic curation: detecting suspicious taxonomic labels ")
+        info("Starting taxonomic curation: detecting suspicious taxonomic labels... ")
         taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, to_integrate=inp_fol+tax)
         taxCleaner.remove_tlabels()
         info("Done!\n")
-        info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ")
+        info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy... ")
     else:
         taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, inps=inps)
-        info("Trying to impute taxonomic labels for taxa newly integrated into the tree ")
+        info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
 
     taxCleaner.infer_tlabels()
     info("Done!\n")
 
-    info("Writing taxonomic "+operation+" outputs ")
+    info("Writing taxonomic "+operation+" outputs... ")
     tid2img = taxCleaner.write_output(proj, images=False)
     info("Done!\n")
-    info("Writing final pdf reports ")
+    info("Writing final pdf reports... ")
     if integrate:
         pass
     elif mtdt:
@@ -1170,11 +1267,11 @@ def tax_imputation(proj, tax, integrate=False, mtdt=None, inps=None):
     if not os.path.exists(intree):
         intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
 
-    info("Trying to impute taxonomic labels for taxa newly integrated into the tree ")
+    info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
     taxCleaner = taxc.TaxCleaner(taxin, intree, integrate=integrate, inps=inps)
     taxCleaner.infer_tlabels()
     info("Done!\n")
-    info("Writing taxonomic "+operation+" outputs ")
+    info("Writing taxonomic "+operation+" outputs... ")
     taxCleaner.write_output(proj, images=False, imp_only=True)
     info("Done!\n")
 
@@ -1185,13 +1282,13 @@ def tax_curation_test(proj, tax, nerrorrs=10, error_type='wrong', taxl='s', tmin
     taxCleaner = taxc.TaxCleaner(inp_fol+tax, intree)
     taxCleaner.introduce_errors(nerrorrs, err_tax, error_type, taxl, tmin, tex)
     taxCleaner = taxc.TaxCleaner(err_tax, intree)
-    info("Starting taxonomic curation: detecting suspicious taxonomic labels ")
+    info("Starting taxonomic curation: detecting suspicious taxonomic labels... ")
     taxCleaner.remove_tlabels()
     info("Done!\n")
-    info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy ")
+    info("Trying to impute taxonomic labels for taxa with suspicious or incomplete taxonomy... ")
     taxCleaner.infer_tlabels()
     info("Done!\n")
-    info("Writing taxonomic curation outputs and evaluations ")
+    info("Writing taxonomic curation outputs and evaluations... ")
     taxCleaner.write_output("log.txt", proj, outname=name) # , images=True )
     taxCleaner.evaluate(proj, inp_fol+tax, err_tax, name, descr=descr)
     info("Done!\n")
@@ -1224,7 +1321,8 @@ def longest_not_overlapping(points):
                 to_add = False
                 break
 
-        if to_add: lno.append((a, b))
+        if to_add:
+            lno.append((a, b))
 
     return lno
 
@@ -1271,162 +1369,175 @@ def find_clusters(reprs, points, f1, f2, reverse=True):
     return clusters
 
 
-def fake_proteome(proj, fna_out, faa_cleaning):
+def fake_proteome_exe(f):
+    key = f[f.rfind('/')+1:f.rfind('.')]
+
+    if not key in fin_dict:
+        return
+
+    mappings = {}
+
+    with open(f) as hf:
+        for r in hf:
+            row = r.strip().split('\t')
+            parsed_row = [row[0], float(row[2])]
+            parsed_row += [int(e) for e in row[3:10]]
+            parsed_row += [float(e) for e in row[10:]]
+
+            if row[1] in mappings:
+                mappings[row[1]].append(parsed_row)
+            else:
+                mappings[row[1]] = [parsed_row]
+
+    clusters = {}
+
+    for c, d in mappings.iteritems():
+        clusters[c] = set()
+        yerev = []
+        norev = []
+
+        for dd in d:
+            if dd[7] > dd[8]:
+                yerev.append((dd[7], dd[8]))
+            else:
+                norev.append((dd[7], dd[8]))
+
+        if norev:
+            lno = longest_not_overlapping(norev) # find longest and not-overlapping segments
+            clusters[c] |= find_clusters(lno, norev, min, max, reverse=False) # search for clusters
+
+        if yerev:
+            lno = longest_not_overlapping(yerev) # find longest and not-overlapping segments
+            clusters[c] |= find_clusters(lno, yerev, max, min, reverse=True) # search for clusters
+
+    # open input file and extract and translate the clusters
+    fin = fin_dict[key]
+    ff = None
+
+    if os.path.isfile(inp_fol+fin+'.fna'):
+        ff = open(inp_fol+fin+'.fna')
+        aaa = inp_fol+fin+'.fna'
+    elif os.path.isfile(inp_fol+fin+'.fna.bz2'):
+        ff = BZ2File(inp_fol+fin+'.fna.bz2')
+        aaa = inp_fol+fin+'.fna.bz2'
+    else:
+        info('File: '+inp_fol+fin+'.fna(.bz2) not found!\n')
+
+    proteome = []
+    p2t = dict()
+
+    if ff:
+        for record in SeqIO.parse(ff, 'fasta'):
+            for contig, cpoints in clusters.iteritems():
+                if record.id in contig:
+                    for s, e in cpoints:
+                        reverse = False
+
+                        if s > e:
+                            s, e = e, s
+                            reverse = True
+
+                    sequence1 = Seq(str(record.seq)[s:e])
+
+                    if s-1 < 0:
+                        sequence2 = Seq('N' + str(record.seq)[s:e])
+                    else:
+                        sequence2 = Seq(str(record.seq)[s-1:e])
+
+                    if s-2 < 0:
+                        if s-1 < 0:
+                            sequence3 = Seq('NN' + str(record.seq)[s:e])
+                        else:
+                            sequence3 = Seq('N' + str(record.seq)[s-1:e])
+                    else:
+                        sequence3 = Seq(str(record.seq)[s-2:e])
+
+                    # if sequence no div by 3, add Ns
+                    while (len(sequence1) % 3) != 0:
+                        sequence1 += Seq('N')
+
+                    while (len(sequence2) % 3) != 0:
+                        sequence2 += Seq('N')
+
+                    while (len(sequence3) % 3) != 0:
+                        sequence3 += Seq('N')
+
+                    if reverse:
+                        sequence1 = sequence1.reverse_complement()
+                        sequence2 = sequence2.reverse_complement()
+                        sequence3 = sequence3.reverse_complement()
+
+                    rev = ':c' if reverse else ':' # reverse or not
+
+                    seqid1 = key+'_'+record.id+rev+str(s)+'-'+str(e)+'___S1___'
+                    seqid2 = key+'_'+record.id+rev+str(s-1)+'-'+str(e)+'___S2___'
+                    seqid3 = key+'_'+record.id+rev+str(s-2)+'-'+str(e)+'___S3___'
+
+                    aminoacids1 = Seq.translate(sequence1)
+                    aminoacids2 = Seq.translate(sequence2)
+                    aminoacids3 = Seq.translate(sequence3)
+
+                    proteome.append(SeqRecord(aminoacids1, id=seqid1, description=''))
+                    proteome.append(SeqRecord(aminoacids2, id=seqid2, description=''))
+                    proteome.append(SeqRecord(aminoacids3, id=seqid3, description=''))
+
+                    # save map from seqid to genome
+                    p2t[seqid1] = f
+                    p2t[seqid2] = f
+                    p2t[seqid3] = f
+
+        ff.close()
+
+        # write output file
+        if proteome:
+            with open(loc_inp+key+'.faa', 'w') as ff:
+                SeqIO.write(proteome, ff, 'fasta')
+                info(loc_inp+key+'.faa generated (from '+aaa+' and '+f+')\n')
+
+        # write the partial mapping of proteins into genomes
+        if p2t:
+            with open(dat_fol+p2t_map, 'a') as f:
+                for k, v in p2t.iteritems():
+                    f.write(str(k)+'\t'+str(v)+'\n')
+
+    return key
+
+
+def fake_proteome(proj, fna_out, faa_cleaning, nproc):
     loc_inp = dat_cln_fol if faa_cleaning else inp_fol
     b6o_files = iglob(dat_fol+'tblastn/*.b6o')
-    fake_proteomes = []
-    contigs = {}
-    done = True
-    p2t = dict()
-    fin_dict = dict([(fo, fi) for fi, fo in fna_out.iteritems()])
+    fake_proteomes = None
+    done = []
 
-    # check if there are already present the result files
-    for _, f in fna_out.iteritems():
-        if not os.path.isfile(loc_inp+f+'.faa') and done:
-            done = False
-
-    if done:
-        return None
-
+    # create the directory if it does not exists
     if not os.path.isdir(loc_inp):
-        os.mkdir(loc_inp) # create the directory if it does not exists
+        os.mkdir(loc_inp)
+    else: # check already computed result files
+        for fi, fo in fna_out:
+            if os.path.isfile(loc_inp+fo+'.faa'):
+                done.append((fi,fo))
 
-    info('Reading tblastn output files (.b6o)')
+    fin_dict = dict([(fo, fi) for fi, fo in list(set(fna_out) - set(done))])
 
-    for f in b6o_files:
-        key = f[f.rfind('/')+1:f.rfind('.')]
+    if not fin_dict:
+        return
 
-        with open(f) as hf:
-            for r in hf:
-                if key not in fake_proteomes:
-                    fake_proteomes.append(key)
+    info('Reading tblastn output .b6o files ('+str(len(fin_dict))+')\n')
+    terminating = mp.Event()
+    pool = mp.Pool(initializer=initu,
+                   initargs=(terminating, loc_inp, dat_fol, fin_dict, fake_proteomes, ),
+                   processes=nproc)
 
-                tmp_lst = r.strip().split('\t')
-                dic = {} if key not in contigs else contigs[key]
+    try:
+        fake_proteomes = pool.map(fake_proteome_exe, b6o_files)
+        pool.close()
+    except:
+        pool.terminate()
+        pool.join()
+        error("Quitting fake_proteome_exe()")
+        return
 
-                tmp_tmp_lst = [tmp_lst[0]]
-                tmp_tmp_lst.append(float(tmp_lst[2]))
-                tmp_tmp_lst += [int(e) for e in tmp_lst[3:10]]
-                tmp_tmp_lst += [float(e) for e in tmp_lst[10:]]
-
-                if tmp_lst[1] in dic:
-                    dic[tmp_lst[1]].append(tmp_tmp_lst)
-                else:
-                    dic[tmp_lst[1]] = [tmp_tmp_lst]
-
-                contigs[key] = dic
-
-    info(': '+str(len(contigs))+' files loaded!\n')
-
-    for f, cc in contigs.items():
-        fin = fin_dict[f]
-        clusters = {}
-
-        for c, d in cc.items():
-            clusters[c] = set()
-            yerev = []
-            norev = []
-
-            for dd in d:
-                if dd[7] > dd[8]:
-                    yerev.append((dd[7], dd[8]))
-                else:
-                    norev.append((dd[7], dd[8]))
-
-            if norev:
-                lno = longest_not_overlapping(norev) # find longest and not-overlapping segments
-                clusters[c] |= find_clusters(lno, norev, min, max, reverse=False) # search for clusters
-
-            if yerev:
-                lno = longest_not_overlapping(yerev) # find longest and not-overlapping segments
-                clusters[c] |= find_clusters(lno, yerev, max, min, reverse=True) # search for clusters
-
-        # open input file and extract and translate the clusters
-        proteome = []
-        ff = None
-
-        if os.path.isfile(inp_fol+fin+'.fna'):
-            ff = open(inp_fol+fin+'.fna')
-            info('Reading input file: '+inp_fol+fin+'.fna\n')
-        elif os.path.isfile(inp_fol+fin+'.fna.bz2'):
-            ff = BZ2File(inp_fol+fin+'.fna.bz2')
-            info('Starting '+inp_fol+fin+'.fna.bz2\n')
-        else:
-            info('File not found: '+inp_fol+fin+'.fna(.bz2)\n')
-
-        if ff:
-            for record in SeqIO.parse(ff, 'fasta'):
-                for contig, cpoints in clusters.items():
-                    if record.id in contig:
-                        for s, e in cpoints:
-                            reverse = False
-
-                            if s > e:
-                                s, e = e, s
-                                reverse = True
-
-                            sequence1 = Seq(str(record.seq)[s:e])
-
-                            if s-1 < 0:
-                                sequence2 = Seq('N' + str(record.seq)[s:e])
-                            else:
-                                sequence2 = Seq(str(record.seq)[s-1:e])
-
-                            if s-2 < 0:
-                                if s-1 < 0:
-                                    sequence3 = Seq('NN' + str(record.seq)[s:e])
-                                else:
-                                    sequence3 = Seq('N' + str(record.seq)[s:e+1])
-                            else:
-                                sequence3 = Seq(str(record.seq)[s-2:e])
-
-                            # if sequence no div by 3, add Ns
-                            while (len(sequence1) % 3) != 0:
-                                sequence1 += Seq('N')
-
-                            while (len(sequence2) % 3) != 0:
-                                sequence2 += Seq('N')
-
-                            while (len(sequence3) % 3) != 0:
-                                sequence3 += Seq('N')
-
-                            if reverse:
-                                sequence1 = sequence1.reverse_complement()
-                                sequence2 = sequence2.reverse_complement()
-                                sequence3 = sequence3.reverse_complement()
-
-                            rev = ':c' if reverse else ':' # reverse or not
-
-                            seqid1 = f+'_'+record.id+rev+str(s)+'-'+str(e)
-                            seqid2 = f+'_'+record.id+rev+str(s-1)+'-'+str(e)
-                            seqid3 = f+'_'+record.id+rev+str(s-2)+'-'+str(e)
-
-                            aminoacids1 = Seq.translate(sequence1)
-                            aminoacids2 = Seq.translate(sequence2)
-                            aminoacids3 = Seq.translate(sequence3)
-
-                            proteome.append(SeqRecord(aminoacids1, id=seqid1, description=''))
-                            proteome.append(SeqRecord(aminoacids2, id=seqid2, description=''))
-                            proteome.append(SeqRecord(aminoacids3, id=seqid3, description=''))
-
-                            # save map from seqid to genome
-                            p2t[seqid1] = f
-                            p2t[seqid2] = f
-                            p2t[seqid3] = f
-
-            ff.close()
-
-            # write output file
-            with open(loc_inp+f+'.faa', 'w') as ff:
-                SeqIO.write(proteome, ff, 'fasta')
-                info(loc_inp+f+'.faa generated!\n')
-
-    # write the partial mapping of proteins into genomes
-    if p2t:
-        with open(dat_fol+p2t_map, 'w') as f:
-            for k, v in p2t.iteritems():
-                f.write(str(k)+'\t'+str(v)+'\n')
-
+    pool.join()
     return fake_proteomes
 
 
@@ -1457,8 +1568,7 @@ if __name__ == '__main__':
         cf_data += '/' if not cf_data.endswith('/') else ''
 
     if pars['cleanall']:
-        if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or \
-           ('user_tree' in pars and pars['user_tree']) or ('integrate' in pars and pars['integrate']):
+        if pars['taxonomic_analysis'] or pars['user_tree'] or pars['integrate']:
             error("--cleanall is in conflict with -t, -u, and -i", exit=True)
         else:
             info("Cleaning \"data/\" and \"data/ppaalns/\" folders... ")
@@ -1498,9 +1608,7 @@ if __name__ == '__main__':
     out_fol += projn+'/'
 
     if pars['clean']:
-        if ('taxonomic_analysis' in pars and pars['taxonomic_analysis']) or \
-           ('user_tree' in pars and pars['user_tree']) or \
-           ('integrate' in pars and pars['integrate']):
+        if pars['taxonomic_analysis'] or pars['user_tree'] or pars['integrate']:
             error("-c/--clean is in conflict with -t, -u, and -i", exit=True)
         else:
             info("Cleaning project \""+projn+"\"... ")
@@ -1514,7 +1622,7 @@ if __name__ == '__main__':
     if cf_up:
         cf_up += '/' if not cf_up.endswith('/') else ''
 
-    dep_checks()
+    dep_checks(pars['mafft'], pars['raxml'], pars['nproc'])
 
     global cf_fna
     global cf_udb
@@ -1532,6 +1640,7 @@ if __name__ == '__main__':
     global min_uprots
     min_uprots = pars['min_uprots']
     t0 = time.time()
+    torm_sol = None
 
     if fna_in:
         try:
@@ -1539,10 +1648,12 @@ if __name__ == '__main__':
         except:
             error("Quitting PhyloPhlAn [blast error]", exit=True)
 
-        fake = fake_proteome(projn, dict(fna_in), pars['faa_cleaning'])
+        fake = fake_proteome(projn, fna_in, pars['faa_cleaning'], pars['nproc'])
 
         if fake:
             faa_in += fake
+            loc_inp = dat_cln_fol if pars['faa_cleaning'] else inp_fol
+            torm_sol = [loc_inp+i+'.faa' for i in fake]
 
     if faa_in:
         try:
@@ -1555,17 +1666,18 @@ if __name__ == '__main__':
     info("Mapping finished in "+str(int(t1-t0))+" secs.\n")
 
     try:
-        faa2aln(pars['nproc'], projn, pars['integrate'])
+        faa2aln(pars['nproc'], projn, pars['integrate'], pars['mafft'])
     except:
         error("Quitting PhyloPhlAn [muscle error]", exit=True)
 
     t2 = time.time()
     info("Aligning finished in "+str(int(t2-t1))+" secs ("+str(int(t2-t0))+" total time).\n")
     aln_merge(projn, pars['integrate'])
-    fasttree(projn, pars['integrate'])
+    build_phylo_tree(projn, pars['integrate'], pars['nproc'], pars['raxml'])
     t4 = time.time()
     info("Tree building finished in "+str(int(t4-t2))+" secs ("+str(int(t4-t0))+" total time).\n")
-    circlader(projn, pars['integrate'], tax)
+
+    # circlader(projn, pars['integrate'], tax)
 
     # if pars['integrate'] and tax and not pars['taxonomic_analysis']:
     #     tax_imputation( projn, tax, mtdt = mtdt, integrate = pars['integrate'], inps = inps )
@@ -1574,18 +1686,21 @@ if __name__ == '__main__':
         tax_imputation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
         sys.exit()
 
-    if not pars['taxonomic_analysis']:
-        sys.exit()
+    if pars['taxonomic_analysis']:
+        if pars['tax_test']:
+            nerrorrs, error_type, taxl, tmin, tex, name = pars['tax_test'].split(":")
+            tax_curation_test(projn, tax,
+                              nerrorrs=int(nerrorrs),
+                              error_type=error_type,
+                              taxl=taxl,
+                              tmin=int(tmin),
+                              tex=int(tex) if tex else None,
+                              name=name,
+                              descr=pars['tax_test'])
+        else:
+            tax_curation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
 
-    if pars['tax_test']:
-        nerrorrs, error_type, taxl, tmin, tex, name = pars['tax_test'].split(":")
-        tax_curation_test(projn, tax,
-                          nerrorrs=int(nerrorrs),
-                          error_type=error_type,
-                          taxl=taxl,
-                          tmin=int(tmin),
-                          tex=int(tex) if tex else None,
-                          name=name,
-                          descr=pars['tax_test'])
-    else:
-        tax_curation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
+    if torm_sol:
+        info("Removing "+str(len(torm_sol))+" input files... ")
+        delete_fake_proteomes(torm_sol)
+        info("Done!\n")
