@@ -131,7 +131,7 @@ def dep_checks(mafft, raxml, nproc):
 def wait_for(it):
     timeout = 1
 
-    while (timeout <= 32) and (not os.path.isfile(it)):
+    while (timeout <= 64) and (not os.path.isfile(it)):
             time.sleep(timeout)
             timeout *= 2
 
@@ -357,11 +357,14 @@ def clean_project():
 
 def get_inputs(proj, params):
     if not os.path.isdir(inp_fol):
-        error("No "+proj+" folder found in '"+inp_fol+"'", init_new_line=True, exit=True)
+        error("Folder not found: '"+inp_fol+"'", init_new_line=True, exit=True)
 
-    files = list(os.listdir(inp_fol))
+    files = os.listdir(inp_fol)
     faa_in = []
     fna_in = []
+    txt_in = []
+    tax_in = []
+    mdt_in = []
 
     for f in files:
         if 'faa' in f.split('.'):
@@ -372,20 +375,26 @@ def get_inputs(proj, params):
             cut = -2 if f.endswith('.bz2') else -1
             fna_in.append('.'.join(f.split('.')[:cut]))
 
+        if os.path.splitext(f)[1] == ".txt":
+            txt_in.append(f)
+
+        if os.path.splitext(f)[1] == ".tax":
+            tax_in.append(f)
+
+        if os.path.splitext(f)[1] == ".metadata":
+            mdt_in.append(f)
+
     if not (len(faa_in) + len(fna_in)):
         error("No '.faa' or '.fna' input files found in '"+inp_fol+"'", init_new_line=True, exit=True)
 
-    txt_in = [l for l in files if os.path.splitext(l)[1] == ".txt"]
     if len(txt_in) > 1:
         error("More than one '.txt' input files found in input/\n"
               "[No more than one txt file (the taxonomy) allowed", init_new_line=True, exit=True)
 
-    tax_in = [l for l in files if os.path.splitext(l)[1] == ".tax"]
     if len(tax_in) > 1:
         error("More than one '.tax' input files found in input/\n"
               "[No more than one tax file (the taxonomy for taxonomic analysis) allowed", init_new_line=True, exit=True)
 
-    mdt_in = [l for l in files if os.path.splitext(l)[1] == ".metadata"]
     if len(tax_in) > 1:
         error("More than one '.metadata' input files found in input/\n"
               "[No more than one metadata file allowed", init_new_line=True, exit=True)
@@ -605,22 +614,22 @@ def exe_usearch(x):
 
 
 def faa2ppafaa(inps, nproc, proj, faa_cleaning):
-    loc_inp = dat_cln_fol if faa_cleaning else inp_fol
-
-    terminating = mp.Event()
-    pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-    mmap = [(loc_inp+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o')]
-
     if not os.path.isdir(dat_fol): # create the data folder if does not exists
         os.mkdir(dat_fol)
 
-    if not mmap:
+    loc_inp = dat_cln_fol if faa_cleaning else inp_fol
+    mmap = ((loc_inp+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o'))
+    us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", cf_udb if cf_udb else ppa_udb, "-blast6out", o, "-threads", "1",
+            "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
+
+    if not us_cmd:
         info("All usearch runs already performed!\n")
     else:
         sw = 'your custom set of' if cf_up else 'PhyloPhlAn'
-        info('Looking for ' + sw + ' proteins in input .faa files ('+str(len(mmap))+')\n')
-        us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", cf_udb if cf_udb else ppa_udb, "-blast6out", o, "-threads", "1",
-            "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
+        info('Looking for ' + sw + ' proteins in input .faa files\n')
+
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
 
         try:
             pool.map(exe_usearch, us_cmd)
@@ -631,7 +640,6 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
             error("Quitting faa2ppafaa()")
             return
 
-    if mmap:
         pool.join()
         info("All usearch runs performed!\n")
 
@@ -938,46 +946,45 @@ def faa2aln(nproc, proj, integrate, mafft):
     else:
         up_list = ('p{num:04d}'.format(num=aa) for aa in range(400))
 
-    mmap = [(dat_fol+i+".faa", dat_fol+i+".aln", dat_fol+i+".sc",
+    mmap = ((dat_fol+i+".faa", dat_fol+i+".aln", dat_fol+i+".sc",
              ppa_fol+i+".aln", ppa_fol+i+".aln.score",
              dat_fol+i+".int.aln", dat_fol+i+".int.sc",
              dat_fol+i+".sub.aln", dat_fol+i+".int.sub.aln",
-             cf_up, i in prots, i) for i in up_list]
+             cf_up, i in prots, i) for i in up_list)
 
-    if mmap:
+    if mafft:
+        us_cmd = [["mafft", "--quiet",
+                       i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+    else:
+        us_cmd = [["muscle", "-quiet",
+                   "-in", i,
+                   "-out", o,
+                   "-scorefile", s,
+                   "-maxiters", "2",
+                   so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+
+    if us_cmd:
+        info("There are "+str(len(us_cmd))+" proteins to align\n")
         if integrate:
             for _, _, _, _, _, _, _, _, _, _, _, i in mmap:
                 with open(dat_fol+i+".faa", 'a') as f:
                     with open(ppa_fol+i+".faa", 'r') as g:
                         f.write(g.read())
 
-        if mafft:
-            us_cmd = [["mafft", "--quiet",
-                       i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
-        else:
-            us_cmd = [["muscle", "-quiet",
-                       "-in", i,
-                       "-out", o,
-                       "-scorefile", s,
-                       "-maxiters", "2",
-                       so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
 
-        if us_cmd:
-            info("There are "+str(len(us_cmd))+" proteins to align\n")
-            terminating = mp.Event()
-            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-
-            try:
-                pool.map(exe_muscle, us_cmd)
-                pool.close()
-            except:
-                pool.terminate()
-                pool.join()
-                error("Quitting faa2aln()")
-                return
-
+        try:
+            pool.map(exe_muscle, us_cmd)
+            pool.close()
+        except:
+            pool.terminate()
             pool.join()
-            info("All alignments performed!\n")
+            error("Quitting faa2aln()")
+            return
+
+        pool.join()
+        info("All alignments performed!\n")
 
     # if os.path.exists(dat_fol+up2prots):
     #     info("All alignments already computed!\n")
