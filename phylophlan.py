@@ -419,15 +419,17 @@ def get_inputs(proj, params):
                 else:
                     with BZ2File(fld+f+'.faa.bz2', 'rU') as inp:
                         prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
+
                 outf.write('\t'.join([f] + prots) + '\n')
 
-            for f, fo in fna_in:
-                if os.path.isfile(inp_fol+f+'.fna'):
-                    prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
-                else:
-                    with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
-                        prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
-                outf.write('\t'.join([fo] + prots) + '\n')
+            # for f, fo in fna_in:
+            #     if os.path.isfile(inp_fol+f+'.fna'):
+            #         prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
+            #     else:
+            #         with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
+            #             prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
+
+            #     outf.write('\t'.join([fo] + prots) + '\n')
 
     return faa_in, fna_in, txt_in[0] if txt_in else None, tax_in[0] if tax_in else None, mdt_in[0] if mdt_in else None
 
@@ -1476,9 +1478,9 @@ def fake_proteome_exe(f):
 
                     rev = ':c' if reverse else ':' # reverse or not
 
-                    seqid1 = key+'_'+record.id+rev+str(s)+'-'+str(e)+'___S1___'
-                    seqid2 = key+'_'+record.id+rev+str(s-1)+'-'+str(e)+'___S2___'
-                    seqid3 = key+'_'+record.id+rev+str(s-2)+'-'+str(e)+'___S3___'
+                    seqid1 = key+'_'+record.id+rev+str(s)+'-'+str(e)+'_s1'
+                    seqid2 = key+'_'+record.id+rev+str(s-1)+'-'+str(e)+'_s2'
+                    seqid3 = key+'_'+record.id+rev+str(s-2)+'-'+str(e)+'_s3'
 
                     aminoacids1 = Seq.translate(sequence1)
                     aminoacids2 = Seq.translate(sequence2)
@@ -1497,9 +1499,13 @@ def fake_proteome_exe(f):
 
         # write output file
         if proteome:
+            with open(dat_fol+ors2prots, 'a') as outf:
+                outf.write('\t'.join([key] + [seq.id for seq in proteome]) + '\n')
+
             with open(loc_inp+key+'.faa', 'w') as ff:
                 SeqIO.write(proteome, ff, 'fasta')
-                info(loc_inp+key+'.faa generated (from '+aaa+' and '+f+')\n')
+
+            info(loc_inp+key+'.faa generated (from '+aaa+' and '+f+')\n')
 
         # write the partial mapping of proteins into genomes
         if p2t:
