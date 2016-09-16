@@ -125,7 +125,7 @@ def dep_checks(mafft, raxml, nproc):
             if t:
                 t.kill()
 
-            error(prog+" not found or not present in system path", exit=True)
+            error(' '.join(prog)+" not found or not present in system path", exit=True)
 
 
 def wait_for(it):
