@@ -99,10 +99,16 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def dep_checks(mafft, raxml, nproc):
-    progs = [["usearch"], ["tblastn"], ["muscle"]]
+    progs = [["usearch"]]
+
+    for _ in iglob(inp_fol+'*.fna*'):
+        progs.append(["tblastn"])
+        break
 
     if mafft:
         progs.append(["mafft", "--version"])
+    else:
+        progs.append(["muscle"])
 
     if raxml:
         if nproc > 1:
@@ -359,14 +365,13 @@ def get_inputs(proj, params):
     if not os.path.isdir(inp_fol):
         error("Folder not found: '"+inp_fol+"'", init_new_line=True, exit=True)
 
-    files = os.listdir(inp_fol)
     faa_in = []
     fna_in = []
     txt_in = []
     tax_in = []
     mdt_in = []
 
-    for f in files:
+    for f in iglob(inp_fol+'*'):
         if 'faa' in f.split('.'):
             cut = -2 if f.endswith('.bz2') else -1
             faa_in.append('.'.join(f.split('.')[:cut]))
