@@ -427,14 +427,14 @@ def get_inputs(proj, params):
 
                 outf.write('\t'.join([f] + prots) + '\n')
 
-            # for f, fo in fna_in:
-            #     if os.path.isfile(inp_fol+f+'.fna'):
-            #         prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
-            #     else:
-            #         with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
-            #             prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
+            for f, fo in fna_in:
+                if os.path.isfile(inp_fol+f+'.fna'):
+                    prots = sorted([l.split()[0][1:] for l in open(inp_fol+f+'.fna') if l.startswith('>')])
+                else:
+                    with BZ2File(inp_fol+f+'.fna.bz2', 'rU') as inp:
+                        prots = sorted([l.split()[0][1:] for l in inp if l.startswith('>')])
 
-            #     outf.write('\t'.join([fo] + prots) + '\n')
+                outf.write('\t'.join([fo] + prots) + '\n')
 
     return faa_in, fna_in, txt_in[0] if txt_in else None, tax_in[0] if tax_in else None, mdt_in[0] if mdt_in else None
 
