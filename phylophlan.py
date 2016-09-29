@@ -374,20 +374,20 @@ def get_inputs(proj, params):
     for f in iglob(inp_fol+'*'):
         if 'faa' in f.split('.'):
             cut = -2 if f.endswith('.bz2') else -1
-            faa_in.append('.'.join(f.split('.')[:cut]))
+            faa_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
 
         if 'fna' in f.split('.'):
             cut = -2 if f.endswith('.bz2') else -1
-            fna_in.append('.'.join(f.split('.')[:cut]))
+            fna_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
 
         if os.path.splitext(f)[1] == ".txt":
-            txt_in.append(f)
+            txt_in.append(f[f.rfind('/')+1:])
 
         if os.path.splitext(f)[1] == ".tax":
-            tax_in.append(f)
+            tax_in.append(f[f.rfind('/')+1:])
 
         if os.path.splitext(f)[1] == ".metadata":
-            mdt_in.append(f)
+            mdt_in.append(f[f.rfind('/')+1:])
 
     if not (len(faa_in) + len(fna_in)):
         error("No '.faa' or '.fna' input files found in '"+inp_fol+"'", init_new_line=True, exit=True)
