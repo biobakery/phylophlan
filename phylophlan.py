@@ -99,7 +99,7 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def dep_checks(mafft, raxml, nproc):
-    progs = [["usearch"]]
+    progs = [["usearch"], ["muscle"]]
 
     for _ in iglob(inp_fol+'*.fna*'):
         progs.append(["tblastn"])
@@ -107,8 +107,6 @@ def dep_checks(mafft, raxml, nproc):
 
     if mafft:
         progs.append(["mafft", "--version"])
-    else:
-        progs.append(["muscle"])
 
     if raxml:
         if nproc > 1:
