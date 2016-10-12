@@ -1385,7 +1385,7 @@ def fake_proteome_exe(f):
     key = f[f.rfind('/')+1:f.rfind('.')]
 
     if not key in fin_dict:
-        return
+        return key
 
     mappings = {}
 
@@ -1516,7 +1516,10 @@ def fake_proteome_exe(f):
                 for k, v in p2t.iteritems():
                     f.write(str(k)+'\t'+str(v)+'\n')
 
-    return key
+    if proteome and p2t:
+        return key
+
+    return
 
 
 def fake_proteome(proj, fna_out, faa_cleaning, nproc):
@@ -1667,9 +1670,9 @@ if __name__ == '__main__':
         fake = fake_proteome(projn, fna_in, pars['faa_cleaning'], pars['nproc'])
 
         if fake:
-            faa_in += fake
+            faa_in += [i for i in fake if i]
             loc_inp = dat_cln_fol if pars['faa_cleaning'] else inp_fol
-            torm_sol = [loc_inp+i+'.faa' for i in fake]
+            torm_sol = [loc_inp+i+'.faa' for i in fake if i]
 
     if faa_in:
         try:
