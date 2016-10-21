@@ -353,10 +353,10 @@ def clean_all(loc_dat):
 
 def clean_project():
     if os.path.exists(dat_fol):
-        shutil.rmtree(dat_fol)
+        shutil.rmtree(dat_fol[:dat_fol.rfind('/')])
 
     if os.path.exists(out_fol):
-        shutil.rmtree(out_fol)
+        shutil.rmtree(out_fol[:out_fol.rfind('/')])
 
 
 def get_inputs(proj, params):
@@ -893,23 +893,23 @@ def exe_muscle(x):
 
                 i1, i3 = x[5], x[-6]
             elif x[0] == 'mafft':
-                info("Running mafft on "+x[2]+"\n")
-                i4 = x[2]
+                info("Running mafft on "+x[3]+"\n")
+                i4 = x[3]
 
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.Popen(x[:3], stdout=open(x[3]+'.refine', 'w'), stderr=devnull) # quiet mode
+                    t = sb.Popen(x[:4], stdout=open(x[4]+'.refine', 'w'), stderr=devnull) # quiet mode
 
                 if t:
                     t.wait()
-                    wait_for(x[3]+'.refine')
+                    wait_for(x[4]+'.refine')
 
                 t = None
 
                 # compute the score file with muscle (in any case, for the moment)
                 with open(os.devnull, 'w') as devnull:
                     t = sb.Popen(['muscle',
-                                  '-in', x[3]+'.refine',
-                                  '-out', x[3],
+                                  '-in', x[4]+'.refine',
+                                  '-out', x[4],
                                   '-refine',
                                   '-scorefile', x[-4]],
                                  stderr=devnull) # quiet mode
@@ -918,7 +918,7 @@ def exe_muscle(x):
                     t.wait()
                     wait_for(x[-4])
 
-                i1, i3 = x[3], x[-4]
+                i1, i3 = x[4], x[-4]
 
             if x[-1]:
                 pn = 80
@@ -958,7 +958,7 @@ def faa2aln(nproc, proj, integrate, mafft):
              cf_up, i in prots, i) for i in up_list)
 
     if mafft:
-        us_cmd = [["mafft", "--quiet",
+        us_cmd = [["mafft", "--anysymbol", "--quiet",
                        i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
     else:
         us_cmd = [["muscle", "-quiet",
@@ -1719,7 +1719,7 @@ if __name__ == '__main__':
         else:
             tax_curation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
 
-    if torm_sol:
-        info("Removing "+str(len(torm_sol))+" input files... ")
-        delete_fake_proteomes(torm_sol)
-        info("Done!\n")
+    # if torm_sol:
+    #     info("Removing "+str(len(torm_sol))+" input files... ")
+    #     delete_fake_proteomes(torm_sol)
+    #     info("Done!\n")
