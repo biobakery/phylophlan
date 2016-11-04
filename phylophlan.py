@@ -119,8 +119,6 @@ def dep_checks(mafft, raxml, nproc):
         try:
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen(prog, stdout=devnull, stderr=devnull)
-                devnull.flush()
-                os.fsync(devnull.fileno())
 
             if t:
                 t.wait()
@@ -717,8 +715,6 @@ def blastx_exe(x):
 
             with open(os.devnull, 'w') as devnull:
                 t = sb.Popen(cmd, stderr=devnull) # tblastn quiet homemade!
-                devnull.flush()
-                os.fsync(devnull.fileno())
 
             if t:
                 t.wait()
@@ -919,8 +915,6 @@ def exe_muscle(x):
 
                 with open(os.devnull, 'w') as devnull:
                     t = sb.Popen(x[:-3], stderr=devnull) # quiet mode
-                    devnull.flush()
-                    os.fsync(devnull.fileno())
 
                 if t:
                     t.wait()
@@ -936,9 +930,6 @@ def exe_muscle(x):
                         f.flush()
                         os.fsync(f.fileno())
 
-                    devnull.flush()
-                    os.fsync(devnull.fileno())
-
                 if t:
                     t.wait()
                     wait_for(x[4]+'.refine')
@@ -950,8 +941,6 @@ def exe_muscle(x):
                 # compute the score file with muscle (in any case, for the moment)
                 with open(os.devnull, 'w') as devnull:
                     t = sb.Popen(['muscle', '-in', x[4]+'.refine', '-out', x[4], '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
-                    devnull.flush()
-                    os.fsync(devnull.fileno())
 
                 if t:
                     t.wait()
@@ -1173,8 +1162,6 @@ def build_phylo_tree(proj, integrate, nproc, raxml):
 
     with open(os.devnull, 'w') as devnull:
         t = sb.Popen(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
-        devnull.flush()
-        os.fsync(devnull.fileno())
 
     if t:
         t.wait()
