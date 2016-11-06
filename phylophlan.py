@@ -247,7 +247,7 @@ def init():
         for f in [ppa_fna, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
             u = urllib2.urlopen(download_compressed(f))
 
-            if not os.path.exists(f):
+            if not os.path.isfile(f):
                 info("Downloading and extracting "+f+"... ")
 
                 with closing(tarfile.open(fileobj=StringIO(u.read()))) as inp:
@@ -256,7 +256,7 @@ def init():
                 info("Done!\n")
     else:
         for f in [ppa_fna, ppa_fna_40, ppa_tax, ppa_aln, ppa_xml, ppa_up2prots, ppa_ors2prots]:
-            if not os.path.exists(f):
+            if not os.path.isfile(f):
                 info("Extracting \""+f+"\"... ")
 
                 with closing(tarfile.open(compressed(f))) as inp:
@@ -265,7 +265,7 @@ def init():
                 info("Done!\n")
 
         for t, f in [ppa_alns]:
-            if not os.path.exists(t):
+            if not os.path.isfile(t):
                 info("Extracting \""+f+"\"... ")
 
                 with closing(tarfile.open(f)) as inp:
@@ -273,7 +273,7 @@ def init():
 
                 info("Done!\n")
 
-    if not os.path.exists(ppa_udb):
+    if not os.path.isfile(ppa_udb):
         info("Generating \""+ppa_udb+"\" (usearch indexed DB)...")
         sb.call(["usearch", "-quiet", "-makeudb_ublast", ppa_fna, "-output", ppa_udb]) # usearch8.0.1623
         info("Done!\n")
@@ -321,7 +321,7 @@ def delete_fake_proteomes(torm_sol):
 
     for f in torm_sol:
         if os.path.isfile(f):
-            shutil.copy2(f, f+'_'+str(time.time())+'.bkp')
+            shutil.copy2(f, f+'_'+str(time.time())+'.bkp') # TO REMOVE!
             os.remove(f)
         else:
             not_rm.append(f)
@@ -370,9 +370,9 @@ def get_inputs(proj, params):
     mdt_in = []
 
     for f in iglob(inp_fol+'*'):
-        if 'faa' in f.split('.'):
-            cut = -2 if f.endswith('.bz2') else -1
-            faa_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
+        # if 'faa' in f.split('.'):
+        #     cut = -2 if f.endswith('.bz2') else -1
+        #     faa_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
 
         if 'fna' in f.split('.'):
             cut = -2 if f.endswith('.bz2') else -1
@@ -412,7 +412,7 @@ def get_inputs(proj, params):
         info("\nCleaning faa inputs took "+str(int(time.time()-t0))+" s\n")
 
     fna_in = uniq_filenames(faa_in, fna_in) # make uniq filename for fna inputs
-    if not os.path.exists(dat_fol+ors2prots):
+    if not os.path.isfile(dat_fol+ors2prots):
         with open(dat_fol+ors2prots, 'w') as outf:
             for f in faa_in:
                 fld = inp_fol if not params['faa_cleaning'] else dat_cln_fol
@@ -638,7 +638,7 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         os.mkdir(dat_fol)
 
     loc_inp = dat_cln_fol if faa_cleaning else inp_fol
-    mmap = ((loc_inp+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.exists(dat_fol+i+'.b6o'))
+    mmap = ((loc_inp+i+'.faa', dat_fol+i+'.b6o') for i in inps if not os.path.isfile(dat_fol+i+'.b6o'))
     us_cmd = [["usearch", "-quiet", "-ublast", i, "-db", cf_udb if cf_udb else ppa_udb, "-blast6out", o, "-threads", "1",
             "-evalue", "1e-10", "-maxaccepts", "8", "-maxrejects", "32"] for i, o in mmap] # usearch8.0.1517
 
@@ -663,7 +663,7 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         pool.join()
         info("All usearch runs performed!\n")
 
-    if not os.path.exists(dat_fol+up2prots):
+    if not os.path.isfile(dat_fol+up2prots):
         up2p = collections.defaultdict(list)
         too_few_maps = set()
 
@@ -743,7 +743,7 @@ def blast(inps, nproc, proj, blast_full=False):
     loc_dat = dat_fol+"tblastn/"
     terminating = mp.Event()
     pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-    mmap = [(inp_fol+i+'.fna', loc_dat+io+'.b6o') for i, io in inps.iteritems() if (not os.path.exists(loc_dat+io+'.b6o'))]
+    mmap = [(inp_fol+i+'.fna', loc_dat+io+'.b6o') for i, io in inps.iteritems() if (not os.path.isfile(loc_dat+io+'.b6o'))]
 
     if not os.path.isdir(loc_dat): # create the tmp directory if does not exists
         os.mkdir(loc_dat)
@@ -786,7 +786,7 @@ def gens2prots(inps, proj, faa_cleaning):
     if not os.path.isdir(dat_fol): # create the tmp directory if does not exists
         os.mkdir(dat_fol)
 
-    if os.path.exists(dat_fol+ups2faa_pkl):
+    if os.path.isfile(dat_fol+ups2faa_pkl):
         return
 
     ups2prots = dict([(ll[0], set(ll[1:])) for ll in (l.strip().split('\t') for l in open(dat_fol+up2prots))])
@@ -828,12 +828,13 @@ def gens2prots(inps, proj, faa_cleaning):
 
     for k, v in ups2faa.iteritems():
         if len(v) > 1: # write only ups with at least 2 sequences!
-            with open(dat_fol+k+'.faa', 'w') as outf:
-                for vv in v:
-                    outf.write("".join(vv))
+            if not os.path.isfile(dat_fol+k+'.faa'):
+                with open(dat_fol+k+'.faa', 'w') as outf:
+                    for vv in v:
+                        outf.write("".join(vv))
 
-                outf.flush()
-                os.fsync(outf.fileno())
+                    outf.flush()
+                    os.fsync(outf.fileno())
         else:
             not_enough_seqs.append(k)
 
@@ -850,7 +851,7 @@ def gens2prots(inps, proj, faa_cleaning):
 def screen(stat, cols, sf=None, unknown_fraction=0.5, n=10):
     lena, nsc = len(cols[0]), []
 
-    if sf and os.path.exists(sf):
+    if sf and os.path.isfile(sf):
         with open(sf) as sfinp:
             scores = [(ll[:12], ll[12:]) for ll in [l for l in sfinp.readlines()]]
     else:
@@ -991,14 +992,14 @@ def faa2aln(nproc, proj, integrate, mafft):
 
     if mafft:
         us_cmd = [["mafft", "--anysymbol", "--quiet",
-                       i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+                   i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
     else:
         us_cmd = [["muscle", "-quiet",
                    "-in", i,
                    "-out", o,
                    "-scorefile", s,
                    "-maxiters", "2",
-                   so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.exists(o) and pres]
+                   so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
 
     if us_cmd:
         info("There are "+str(len(us_cmd))+" proteins to align\n")
@@ -1025,6 +1026,8 @@ def faa2aln(nproc, proj, integrate, mafft):
 
         pool.join()
         info("All alignments performed!\n")
+    else:
+        info("All alignments already performed!\n")
 
     # if os.path.exists(dat_fol+up2prots):
     #     info("All alignments already computed!\n")
@@ -1048,7 +1051,7 @@ def faa2aln(nproc, proj, integrate, mafft):
 def aln_merge(proj, integrate):
     loc_dat = dat_fol+aln_int_tot if integrate else dat_fol+aln_tot
 
-    if os.path.exists(loc_dat):
+    if os.path.isfile(loc_dat):
         info("All alignments already merged!\n")
         return
 
@@ -1075,7 +1078,7 @@ def aln_merge(proj, integrate):
 
     # map proteins id to genomes id
     p2t = dict()
-    if os.path.exists(dat_fol+p2t_map):
+    if os.path.isfile(dat_fol+p2t_map):
         p2t = dict([(l[0], l[1]) for l in (row.strip().split('\t') for row in open(dat_fol+p2t_map, 'r'))])
 
     for t, p in t2p.iteritems():
@@ -1134,7 +1137,7 @@ def aln_merge(proj, integrate):
 def build_phylo_tree(proj, integrate, nproc, raxml):
     loc_out = proj+"."+ (o_inttree if integrate else o_tree)
 
-    if os.path.exists(loc_out):
+    if os.path.isfile(loc_out):
         info("Final tree already built ("+loc_out+")!\n")
         return
 
@@ -1188,7 +1191,7 @@ def circlader(proj, integrate, tax=None):
     # o2t = dict([(o,t.split('.')) for t,o in tax_d])
     t2o = dict(tax_d)
 
-    if os.path.exists(pngtree):
+    if os.path.isfile(pngtree):
         info("Output tree images already generated!\n")
         return
 
@@ -1280,7 +1283,7 @@ def tax_curation(proj, tax, integrate, mtdt=None, inps=None):
     intree = out_fol+proj+".tree.reroot."+ ("int." if integrate else "")+"annot.xml"
     operation = "imputation" if integrate else "curation"
 
-    if not os.path.exists(intree):
+    if not os.path.isfile(intree):
         intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
 
     if tax:
@@ -1324,7 +1327,7 @@ def tax_imputation(proj, tax, integrate=False, mtdt=None, inps=None):
     intree = out_fol+proj+".tree.reroot."+ ("int." if integrate else "")+"annot.xml"
     operation = "imputation" if integrate else "curation"
 
-    if not os.path.exists(intree):
+    if not os.path.isfile(intree):
         intree = out_fol+proj+".tree."+ ("int." if integrate else "")+"nwk"
 
     info("Trying to impute taxonomic labels for taxa newly integrated into the tree... ")
@@ -1800,7 +1803,7 @@ if __name__ == '__main__':
         else:
             tax_curation(projn, tax, mtdt=mtdt, integrate=pars['integrate'], inps=faa_in+fna_in)
 
-    # if torm_sol:
-    #     info("Removing "+str(len(torm_sol))+" input files... ")
-    #     delete_fake_proteomes(torm_sol)
-    #     info("Done!\n")
+    if torm_sol:
+        info("Removing "+str(len(torm_sol))+" input files... ")
+        delete_fake_proteomes(torm_sol)
+        info("Done!\n")
