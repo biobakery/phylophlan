@@ -321,8 +321,8 @@ def delete_fake_proteomes(torm_sol):
 
     for f in torm_sol:
         if os.path.isfile(f):
-            shutil.copy2(f, f+'_'+str(time.time())+'.bkp') # TO REMOVE!
-            os.remove(f)
+            # os.remove(f)
+            os.rename(f, f+'_'+str(time.time())+'.bkp') # TO REMOVE!
         else:
             not_rm.append(f)
 
@@ -370,9 +370,9 @@ def get_inputs(proj, params):
     mdt_in = []
 
     for f in iglob(inp_fol+'*'):
-        # if 'faa' in f.split('.'):
-        #     cut = -2 if f.endswith('.bz2') else -1
-        #     faa_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
+        if 'faa' in f.split('.'):
+            cut = -2 if f.endswith('.bz2') else -1
+            faa_in.append('.'.join(f[f.rfind('/')+1:].split('.')[:cut]))
 
         if 'fna' in f.split('.'):
             cut = -2 if f.endswith('.bz2') else -1
