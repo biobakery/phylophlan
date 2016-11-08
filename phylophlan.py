@@ -464,7 +464,7 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
 
     protein_ids_map = dict() # will contains the old protein id and the new protein id assigned
 
-    for f in faa_in:
+    for f in faa_in: # parallelize?
         records = []
         out = []
         seqid = 0
@@ -518,7 +518,7 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
     # write the mapping of the old and new proteins id of all genomes
     with open(dat_fol+old2newprots, 'w') as f:
         for k, v in protein_ids_map.iteritems():
-            f.write('\t'.join([k] + ['('+a+','+b+')' for a,b in v]))
+            f.write('\t'.join([k] + ['('+a+','+b+')' for a,b in v]) + '\n')
 
         f.flush()
         os.fsync(f.fileno())
@@ -1603,7 +1603,11 @@ def fake_proteome(proj, fna_out, faa_cleaning, nproc):
     fin_dict = dict([(fo, fi) for fi, fo in list(set(fna_out) - set(done))])
 
     if not fin_dict:
-        return
+        info('All fake proteomes already computed!\n')
+        if os.path.isfile(dat_fol+ors2prots):
+            return [row.strip().split('\t')[0] for row in open(dat_fol+ors2prots)]
+        else:
+            return None
 
     info('Reading tblastn output .b6o files ('+str(len(fin_dict))+')\n')
     terminating = mp.Event()
