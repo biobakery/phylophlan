@@ -297,8 +297,8 @@ def init():
                         with open(i) as g:
                             f.write(g.read())
 
-                    f.flush()
-                    os.fsync(f.fileno())
+                    # f.flush()
+                    # os.fsync(f.fileno())
             else:
                 info('File "'+cf_fna+'" already present in "'+cf_up+'" folder.\n')
         else: # what's that??
@@ -434,8 +434,8 @@ def get_inputs(proj, params):
 
                 outf.write('\t'.join([fo] + prots) + '\n')
 
-            outf.flush()
-            os.fsync(outf.fileno())
+            # outf.flush()
+            # os.fsync(outf.fileno())
 
     return faa_in, fna_in, txt_in[0] if txt_in else None, tax_in[0] if tax_in else None, mdt_in[0] if mdt_in else None
 
@@ -507,8 +507,8 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
             # write the new .faa
             with open(dat_cln_fol+f+'.faa', 'w') as h_out:
                 SeqIO.write(out, h_out, "fasta")
-                h_out.flush()
-                os.fsync(h_out.fileno())
+                # h_out.flush()
+                # os.fsync(h_out.fileno())
         else:
             msg = "not enough good proteins!"
 
@@ -520,14 +520,14 @@ def clean_faa(proj, faa_in, min_num_proteins, min_len_protein, verbose=False):
         for k, v in protein_ids_map.iteritems():
             f.write('\t'.join([k] + ['('+a+','+b+')' for a,b in v]) + '\n')
 
-        f.flush()
-        os.fsync(f.fileno())
+        # f.flush()
+        # os.fsync(f.fileno())
 
     # serialize the protein_ids_map mapping
     with open(dat_fol+f_protein_ids_map, 'w') as f:
         pickle.dump(protein_ids_map, f, pickle.HIGHEST_PROTOCOL)
-        f.flush()
-        os.fsync(f.fileno())
+        # f.flush()
+        # os.fsync(f.fileno())
 
     return protein_ids_map.keys()
 
@@ -580,8 +580,8 @@ def exe_usearch(x):
             else:
                 outf.write("\t".join([inpf[inpf.rfind('/')+1:], NOT_ENOUGH_MAPPINGS]) + "\n")
 
-            outf.flush()
-            os.fsync(outf.fileno())
+            # outf.flush()
+            # os.fsync(outf.fileno())
 
     #
     if not terminating.is_set():
@@ -598,8 +598,8 @@ def exe_usearch(x):
                         records = list(SeqIO.parse(h_in, "fasta"))
 
                     SeqIO.write(records, h_out, "fasta")
-                    h_out.flush()
-                    os.fsync(h_out.fileno())
+                    # h_out.flush()
+                    # os.fsync(h_out.fileno())
 
                 cmd = x[:3] + [tmp_faa.name] + x[4:]
             else:
@@ -678,8 +678,8 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
         if too_few_maps:
             with open(dat_fol+few_maps, 'w') as fout:
                 fout.write('\n'.join(too_few_maps) + '\n')
-                fout.flush()
-                os.fsync(fout.fileno())
+                # fout.flush()
+                # os.fsync(fout.fileno())
 
         # write the mapping between universal proteins and proteins mapped
         if up2p:
@@ -687,8 +687,8 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
                 for k, v in up2p.iteritems():
                     outf.write("\t".join([k]+v) + "\n")
 
-                outf.flush()
-                os.fsync(outf.fileno())
+                # outf.flush()
+                # os.fsync(outf.fileno())
 
 
 def blastx_exe(x):
@@ -706,8 +706,8 @@ def blastx_exe(x):
                         records = list(SeqIO.parse(h_in, "fasta"))
 
                     SeqIO.write(records, h_out, "fasta")
-                    h_out.flush()
-                    os.fsync(h_out.fileno())
+                    # h_out.flush()
+                    # os.fsync(h_out.fileno())
 
                 cmd = x[:2] + [tmp_fna.name] + x[3:]
             else:
@@ -833,8 +833,8 @@ def gens2prots(inps, proj, faa_cleaning):
                     for vv in v:
                         outf.write("".join(vv))
 
-                    outf.flush()
-                    os.fsync(outf.fileno())
+                    # outf.flush()
+                    # os.fsync(outf.fileno())
         else:
             not_enough_seqs.append(k)
 
@@ -844,8 +844,8 @@ def gens2prots(inps, proj, faa_cleaning):
 
     with open(dat_fol+ups2faa_pkl, 'w') as outf:
         pickle.dump(ups2faa, outf, pickle.HIGHEST_PROTOCOL)
-        outf.flush()
-        os.fsync(outf.fileno())
+        # outf.flush()
+        # os.fsync(outf.fileno())
 
 
 def screen(stat, cols, sf=None, unknown_fraction=0.5, n=10):
@@ -901,8 +901,8 @@ def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
 
     with open(out_f, 'w') as out:
         SeqIO.write(recs, out, "fasta")
-        out.flush()
-        os.fsync(out.fileno())
+        # out.flush()
+        # os.fsync(out.fileno())
 
 
 def exe_muscle(x):
@@ -928,8 +928,8 @@ def exe_muscle(x):
                 with open(os.devnull, 'w') as devnull:
                     with open(x[4]+'.refine', 'w') as f:
                         t = sb.Popen(x[:4], stdout=f, stderr=devnull) # quiet mode
-                        f.flush()
-                        os.fsync(f.fileno())
+                        # f.flush()
+                        # os.fsync(f.fileno())
 
                 if t:
                     t.wait()
@@ -1009,8 +1009,8 @@ def faa2aln(nproc, proj, integrate, mafft):
                     with open(ppa_fol+i+".faa", 'r') as g:
                         f.write(g.read())
 
-                    f.flush()
-                    os.fsync(f.fileno())
+                    # f.flush()
+                    # os.fsync(f.fileno())
 
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
@@ -1128,8 +1128,8 @@ def aln_merge(proj, integrate):
             tot_gaps = str(v.seq).count('-')
             f.write('\t'.join([str(k), str(tot_len), str(tot_len-tot_gaps), str(tot_gaps), str(up[k])])+'\n')
 
-        f.flush()
-        os.fsync(f.fileno())
+        # f.flush()
+        # os.fsync(f.fileno())
 
     info(out_fol+'aln_stats.tsv generated!\n')
 
@@ -1212,8 +1212,8 @@ def circlader(proj, integrate, tax=None):
 
         with open(archaea_f, 'w') as out:
             out.write("\n".join(mt4archaea) +"\n")
-            out.flush()
-            os.fsync(out.fileno())
+            # out.flush()
+            # os.fsync(out.fileno())
 
         sb.call([c_reroot, "-s", "lca", "-f", archaea_f, tree, xtree_rr])
         annotation_f = dat_fol+proj+".annot.txt"
@@ -1231,8 +1231,8 @@ def circlader(proj, integrate, tax=None):
             for v1,v2 in [('sub_branches_angle_reduction','0.0'), ('clade_edge_line_width','0.2'), ('branch_line_width','0.45'), ]:
                 outf.write("\t".join([v1,v2]) + "\n")
 
-            outf.flush()
-            os.fsync(outf.fileno())
+            # outf.flush()
+            # os.fsync(outf.fileno())
     else:
         n = 1 if len(names) < 4 else int(round(min(len(names)*0.05,100)))
         archaea = [o for t,o in t2o.iteritems() if t.split(".")[0] == "d__Archaea"]
@@ -1240,8 +1240,8 @@ def circlader(proj, integrate, tax=None):
         if t2o and archaea:
             with open(archaea_f, 'w') as out:
                 out.write("\n".join(archaea) +"\n")
-                out.flush()
-                os.fsync(out.fileno())
+                # out.flush()
+                # os.fsync(out.fileno())
 
             sb.call([c_reroot, "-s", "lca", "-f", archaea_f, tree, xtree_rr])
         elif n == 1 and len(names) < 8:
@@ -1263,8 +1263,8 @@ def circlader(proj, integrate, tax=None):
             for v1,v2 in [('sub_branches_angle_reduction','0.0'), ('clade_edge_line_width','0.2'), ('branch_line_width','0.45'), ]:
                 outf.write("\t".join([v1,v2]) + "\n")
 
-            outf.flush()
-            os.fsync(outf.fileno())
+            # outf.flush()
+            # os.fsync(outf.fileno())
 
     sb.call([c_circ_an, "--annot", annotation_f, xtree_rr, xtree_an])
     sb.call([c_circ, "--dpi", "300", xtree_an, pngtree])
@@ -1555,13 +1555,13 @@ def fake_proteome_exe(f):
         if proteome:
             with open(dat_fol+ors2prots[:ors2prots.rfind('.')]+'/'+key+'.txt', 'w') as outf:
                 outf.write('\t'.join([key] + [seq.id for seq in proteome]) + '\n')
-                outf.flush()
-                os.fsync(outf.fileno())
+                # outf.flush()
+                # os.fsync(outf.fileno())
 
             with open(loc_inp+key+'.faa', 'w') as ff:
                 SeqIO.write(proteome, ff, 'fasta')
-                ff.flush()
-                os.fsync(ff.fileno())
+                # ff.flush()
+                # os.fsync(ff.fileno())
 
             info(loc_inp+key+'.faa generated (from '+aaa+' and '+f+')\n')
 
@@ -1571,8 +1571,8 @@ def fake_proteome_exe(f):
                 for k, v in p2t.iteritems():
                     f.write(str(k)+'\t'+str(v)+'\n')
 
-                f.flush()
-                os.fsync(f.fileno())
+                # f.flush()
+                # os.fsync(f.fileno())
 
     if proteome and p2t:
         return key
@@ -1632,8 +1632,8 @@ def fake_proteome(proj, fna_out, faa_cleaning, nproc):
             with open(i) as g:
                 f.write(g.read())
 
-        f.flush()
-        os.fsync(f.fileno())
+        # f.flush()
+        # os.fsync(f.fileno())
 
     # merge p2t_map
     with open(dat_fol+p2t_map, 'w') as f:
@@ -1641,8 +1641,8 @@ def fake_proteome(proj, fna_out, faa_cleaning, nproc):
             with open(i) as g:
                 f.write(g.read())
 
-        f.flush()
-        os.fsync(f.fileno())
+        # f.flush()
+        # os.fsync(f.fileno())
 
 
     return fake_proteomes
