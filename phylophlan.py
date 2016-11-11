@@ -922,34 +922,36 @@ def exe_muscle(x):
 
                 i1, i3 = x[5], x[-6]
             elif x[0] == 'mafft':
-                info("Running mafft on "+x[3]+"\n")
-                i4 = x[3]
+                i4 = x[-6]
+                o4 = x[-5]
+                info("Running mafft on "+i4+"\n")
+
 
                 with open(os.devnull, 'w') as devnull:
-                    with open(x[4]+'.refine', 'w') as f:
-                        t = sb.Popen(x[:4], stdout=f, stderr=devnull) # quiet mode
+                    with open(o4+'.refine', 'w') as f:
+                        t = sb.Popen(x[:-5], stdout=f, stderr=devnull) # quiet mode
                         # f.flush()
                         # os.fsync(f.fileno())
 
                 if t:
                     t.wait()
-                    wait_for(x[4]+'.refine')
+                    wait_for(o4+'.refine')
                 else:
-                    error(' '.join(x[:4])+', t=None')
+                    error(' '.join(x[:-5])+', t=None')
 
                 t = None
 
                 # compute the score file with muscle (in any case, for the moment)
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.Popen(['muscle', '-in', x[4]+'.refine', '-out', x[4], '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
+                    t = sb.Popen(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
 
                 if t:
                     t.wait()
                     wait_for(x[-4])
                 else:
-                    error(' '.join(['muscle', '-in', x[4]+'.refine', '-out', x[4], '-refine', '-scorefile', x[-4]])+', t=None')
+                    error(' '.join(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]])+', t=None')
 
-                i1, i3 = x[4], x[-4]
+                i1, i3 = o4, x[-4]
             else:
                 error('Invalid program: "'+x[0]+'"')
 
@@ -991,7 +993,7 @@ def faa2aln(nproc, proj, integrate, mafft):
              cf_up, i in prots, i) for i in up_list)
 
     if mafft:
-        us_cmd = [["mafft", "--anysymbol", "--quiet",
+        us_cmd = [["mafft", "--anysymbol", "--quiet", "--retree", "1",# "--ep", "0.123",
                    i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
     else:
         us_cmd = [["muscle", "-quiet",
