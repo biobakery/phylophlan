@@ -993,7 +993,7 @@ def faa2aln(nproc, proj, integrate, mafft):
              cf_up, i in prots, i) for i in up_list)
 
     if mafft:
-        us_cmd = [["mafft", "--anysymbol", "--quiet", "--retree", "1",# "--ep", "0.123",
+        us_cmd = [["mafft", "--anysymbol", "--quiet",
                    i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
     else:
         us_cmd = [["muscle", "-quiet",
