@@ -986,11 +986,11 @@ def faa2aln(nproc, proj, integrate, mafft):
     else:
         up_list = ('p{num:04d}'.format(num=aa) for aa in range(400))
 
-    mmap = ((dat_fol+i+".faa", dat_fol+i+".aln", dat_fol+i+".sc",
+    mmap = [(dat_fol+i+".faa", dat_fol+i+".aln", dat_fol+i+".sc",
              ppa_fol+i+".aln", ppa_fol+i+".aln.score",
              dat_fol+i+".int.aln", dat_fol+i+".int.sc",
              dat_fol+i+".sub.aln", dat_fol+i+".int.sub.aln",
-             cf_up, i in prots, i) for i in up_list)
+             cf_up, i in prots, i) for i in up_list]
 
     if mafft:
         us_cmd = [["mafft", "--anysymbol", "--quiet",
@@ -1005,14 +1005,12 @@ def faa2aln(nproc, proj, integrate, mafft):
 
     if us_cmd:
         info("There are "+str(len(us_cmd))+" proteins to align\n")
+
         if integrate:
             for _, _, _, _, _, _, _, _, _, _, _, i in mmap:
                 with open(dat_fol+i+".faa", 'a') as f:
                     with open(ppa_fol+i+".faa", 'r') as g:
                         f.write(g.read())
-
-                    # f.flush()
-                    # os.fsync(f.fileno())
 
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
