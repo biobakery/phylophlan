@@ -852,15 +852,12 @@ def screen(stat, cols, sf=None, unknown_fraction=0.5, n=10):
 
     nsc = sorted(nsc, key=lambda x: x[0], reverse=True)
     ret = [v for _, v in nsc][-n:]
-    # ret = [v for _, v in nsc]
-    # return ret if ret else [list(['-']*lena+['\n'])] # I'm not sure about the '\n', I believe that SeqIO.write() will complain!
+
     return ret if ret else [list(['-']*lena)]
 
 
 def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
-    with open(inp_f) as inp:
-        fnas = list(SeqIO.parse(inp, "fasta"))
-
+    fnas = list(SeqIO.parse(inp_f, "fasta"))
     ids = [f.id for f in fnas]
     cols = zip(*[f.seq for f in fnas])
     col_alf = [set(x) for x in cols]
@@ -868,9 +865,7 @@ def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
     col_sta_ok = screen(col_sta, cols, sf=scores, unknown_fraction=unknown_fraction, n=namn)
     raws = zip(*col_sta_ok)
     recs = [SeqRecord(seq=Seq("".join(r)), id=nid, description=nid) for r, nid in zip(raws, ids)]
-
-    with open(out_f, 'w') as out:
-        SeqIO.write(recs, out, "fasta")
+    SeqIO.write(recs, out_f, "fasta")
 
 
 def exe_muscle(x):
@@ -879,8 +874,8 @@ def exe_muscle(x):
 
         try:
             if x[0] == 'muscle':
-                info("Running muscle on "+x[3]+"\n")
                 i4 = x[3]
+                info("Running muscle on "+i4+"\n")
 
                 with open(os.devnull, 'w') as devnull:
                     t = sb.Popen(x[:-3], stderr=devnull) # quiet mode
