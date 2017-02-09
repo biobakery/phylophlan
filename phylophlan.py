@@ -570,7 +570,8 @@ def exe_usearch(x):
     #
     if not terminating.is_set():
         try:
-            info("Starting "+x[7][x[7].rfind('/')+1:]+"\n")
+            # info("Starting "+x[7][x[7].rfind('/')+1:]+"\n")
+            info("Starting "+x[7]+"\n")
             tmp_faa = None
             t = None
 
@@ -598,7 +599,8 @@ def exe_usearch(x):
             if tmp_faa:
                 tmp_faa.close()
 
-            info(x[7][x[7].rfind('/')+1:]+" generated!\n")
+            # info(x[7][x[7].rfind('/')+1:]+" generated!\n")
+            info(x[7]+" generated!\n")
         except:
             if t:
                 t.kill()
@@ -671,7 +673,8 @@ def faa2ppafaa(inps, nproc, proj, faa_cleaning):
 def blastx_exe(x):
     if not terminating.is_set():
         try:
-            info("Starting "+x[6][x[6].rfind('/')+1:]+"\n")
+            # info("Starting "+x[6][x[6].rfind('/')+1:]+"\n")
+            info("Starting "+x[6]+"\n")
             tmp_fna = None
             t = None
 
@@ -697,7 +700,8 @@ def blastx_exe(x):
             if tmp_fna:
                 tmp_fna.close()
 
-            info(x[6][x[6].rfind('/')+1:]+" generated!\n")
+            # info(x[6][x[6].rfind('/')+1:]+" generated!\n")
+            info(x[6]+" generated!\n")
         except:
             if t:
                 t.kill()
@@ -954,8 +958,7 @@ def faa2aln(nproc, proj, integrate, mafft):
              cf_up, i in prots, i) for i in up_list]
 
     if mafft:
-        us_cmd = [["mafft", "--anysymbol", "--quiet",
-                   i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
+        us_cmd = [["mafft", "--anysymbol", "--quiet", i, o, s, so, pn, up] for i,o,s,_,_,_,_,so,_,up,pres,pn in mmap if not os.path.isfile(o) and pres]
     else:
         us_cmd = [["muscle", "-quiet",
                    "-in", i,
@@ -968,9 +971,9 @@ def faa2aln(nproc, proj, integrate, mafft):
         info("There are "+str(len(us_cmd))+" proteins to align\n")
 
         if integrate:
-            for _, _, _, _, _, _, _, _, _, _, _, i in mmap:
-                with open(dat_fol+i+".faa", 'a') as f:
-                    with open(ppa_fol+i+".faa", 'r') as g:
+            for pn in [pn for _, _, _, _, _, _, _, _, _, _, pres, pn in mmap if pres]:
+                with open(dat_fol+pn+".faa", 'a') as f:
+                    with open(ppa_fol+pn+".faa", 'r') as g:
                         f.write(g.read())
 
         terminating = mp.Event()
