@@ -118,7 +118,7 @@ def dep_checks(mafft, raxml, nproc):
 
         try:
             with open(os.devnull, 'w') as devnull:
-                t = sb.Popen(prog, stdout=devnull, stderr=devnull)
+                t = sb.call(prog, stdout=devnull, stderr=devnull)
 
             if t:
                 t.wait()
@@ -588,7 +588,7 @@ def exe_usearch(x):
             else:
                 cmd = x
 
-            t = sb.Popen(cmd)
+            t = sb.call(cmd)
 
             if t:
                 t.wait()
@@ -692,7 +692,7 @@ def blastx_exe(x):
                 cmd = x
 
             with open(os.devnull, 'w') as devnull:
-                t = sb.Popen(cmd, stderr=devnull) # tblastn quiet homemade!
+                t = sb.call(cmd, stderr=devnull) # tblastn quiet homemade!
 
             if t:
                 t.wait()
@@ -882,7 +882,7 @@ def exe_muscle(x):
                 info("Running muscle on "+i4+"\n")
 
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.Popen(x[:-3], stderr=devnull) # quiet mode
+                    t = sb.call(x[:-3], stderr=devnull) # quiet mode
 
                 if t:
                     t.wait()
@@ -896,7 +896,7 @@ def exe_muscle(x):
 
                 with open(os.devnull, 'w') as devnull:
                     with open(o4+'.refine', 'w') as f:
-                        t = sb.Popen(x[:-5], stdout=f, stderr=devnull) # quiet mode
+                        t = sb.call(x[:-5], stdout=f, stderr=devnull) # quiet mode
 
                 if t:
                     t.wait()
@@ -908,7 +908,7 @@ def exe_muscle(x):
 
                 # compute the score file with muscle (in any case, for the moment)
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.Popen(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
+                    t = sb.call(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
 
                 if t:
                     t.wait()
@@ -1119,13 +1119,12 @@ def build_phylo_tree(proj, integrate, nproc, raxml):
         cmd += ["-m", "PROTCATWAG", "-n", loc_out, "-s", aln_in, "-w", os.getcwd()+'/'+out_fol, "-p", "1989"]
     else:
         info("FastTree\n")
-        cmd = ['FastTree', "-quiet", "-fastest", "-bionj", "-slownni", "-mlacc", "2", "-spr", "4",
-               '-out', out_fol+loc_out, aln_in]
+        cmd = ["FastTree", "-quiet", "-fastest", "-mlnni", "4", "-spr", "4", "-mlacc", "2", "-slownni", "-no2nd", "-out", out_fol+loc_out, aln_in]
 
     t = None
 
     with open(os.devnull, 'w') as devnull:
-        t = sb.Popen(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
+        t = sb.call(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
 
     if t:
         t.wait()
