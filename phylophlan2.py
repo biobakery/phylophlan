@@ -14,7 +14,10 @@ import argparse as ap
 import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
-from Bio import SeqIO # Biopython (version 1.69) require NumPy (version 1.12.1)
+from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
+import tempfile as tf
+import bz2
+
 
 # import tarfile
 # import collections
@@ -29,8 +32,7 @@ from Bio import SeqIO # Biopython (version 1.69) require NumPy (version 1.12.1)
 # from Bio.SeqRecord import SeqRecord
 # import taxcuration as taxc
 # import time
-# from bz2 import BZ2File
-# from tempfile import NamedTemporaryFile
+
 # from itertools import chain
 # import hashlib
 # try:
@@ -70,9 +72,7 @@ def info(s, init_new_line=False, exit=False, exit_value=0):
     inf = '\n' if init_new_line else ''
     sys.stdout.write('{}{}'.format(inf, s))
     sys.stdout.flush()
-
-    if exit:
-        sys.exit(exit_value)
+    sys.exit(exit_value) if exit else None
 
 
 def error(s, init_new_line=False, exit=False, exit_value=1):
@@ -80,22 +80,20 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
     err += '[e] '
     sys.stderr.write('{}{}\n'.format(err, s))
     sys.stderr.flush()
-
-    if exit:
-        sys.exit(exit_value)
+    sys.exit(exit_value) if exit else None
 
 
 def read_params():
     p = ap.ArgumentParser(description="")
 
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--integrate', metavar='PROJECT_NAME', type=str, default=None, help="Integrate user genomes into the PhyloPhlAn tree")
     group.add_argument('-u', '--user_tree', metavar='PROJECT_NAME', type=str, default=None, help="Build a phylogenetic tree using only genomes provided by the user")
     group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None, help="Clean the final and partial data produced for the specified project")
 
-    p.add_argument('-d', '--database', type=str, default=None, required=True, help="The name of the database to use")
+    p.add_argument('-d', '--database', type=str, default=None, required=False, help="The name of the database to use")
 
-    group = p.add_mutually_exclusive_group(required=False)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
@@ -111,6 +109,7 @@ def read_params():
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the --database option")
 
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use, default 1")
+
     # # decide which database to use with blast
     # p.add_argument('--blast_full', action='store_true', default=False, help=
     #     "If specified, tells blast to use the full dataset of universal proteins. As default the small "
@@ -120,12 +119,13 @@ def read_params():
     #     "When specified perform a cleaning on the number and the length of proteins, changing also the "
     #     "proteins id such that are unique among all the genomes. As default this step will be skipped.\n")
 
-    # protein filtering params
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
-
-    # minimum number of markers mapped
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
+
+    group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
+    group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
+    group.add_argument('--proteome_extension', type=str, default='.faa', help="Set the extension for the proteomes in your inputs, default .faa")
 
     p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn2 verbose")
     p.add_argument('-v', '--version', action='store_true', default=False, help="Prints the current PhyloPhlAn2 version")
@@ -138,9 +138,7 @@ def read_configs(configs_folder, verbose=False):
     config_files = glob.iglob(configs_folder+"*.config")
 
     for config_file in config_files:
-        if verbose:
-            info('Reading configuration file {}\n'.format(config_file))
-
+        info('Reading configuration file {}\n'.format(config_file)) if verbose else None
         config = cp.ConfigParser()
         config.read(config_file)
 
@@ -160,97 +158,89 @@ def check_args(args, verbose):
     if args.database_list:
         info('Available databases:\n    {}\n'.format('\n    '.join(database_list(args.databases_folder))), exit=True)
 
-    if args.integrate:
-        project_name = args.integrate
+    if args.clean_all:
+        return
 
-    if args.user_tree:
-        project_name = args.user_tree
-
-    if args.clean:
-        project_name = args.clean
-
-    if not args.input_folder.endswith('/'):
-        args.input_folder += '/'
+    args.input_folder += '/' if not args.input_folder.endswith('/') else ''
+    args.configs_folder += '/' if not args.configs_folder.endswith('/') else ''
+    args.data_folder += '/' if not args.data_folder.endswith('/') else ''
+    args.databases_folder += '/' if not args.databases_folder.endswith('/') else ''
+    args.output_folder += '/' if not args.output_folder.endswith('/') else ''
 
     if not os.path.isdir(args.input_folder):
         error('{} folder does not exists'.format(args.input_folder), exit=True)
 
-    if not args.configs_folder.endswith('/'):
-        args.configs_folder += '/'
-
     if not os.path.isdir(args.configs_folder):
         error('{} folder does not exists'.format(args.configs_folder), exit=True)
-
-    if not args.data_folder.endswith('/'):
-        args.data_folder += '/'
 
     if not os.path.isdir(args.data_folder):
         error('{} folder does not exists'.format(args.data_folder), exit=True)
 
-    if not args.databases_folder.endswith('/'):
-        args.databases_folder += '/'
-
     if not os.path.isdir(args.databases_folder):
         error('{} folder does not exists'.format(args.databases_folder), exit=True)
-
-    if not args.output_folder.endswith('/'):
-        args.output_folder += '/'
 
     if not os.path.isdir(args.output_folder):
         error('{} folder does not exists'.format(args.output_folder), exit=True)
 
-    if not os.path.isdir(args.databases_folder+args.database):
-        error('{} folder does not exists\nAvailable databases are: {}'.format(args.databases_folder+args.database, ', '.database_list(args.databases_folder)), exit=True)
+    if (not args.integrate) and (not args.user_tree) and (not args.clean):
+        error('Either -i (--integrate), or -u (--user_tree), or -c (--clean) must be specified', exit=True)
 
-    if (not args.strain) and (not args.tol) and (not args.meta):
-        # choose a set of parameters for a default execution of PhyloPhlAn2 that is not either
-        # for building strain-level phylogenies, tree-of-life phylogenies, or a metagenomic application
-        pass
+    project_name = args.integrate if args.integrate else None
+    project_name = args.user_tree if args.user_tree else project_name
+    project_name = args.clean if args.clean else project_name
+    project_name += '/' if not project_name.endswith('/') else ''
 
     args.input_folder += project_name
     args.data_folder += project_name
     args.output_folder += project_name
 
-    if not args.input_folder.endswith('/'):
-        args.input_folder += '/'
-
     if not os.path.isdir(args.input_folder):
         error('Project folder does not exists in input directory ({})'.format(args.input_folder), exit=True)
 
-    if not args.data_folder.endswith('/'):
-        args.data_folder += '/'
-
     if not os.path.isdir(args.data_folder):
-        if verbose:
-            info('Creating folder {}\n'.format(args.data_folder))
-
+        info('Creating folder {}\n'.format(args.data_folder)) if verbose else None
         os.mkdir(args.data_folder, mode=0o775)
 
-    if not args.output_folder.endswith('/'):
-        args.output_folder += '/'
-
     if not os.path.isdir(args.output_folder):
-        if verbose:
-            info('Creating folder {}\n'.format(args.output_folder))
-
+        info('Creating folder {}\n'.format(args.output_folder)) if verbose else None
         os.mkdir(args.output_folder, mode=0o775)
+
+    if args.database:
+        if not os.path.isdir(args.databases_folder+args.database):
+            error('{} folder does not exists\nAvailable databases are: {}'.format(args.databases_folder+args.database, ', '.join(database_list(args.databases_folder))), exit=True)
+    else:
+        error('Database not selected\nAvailable databases are: {}'.format(', '.join(database_list(args.databases_folder))), exit=True)
+
+    args.genome_extension = '.'+args.genome_extension if not args.genome_extension.startswith('.') else args.genome_extension
+    args.genome_extension = args.genome_extension[:-1] if args.genome_extension.endswith('.') else args.genome_extension
+
+    args.proteome_extension = '.'+args.proteome_extension if not args.proteome_extension.startswith('.') else args.proteome_extension
+    args.proteome_extension = args.proteome_extension[:-1] if args.proteome_extension.endswith('.') else args.proteome_extension
+
+    if args.strain: # params for strain-level phylogenies
+        print('>  ARGS.STRAIN  <')
+        pass
+    elif args.tol: # params for tree-of-life phylogenies
+        print('>  ARGS.TOL  <')
+        pass
+    elif args.meta: # params for phylogenetic placement of metagenomic contigs
+        print('>  ARGS.META  <')
+        pass
+    else: # default params
+        print('>  DEFAULT  <')
+        pass
 
 
 def check_configs(configs, verbose=False):
     for i in ['markers_db', 'dna_map', 'aa_map', 'msa', 'tree']:
-        if verbose:
-            info('Checking {} section in configuration file\n'.format(i))
-
-        if i not in configs:
-            error('Could not find {} section in configuration file'.format(i), exit=True)
+        info('Checking {} section in configuration file\n'.format(i)) if verbose else None
+        error('Could not find {} section in configuration file'.format(i), exit=True) if i not in configs else None
 
 
 def check_dependencies(configs, nproc, verbose=False):
     for prog in [compose_command(configs[params], check=True, nproc=nproc) for params in configs]:
         try:
-            if verbose:
-                info('Checking {}\n'.format(' '.join(prog)))
-
+            info('Checking {}\n'.format(' '.join(prog))) if verbose else None
             # sb.run(prog, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True)
             print('>  RICORDA DI DECOMMENTARE IL RUN  <')
         except sb.CalledProcessError as cpe:
@@ -319,12 +309,13 @@ def init_database(database, databases_folder, command, verbose=False):
         if not os.path.isfile(db_output):
             try:
                 info("Generating usearch indexed DB {}\n".format(db_output))
-                # sb.run(compose_command(command, db_fasta, db_output), stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
+                cmd = compose_command(command, input_file=db_fasta, output_file=db_output)
+                # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
                 print('>  RICORDA DI DECOMMENTARE IL RUN  <')
             except sb.CalledProcessError as cpe:
-                error('{} returned the following error: {}'.format(' '.join(prog), cpe), exit=True)
+                error('{} returned the following error: {}'.format(' '.join(cmd), cpe), exit=True)
             except:
-                error('{} not installed or not present in system path'.format(' '.join(prog)), exit=True)
+                error('{} not installed or not present in system path'.format(' '.join(cmd)), exit=True)
         elif verbose:
             info('usearch database {} already present\n'.format(db_output))
 
@@ -338,15 +329,11 @@ def clean_all(loc_dat, verbose=False):
 
 def clean_project(data_folder, output_folder, verbose=False):
     if os.path.exists(data_folder):
-        if verbose:
-            info('Cleaning prject folder {}\n'.format(data_folder))
-
+        info('Cleaning prject folder {}\n'.format(data_folder)) if verbose else None
         shutil.rmtree(data_folder)
 
     if os.path.exists(output_folder):
-        if verbose:
-            info('Cleaning prject folder {}\n'.format(output_folder))
-
+        info('Cleaning prject folder {}\n'.format(output_folder)) if verbose else None
         shutil.rmtree(output_folder)
 
     sys.exit(0)
@@ -365,13 +352,11 @@ def load_input_files(input_folder, extension, verbose=False):
     return inputs
 
 
-def check_input_files(inputs, min_num_proteins, min_len_protein, verbose=False):
+def check_input_proteomes(inputs, min_num_proteins, min_len_protein, verbose=False):
     good_inputs = []
 
     for inp in inputs:
-        if verbose:
-            info('Checking input file {}\n'.format(inp))
-
+        info('Checking input file {}\n'.format(inp)) if verbose else None
         good_proteins = 0
 
         for seq_record in SeqIO.parse(inp, "fasta"):
@@ -386,24 +371,29 @@ def check_input_files(inputs, min_num_proteins, min_len_protein, verbose=False):
     return good_inputs
 
 
-def gene_markers_identification(configs, key, inputs, data_folder, database_name, database, nproc=1, verbose=False):
-    current_folder = data_folder+key+'/'
+def initt(terminating_):
+    # This places terminating in the global namespace of the worker subprocesses.
+    # This allows the worker function to access `terminating` even though it is
+    # not passed as an argument to the function.
+    global terminating
+    terminating = terminating_
+
+
+def gene_markers_identification(configs, key, inputs, output_folder, database_name, database, nproc=1, verbose=False):
     commands = []
 
-    if not os.path.isdir(current_folder):
-        if verbose:
-            info('Creating folder {}\n'.format(current_folder))
-
-        os.mkdir(current_folder)
+    if not os.path.isdir(output_folder):
+        info('Creating folder {}\n'.format(output_folder)) if verbose else None
+        os.mkdir(output_folder)
     elif verbose:
-        info('Folder {} already exists\n'.format(current_folder))
+        info('Folder {} already exists\n'.format(output_folder))
 
     for inp in inputs:
         out = inp[inp.rfind('/')+1:]
-        out = current_folder+out[:out.rfind('.')]+'.b6o'
+        out = output_folder+out[:out.rfind('.')]+'.b6o'
 
         if not os.path.isfile(out):
-            commands.append((compose_command(configs[key], input_file=inp, database=database, output_file=out, nproc=nproc), inp, out))
+            commands.append((configs[key], inp, database, out, nproc))
 
     if commands:
         info('Mapping {} on {} inputs (key: {})\n'.format(database_name, len(commands), key))
@@ -419,33 +409,83 @@ def gene_markers_identification(configs, key, inputs, data_folder, database_name
             pool_error = True
 
         pool.join()
-
-        if pool_error:
-            error('gene_markers_identification crashes', exit=True)
+        error('gene_markers_identification crashes', exit=True) if pool_error else None
     else:
         info('{} markers already mapped (key: {})\n'.format(database_name, key))
-
-
-
-def initt(terminating_):
-    # This places terminating in the global namespace of the worker subprocesses.
-    # This allows the worker function to access `terminating` even though it is
-    # not passed as an argument to the function.
-    global terminating
-    terminating = terminating_
 
 
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
         try:
-            cmd, inp, out = x[0], x[1], x[2]
+            c, i, d, o, n = x
+            inp = i
+            tmp_faa = None
+
+            if '.bz2' in inp: # is it compressed?
+                print()
+                print('prefix', inp[inp.rfind('/')+1:inp.find('.')])
+                print('dir', inp[:inp.rfind('/')+1])
+                tmp_faa = tf.NamedTemporaryFile(suffix='.faa', prefix=inp[inp.rfind('/')+1:inp.find('.')], dir=inp[:inp.rfind('/')+1])
+                inp = tmp_faa.name
+                print('inp', inp)
+                print()
+
+                with open(tmp_faa.name, 'w') as f:
+                    with bz2.BZ2File(inp+'.bz2', 'rU') as g:
+                        records = list(SeqIO.parse(g, "fasta"))
+
+                    SeqIO.write(records, f, "fasta")
+
+            cmd = compose_command(c, input_file=inp, database=d, output_file=o, nproc=n)
             info('Starting {}\n'.format(inp))
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             print('>  RICORDA DI DECOMMENTARE IL RUN  <')
+            shutil.copy2(inp, inp+'.bkp') # save the original results
+            print('>  SCREENING OF THE RESULTS OF USEARCH  <')
         except sb.CalledProcessError as cpe:
             error('{} returned the following error: {}'.format(' '.join(cmd), cpe))
+            tmp_faa.close() if tmp_faa else None
             terminating.set()
             return
+        except:
+            error('Cannot execute command {}'.format(' '.join(cmd)))
+            tmp_faa.close() if tmp_faa else None
+            terminating.set()
+            return
+
+        tmp_faa.close() if tmp_faa else None
+        info('{} generated\n'.format(o))
+    else:
+        terminating.set()
+
+
+def gene_markers_extraction(input_folder, output_folder, nproc=1, verbose=False):
+    if not os.path.isdir(output_folder):
+        info('Creating folder {}\n'.format(output_folder)) if verbose else None
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder {} already exists\n'.format(output_folder))
+
+    info('Extracting markers from inputs\n')
+    pool_error = False
+    terminating = mp.Event()
+    pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+
+    try:
+        pool.imap_unordered(gene_markers_extraction_rec, glob.iglob(output_folder+'*.b6o'), chunksize=nproc) # if there are a lot of cpus it is reasonable assume that there will be a lot of inputs too!
+        pool.close()
+    except:
+        pool.terminate()
+        pool_error = True
+
+    pool.join()
+    error('gene_markers_extraction crashes', exit=True) if pool_error else None
+
+
+def gene_markers_extraction_rec(x):
+    if not terminating.is_set():
+        try:
+            info('Extracting {}\n'.format(x))
         except:
             error('Cannot execute command {}'.format(' '.join(cmd)))
             terminating.set()
@@ -454,37 +494,6 @@ def gene_markers_identification_rec(x):
         info('{} generated\n'.format(out))
     else:
         terminating.set()
-
-
-# def wait_for(it):
-#     timeout = 1
-
-#     while (timeout <= 64) and (not os.path.isfile(it)):
-#         time.sleep(timeout)
-#         timeout *= 2
-
-#     if not os.path.isfile(it):
-#         error('File {} has not been created, there should be an error somewhere!'.format(it))
-#         return False
-
-#     return True
-
-
-# def delete_fake_proteomes(torm_sol):
-#     not_rm = []
-
-#     for f in torm_sol:
-#         if os.path.isfile(f):
-#             # os.remove(f)
-#             os.rename(f, f+'_'+str(time.time())+'.bkp') # TO REMOVE!
-#         else:
-#             not_rm.append(f)
-
-#     if not_rm:
-#         msg = "The following fake proteome"
-#         msg += "s were" if len(not_rm) > 1 else " was"
-#         msg += " not removed: "
-#         info(msg + ', '.join(not_rm) + "\n")
 
 
 # def get_inputs(proj, params):
@@ -1724,30 +1733,26 @@ def gene_markers_identification_rec(x):
 if __name__ == '__main__':
     args = read_params()
     check_args(args, args.verbose)
-
-    if args.clean_all:
-        clean_all(loc_dat, args.verbose)
-
-    if args.clean:
-        clean_project(args.data_folder, args.output_folder, args.verbose)
+    clean_all(loc_dat, args.verbose) if args.clean_all else None
+    clean_project(args.data_folder, args.output_folder, args.verbose) if args.clean else None
 
     if not args.meta: # standard phylogeny reconstruction
         configs = read_configs(args.configs_folder, args.verbose)
         check_configs(configs, args.verbose)
         check_dependencies(configs, args.nproc, args.verbose)
         database = init_database(args.database, args.databases_folder, configs['markers_db'], args.verbose)
-        input_fna = load_input_files(args.input_folder, '.fna', args.verbose)
+        input_fna = load_input_files(args.input_folder, args.genome_extension, args.verbose)
 
         if input_fna:
-            gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.nproc, args.verbose)
-            # QC?
+            output_fna = gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.nproc, args.verbose)
             # input_fna = fake_proteomes(input_fna, args.nrpoc, .., args.verbose)
 
-        input_faa = load_input_files(args.input_folder, '.faa', args.verbose) + input_fna
-        input_faa = check_input_files(input_faa, args.min_num_proteins, args.min_len_protein, args.verbose)
+        input_faa = load_input_files(args.input_folder, args.proteome_extension, args.verbose) + input_fna
+        input_faa = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.verbose)
 
         if input_faa:
-            gene_markers_identification(configs, 'aa_map', input_faa, args.data_folder, args.database, database, args.nproc, args.verbose)
+            gene_markers_identification(configs, 'aa_map', input_faa, args.data_folder+'aa_map/', args.database, database, args.nproc, args.verbose)
+            gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'markers/', args.nproc, args.verbose)
     else: # metagenomic application
         pass
 
