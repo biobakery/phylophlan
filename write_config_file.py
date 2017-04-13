@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3.6
 
 
 import configparser as cp
@@ -8,13 +8,17 @@ config = cp.ConfigParser()
 config_folder_files = 'configs/'
 
 # AVAILABLE OPTIONS:
-# program_name
-# program_name_parallel
-# params
-# input
-# database
-# output
-# version
+# program_name: executable name to use
+# program_name_parallel: executable name of the parallel (or multi-core) version (if available)
+# params: list of params to use
+# input: specify input option after which the input file will be placed
+# database:
+# output: specify output option after which the output file will be placed
+# version: (if available) used to verify that the software is installed and running
+
+
+# command: "@program_name|@program_name_parallel @input @output @database @params"
+
 
 progs = {
     'markers_db': {'program_name': 'usearch9.2.64_i86linux32', 'program_name_parallel': '', 'params': '-quiet', 'input': '-makeudb_ublast', 'output': '-output', 'version': '-version'},
