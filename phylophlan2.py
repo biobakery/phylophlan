@@ -340,16 +340,27 @@ def clean_project(data_folder, output_folder, verbose=False):
 
 
 def load_input_files(input_folder, extension, verbose=False):
-    inputs = []
+    inputs, inputs_compressed = [], []
     files = glob.iglob(input_folder+'*'+extension+'*')
 
     for file in files:
         if file.endswith('.bz2'):
-            print('>  COMPRESSED FILE, WHAT DO WE DO??  <')
+            tmp_faa = tf.NamedTemporaryFile(suffix=extension, prefix=file[file.rfind('/')+1:file.find('.')], dir=file[:file.rfind('/')+1])
 
-        inputs.append(file)
+            with open(tmp_faa.name, 'w') as f:
+                with bz2.open(file, 'rt') as g:
+                    records = list(SeqIO.parse(g, "fasta"))
 
-    return inputs
+                SeqIO.write(records, f, "fasta")
+
+            inputs_compressed.append(tmp_faa)
+            inputs.append(tmp_faa.name)
+        elif file.endswith(extension):
+            inputs.append(file)
+        else:
+            info('input file {} not recognized\n'.format(file))
+
+    return (inputs, inputs_compressed)
 
 
 def check_input_proteomes(inputs, min_num_proteins, min_len_protein, verbose=False):
@@ -417,26 +428,8 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
         try:
-            c, i, d, o, n = x
-            inp = i
-            tmp_faa = None
-
-            if '.bz2' in inp: # is it compressed?
-                print()
-                print('prefix', inp[inp.rfind('/')+1:inp.find('.')])
-                print('dir', inp[:inp.rfind('/')+1])
-                tmp_faa = tf.NamedTemporaryFile(suffix='.faa', prefix=inp[inp.rfind('/')+1:inp.find('.')], dir=inp[:inp.rfind('/')+1])
-                inp = tmp_faa.name
-                print('inp', inp)
-                print()
-
-                with open(tmp_faa.name, 'w') as f:
-                    with bz2.BZ2File(inp+'.bz2', 'rU') as g:
-                        records = list(SeqIO.parse(g, "fasta"))
-
-                    SeqIO.write(records, f, "fasta")
-
-            cmd = compose_command(c, input_file=inp, database=d, output_file=o, nproc=n)
+            params, inp, db, out, nproc = x
+            cmd = compose_command(params, input_file=inp, database=db, output_file=out, nproc=nproc)
             info('Starting {}\n'.format(inp))
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             print('>  RICORDA DI DECOMMENTARE IL RUN  <')
@@ -444,17 +437,14 @@ def gene_markers_identification_rec(x):
             print('>  SCREENING OF THE RESULTS OF USEARCH  <')
         except sb.CalledProcessError as cpe:
             error('{} returned the following error: {}'.format(' '.join(cmd), cpe))
-            tmp_faa.close() if tmp_faa else None
             terminating.set()
             return
         except:
             error('Cannot execute command {}'.format(' '.join(cmd)))
-            tmp_faa.close() if tmp_faa else None
             terminating.set()
             return
 
-        tmp_faa.close() if tmp_faa else None
-        info('{} generated\n'.format(o))
+        info('{} generated\n'.format(out))
     else:
         terminating.set()
 
@@ -1741,18 +1731,25 @@ if __name__ == '__main__':
         check_configs(configs, args.verbose)
         check_dependencies(configs, args.nproc, args.verbose)
         database = init_database(args.database, args.databases_folder, configs['markers_db'], args.verbose)
-        input_fna = load_input_files(args.input_folder, args.genome_extension, args.verbose)
+        input_fna, input_fna_compressed = load_input_files(args.input_folder, args.genome_extension, args.verbose)
 
         if input_fna:
-            output_fna = gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.nproc, args.verbose)
-            # input_fna = fake_proteomes(input_fna, args.nrpoc, .., args.verbose)
+            gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.nproc, args.verbose)
+            gene_markers_extraction(args.data_folder+'dna_map/', args.data_folder+'dna_markers/', args.nproc, args.verbose)
+            fake_proteomes(args.data_folder+'dna_markers/', args.data_folder+'fake_proteomes/', args.proteome_extension, args.nrpoc, args.verbose)
 
-        input_faa = load_input_files(args.input_folder, args.proteome_extension, args.verbose) + input_fna
+        input_faa, input_faa_compressed = load_input_files(args.input_folder, args.proteome_extension, args.verbose)
+        input_faa_fake, input_faa_compressed_fake = load_input_files(args.data_folder+'fake_proteomes/', args.proteome_extension, args.verbose)
+        # merge input_faa & input_faa_fake?
         input_faa = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.verbose)
 
         if input_faa:
             gene_markers_identification(configs, 'aa_map', input_faa, args.data_folder+'aa_map/', args.database, database, args.nproc, args.verbose)
-            gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'markers/', args.nproc, args.verbose)
+            gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'aa_markers/', args.nproc, args.verbose)
+
+        for i in input_fna_compressed+input_faa_compressed+input_faa_compressed_fake: # close all NamedTemporaryFile
+            i.close()
+
     else: # metagenomic application
         pass
 
