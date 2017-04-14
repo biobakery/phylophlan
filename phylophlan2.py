@@ -17,8 +17,6 @@ import multiprocessing as mp
 from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
 import tempfile as tf
 import bz2
-
-
 # import tarfile
 # import collections
 # try:
@@ -32,7 +30,6 @@ import bz2
 # from Bio.SeqRecord import SeqRecord
 # import taxcuration as taxc
 # import time
-
 # from itertools import chain
 # import hashlib
 # try:
@@ -42,6 +39,9 @@ import bz2
 #     collections_counter = False
 
 
+config_sections_all = ['markers_db', 'dna_map', 'aa_map', 'msa', 'tree']
+config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version']
+config_options_mandatory = ['program_name']
 # download = ""
 # ppa_fna = "data/ppa.seeds.faa"
 # ppa_fna_40 = "data/ppa.seeds.40.faa"
@@ -135,18 +135,23 @@ def read_params():
 
 def read_configs(configs_folder, verbose=False):
     configs = {}
-    config_files = glob.iglob(configs_folder+"*.config")
 
-    for config_file in config_files:
+    for config_file in glob.iglob(configs_folder+"*.config"):
         info('Reading configuration file {}\n'.format(config_file)) if verbose else None
         config = cp.ConfigParser()
         config.read(config_file)
 
-        for section in config.sections(): # "DEFAULT" section not included!
-            configs[section] = {}
+        for section in config_sections_all:
+            if section in config.sections(): # "DEFAULT" section not included!
+                configs[section] = {}
 
-            for option in config[section]:
-                configs[section][option] = config[section][option]
+                for option in config_options_all:
+                    if option in config[section]:
+                        configs[section][option] = config[section][option]
+                    else:
+                        configs[section][option] = None
+            else:
+                configs[section] = None
 
     return configs
 
@@ -232,9 +237,11 @@ def check_args(args, verbose):
 
 
 def check_configs(configs, verbose=False):
-    for i in ['markers_db', 'dna_map', 'aa_map', 'msa', 'tree']:
-        info('Checking {} section in configuration file\n'.format(i)) if verbose else None
-        error('Could not find {} section in configuration file'.format(i), exit=True) if i not in configs else None
+    for section in config_sections_all:
+        info('Checking {} section in configuration file\n'.format(section)) if verbose else None
+        error('Could not find {} section in configuration file'.format(section), exit=True) if section not in configs else None
+        for option in config_options_mandatory:
+            error('Could not find {} mandatory option in section {} in configuration file'.format(option, section), exit=True) if option not in configs[section] else None
 
 
 def check_dependencies(configs, nproc, verbose=False):
@@ -259,6 +266,10 @@ def compose_command(params, check=False, input_file=None, database=None, output_
     if (nproc > 1) and params['program_name_parallel']:
         command = [params['program_name_parallel']]
 
+    if params['threads']:
+        command.append(params['threads'])
+        command.append(nproc)
+
     if check and params['version']:
         command.append(params['version'])
     elif params['params']:
@@ -282,7 +293,7 @@ def compose_command(params, check=False, input_file=None, database=None, output_
 
         command.append(output_file)
 
-    return command
+    return [str(a) for a in command]
 
 
 def init_database(database, databases_folder, command, verbose=False):
@@ -404,7 +415,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         out = output_folder+out[:out.rfind('.')]+'.b6o'
 
         if not os.path.isfile(out):
-            commands.append((configs[key], inp, database, out, nproc))
+            commands.append((configs[key], inp, database, out))
 
     if commands:
         info('Mapping {} on {} inputs (key: {})\n'.format(database_name, len(commands), key))
@@ -428,12 +439,14 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
         try:
-            params, inp, db, out, nproc = x
-            cmd = compose_command(params, input_file=inp, database=db, output_file=out, nproc=nproc)
+            params, inp, db, out = x
+            cmd = compose_command(params, input_file=inp, database=db, output_file=out)
             info('Starting {}\n'.format(inp))
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             print('>  RICORDA DI DECOMMENTARE IL RUN  <')
-            shutil.copy2(inp, inp+'.bkp') # save the original results
+            # shutil.copy2(out, out+'.bkp') # save the original results
+            print('>  RICORDA DI DECOMMENTARE LA COPIA  <')
+
             print('>  SCREENING OF THE RESULTS OF USEARCH  <')
         except sb.CalledProcessError as cpe:
             error('{} returned the following error: {}'.format(' '.join(cmd), cpe))
@@ -1748,8 +1761,8 @@ if __name__ == '__main__':
             gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'aa_markers/', args.nproc, args.verbose)
 
         for i in input_fna_compressed+input_faa_compressed+input_faa_compressed_fake: # close all NamedTemporaryFile
+            print('Removing temporary file {}'.format(i.name)) if args.verbose else None
             i.close()
-
     else: # metagenomic application
         pass
 

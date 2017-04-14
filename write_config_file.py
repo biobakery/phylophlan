@@ -8,26 +8,26 @@ config = cp.ConfigParser()
 config_folder_files = 'configs/'
 
 # AVAILABLE OPTIONS:
-# program_name: executable name to use
-# program_name_parallel: executable name of the parallel (or multi-core) version (if available)
-# params: list of params to use
-# input: specify input option after which the input file will be placed
-# database:
-# output: specify output option after which the output file will be placed
-# version: (if available) used to verify that the software is installed and running
-
+# program_name: name of the executable to use
+# program_name_parallel: name of the parallel (or multi-core) version of the executable
+# params: params to use
+# threads: specify the option to use to pass the number of threads
+# input: specify the option to use for the input file
+# database: specify the option to use for setting the database
+# output_path: specify the to option to use to set the path of the folder that will contains the output file
+# output: specify the option to use for the output file
+# version: specify the option to use to get the version of the sotware, used to verify the software installation
 
 # command: "@program_name|@program_name_parallel @input @output @database @params"
 
-
 progs = {
-    'markers_db': {'program_name': 'usearch9.2.64_i86linux32', 'program_name_parallel': '', 'params': '-quiet', 'input': '-makeudb_ublast', 'output': '-output', 'version': '-version'},
-    'dna_map': {'program_name': 'tblastn', 'program_name_parallel': '', 'params': '', 'input': '', 'database': '', 'output': '', 'version': '-version'},
-    'aa_map': {'program_name': 'usearch9.2.64_i86linux32', 'program_name_parallel': '', 'params': '-quiet -threads 1 -evalue 1e-10 -maxaccepts 8 -maxrejects 32', 'input': '-ublast', 'database': '-db', 'output': '-blast6out', 'version': '-version'},
-    'msa': {'program_name': 'muscle3.8.1551', 'program_name_parallel': '', 'params': '', 'input': '', 'output': '', 'version': '-version'},
-    # {'program_name': 'mafft', 'program_name_parallel': '', 'params': '', 'input': '', 'output': '', 'version': '--version'},
-    'tree': {'program_name': 'FastTree-2.1.9-SSE3', 'program_name_parallel': 'FastTreeMP-2.1.9-SSE3', 'params': '', 'input': '', 'output': '', 'version': ''},
-    # {'program_name': 'raxmlHPC', 'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3', 'params': '', 'input': '', 'output': '', 'version': '-v'}
+    'markers_db': {'program_name': 'usearch9.2.64_i86linux32', 'params': '-quiet', 'input': '-makeudb_ublast', 'output': '-output', 'version': '-version'},
+    'dna_map': {'program_name': 'tblastn', 'params': '-outfmt 6 -evalue 1e-50', 'input': '-subject', 'database': '-query', 'output': '-out', 'version': '-version'},
+    'aa_map': {'program_name': 'usearch9.2.64_i86linux32', 'params': '-quiet -evalue 1e-10 -maxaccepts 8 -maxrejects 32', 'threads': '-threads', 'input': '-ublast', 'database': '-db', 'output': '-blast6out', 'version': '-version'},
+    'msa': {'program_name': 'muscle3.8.1551', 'params': '-quiet -maxiters 2', 'input': '-in', 'output': '-out', 'version': '-version'},
+           # {'program_name': 'mafft', 'params': '--anysymbol --quiet', 'version': '--version'},
+    'tree': {'program_name': 'FastTree-2.1.9-SSE3', 'program_name_parallel': 'FastTreeMP-2.1.9-SSE3', 'params': '-quiet -fastest -mlnni 4 -no2nd', 'output': '-out'},
+            # {'program_name': 'raxmlHPC', 'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3', 'params': '-m PROTCATWAG -p 1989', 'threads': '-T', 'input': '-s', 'output_path':'-w', 'output': '-n', 'version': '-v'}
 }
 
 for prog, options in progs.items():
