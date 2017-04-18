@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
@@ -256,7 +256,7 @@ def check_dependencies(configs, nproc, verbose=False):
 
 
 def database_list(databases_folder, exit=False):
-    info('Available databases:\n    {}\n'.format('\n    '.join(os.listdir(databases_folder))), exit=exit)
+    info('Available databases:\n    {}\n'.format('\n    '.join([a.replace('.faa', '').replace('.bz2', '') for a in os.listdir(databases_folder)])), exit=exit)
 
 
 def compose_command(params, check=False, input_file=None, database=None, output_file=None, nproc=1):
@@ -298,26 +298,32 @@ def compose_command(params, check=False, input_file=None, database=None, output_
 
 
 def init_database(database, databases_folder, command, verbose=False):
-    db_fasta, db_output = None, None
+    db_fasta, db_output, markers = None, None, None
 
-    if os.path.isfile(databases_folder+database): # assumed to be a fasta file containing the markers
-        db_fasta = databases_folder+database
-        db_output = databases_folder+database[:database.rfind('.')]+'.udb'
+    if os.path.isfile(databases_folder+database+'.faa'): # assumed to be a fasta file containing the markers
+        db_fasta = databases_folder+database+'.faa'
+        db_output = databases_folder+database+'.udb'
+    elif os.path.isfile(databases_folder+database+'.faa.bz2'):
+        db_fasta = databases_folder+database+'.faa'
+        db_output = databases_folder+database+'.udb'
+        markers = [databases_folder+database+'.faa.bz2']
     elif os.path.isdir(databases_folder+database): # assumed to be a folder with a fasta file for each marker
-        db_fasta = databases_folder+database+'/'+database+'.fna'
+        db_fasta = databases_folder+database+'/'+database+'.faa'
         db_output = databases_folder+database+'/'+database+'.udb'
-
-        if not os.path.isfile(db_fasta):
-            with open(db_fasta, 'w') as f:
-                for i in glob.iglob(databases_folder+database+'/*'):
-                    with open(i) as g:
-                        f.write(g.read())
-        elif verbose:
-            info('File {} already present\n'.format(db_fasta))
+        markers = glob.iglob(databases_folder+database+'/*.faa*')
     else: # what's that??
-        error("Custom set of markers not recognize", exit=True)
+        error('Custom set of markers not recognize', exit=True)
 
     if db_fasta and db_output:
+        if not os.path.isfile(db_fasta):
+            with open(db_fasta, 'w') as f:
+                for i in markers:
+                    g = bz2.open(i, 'rt') if i.endswith('.bz2') else open(i)
+                    f.write(g.read())
+                    g.close()
+        elif verbose:
+            info('File {} already present\n'.format(db_fasta))
+
         if not os.path.isfile(db_output):
             try:
                 info("Generating usearch indexed DB {}\n".format(db_output))
@@ -353,11 +359,11 @@ def clean_all(databases_folder, verbose=False):
 
 def clean_project(data_folder, output_folder, verbose=False):
     if os.path.exists(data_folder):
-        info('Cleaning prject folder {}\n'.format(data_folder)) if verbose else None
+        info('Cleaning project folder {}\n'.format(data_folder)) if verbose else None
         shutil.rmtree(data_folder)
 
     if os.path.exists(output_folder):
-        info('Cleaning prject folder {}\n'.format(output_folder)) if verbose else None
+        info('Cleaning project folder {}\n'.format(output_folder)) if verbose else None
         shutil.rmtree(output_folder)
 
     sys.exit(0)
