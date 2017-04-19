@@ -14,7 +14,7 @@ import argparse as ap
 import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
-from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
+#from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
 import tempfile as tf
 import bz2
 # import tarfile
@@ -196,7 +196,8 @@ def check_args(args, verbose):
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
 
     if args.database:
-        if not check_and_create_folder(args.databases_folder+args.database, verbose=verbose):
+        if (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
+            error('Database {} not found'.format(args.database))
             database_list(args.databases_folder, exit=True)
     else:
         error('Database not selected')
@@ -248,7 +249,7 @@ def check_dependencies(configs, nproc, verbose=False):
         try:
             info('Checking {}\n'.format(' '.join(prog))) if verbose else None
             # sb.run(prog, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True)
-            print('>  RICORDA DI DECOMMENTARE IL RUN  <')
+            sb.check_call(prog, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
         except sb.CalledProcessError as cpe:
             error('{} returned the following error: {}'.format(' '.join(prog), cpe), exit=True)
         except:
@@ -329,7 +330,7 @@ def init_database(database, databases_folder, command, verbose=False):
                 info("Generating usearch indexed DB {}\n".format(db_output))
                 cmd = compose_command(command, input_file=db_fasta, output_file=db_output)
                 # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-                print('>  RICORDA DI DECOMMENTARE IL RUN  <')
+                sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
             except sb.CalledProcessError as cpe:
                 error('{} returned the following error: {}'.format(' '.join(cmd), cpe), exit=True)
             except:
@@ -342,28 +343,32 @@ def init_database(database, databases_folder, command, verbose=False):
 
 def clean_all(databases_folder, verbose=False):
     for f in glob.iglob(databases_folder+'*.udb'):
-        # os.remove(f)
-        print('>  {}  <'.format(f))
+        info('Removing {}\n'.format(f)) if verbose else None
+        os.remove(f)
+
+        if os.path.isfile(f[:f.rfind('.')]+'.faa') and os.path.isfile(f[:f.rfind('.')]+'.faa.bz2'):
+            info('Removing {}\n'.format(f[:f.rfind('.')]+'.faa')) if verbose else None
+            os.remove(f[:f.rfind('.')]+'.faa')
 
     for database in os.listdir(databases_folder):
-        for f in glob.iglob(databases_folder+database+'/'+database+'.fna'):
-            # os.remove(f)
-            print('>  {}  <'.format(f))
+        for f in glob.iglob(databases_folder+database+'/'+database+'.faa'):
+            info('Removing {}\n'.format(f)) if verbose else None
+            os.remove(f)
 
         for f in glob.iglob(databases_folder+database+'/'+database+'.udb'):
-            # os.remove(f)
-            print('>  {}  <'.format(f))
+            info('Removing {}\n'.format(f)) if verbose else None
+            os.remove(f)
 
     sys.exit(0)
 
 
 def clean_project(data_folder, output_folder, verbose=False):
     if os.path.exists(data_folder):
-        info('Cleaning project folder {}\n'.format(data_folder)) if verbose else None
+        info('Removing folder {}\n'.format(data_folder)) if verbose else None
         shutil.rmtree(data_folder)
 
     if os.path.exists(output_folder):
-        info('Cleaning project folder {}\n'.format(output_folder)) if verbose else None
+        info('Removing folder {}\n'.format(output_folder)) if verbose else None
         shutil.rmtree(output_folder)
 
     sys.exit(0)
@@ -463,9 +468,8 @@ def gene_markers_identification_rec(x):
         try:
             cmd = compose_command(params, input_file=inp, database=db, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            print('>  RICORDA DI DECOMMENTARE IL RUN  <')
-            # shutil.copy2(out, out+'.bkp') # save the original results
-            print('>  RICORDA DI DECOMMENTARE LA COPIA  <')
+            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            shutil.copy2(out, out+'.bkp') # save the original results
             tab = (tuple(ll.strip().split('\t')) for ll in open(out))
             best_matches = {}
 
@@ -1792,7 +1796,7 @@ if __name__ == '__main__':
         input_faa, input_faa_compressed = load_input_files(args.input_folder, args.proteome_extension, args.verbose)
         input_faa_fake, input_faa_compressed_fake = load_input_files(args.data_folder+'fake_proteomes/', args.proteome_extension, args.verbose)
         input_faa += input_faa_fake
-        input_faa = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.verbose)
+        #input_faa = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.verbose)
 
         if input_faa:
             gene_markers_identification(configs, 'aa_map', input_faa, args.data_folder+'aa_map/', args.database, database, args.min_num_proteins, args.nproc, args.verbose)
