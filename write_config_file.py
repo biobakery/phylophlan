@@ -26,6 +26,7 @@ progs = {
     'aa_map': {'program_name': 'usearch9.2.64_i86linux32', 'params': '-quiet -evalue 1e-10 -maxaccepts 8 -maxrejects 32', 'threads': '-threads', 'input': '-ublast', 'database': '-db', 'output': '-blast6out', 'version': '-version'},
     'msa': {'program_name': 'muscle3.8.1551', 'params': '-quiet -maxiters 2', 'input': '-in', 'output': '-out', 'version': '-version'},
            # {'program_name': 'mafft', 'params': '--anysymbol --quiet', 'version': '--version'},
+    'trim': {'program_name': 'trimal', 'params': '-gappyout', 'input': '-in', 'output': '-out', 'version': '--version'},
     'tree': {'program_name': 'FastTree-2.1.9-SSE3', 'program_name_parallel': 'FastTreeMP-2.1.9-SSE3', 'params': '-quiet -fastest -mlnni 4 -no2nd', 'output': '-out'},
             # {'program_name': 'raxmlHPC', 'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3', 'params': '-m PROTCATWAG -p 1989', 'threads': '-T', 'input': '-s', 'output_path':'-w', 'output': '-n', 'version': '-v'}
 }
