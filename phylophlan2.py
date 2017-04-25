@@ -167,8 +167,11 @@ def check_args(args, verbose):
         database_list(args.databases_folder, exit=True)
     elif (not args.integrate) and (not args.user_tree) and (not args.clean):
         error('either -i (--integrate), or -u (--user_tree), or -c (--clean) must be specified', exit=True)
+    elif not args.database:
+        error('-d (or --database) must be specified')
+        database_list(args.databases_folder, exit=True)
     elif (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
-        error('database {} not found'.format(args.database))
+        error('database {} not found in {}'.format(args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
     elif not os.path.isfile(args.config_file):
         error('configuration file {} not found'.format(args.config), exit=True)
