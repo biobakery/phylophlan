@@ -17,10 +17,10 @@ import multiprocessing as mp
 from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
-import tempfile as tf
 import bz2
 import math
 import re
+import hashlib
 # import tarfile
 # import collections
 # try:
@@ -33,7 +33,6 @@ import re
 # import taxcuration as taxc
 # import time
 # from itertools import chain
-# import hashlib
 # try:
 #     from collections import Counter # works only with python >= 2.7
 #     collections_counter = True
@@ -41,9 +40,9 @@ import re
 #     collections_counter = False
 
 
-config_sections_all = ['markers_db', 'dna_map', 'aa_map', 'msa', 'trim', 'tree']
-config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version']
-config_options_mandatory = ['program_name', 'command_line']
+config_sections_mandatory = ['markers_db', 'dna_map', 'aa_map', 'msa', 'trim', 'tree']
+config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
 # download = ""
 # ppa_fna = "data/ppa.seeds.faa"
 # ppa_fna_40 = "data/ppa.seeds.40.faa"
@@ -139,7 +138,7 @@ def read_configs(config_file, verbose=False):
     if verbose:
         info('Reading configuration file {}\n'.format(config_file))
 
-    for section in config_sections_all:
+    for section in config_sections_mandatory:
         if section in config.sections(): # "DEFAULT" section not included!
             configs[section] = {}
 
@@ -235,14 +234,21 @@ def check_args(args, verbose):
 
 
 def check_configs(configs, verbose=False):
-    for section in config_sections_all:
+    for section in config_sections_mandatory:
         if verbose:
             info('Checking {} section in configuration file\n'.format(section))
 
         if section not in configs:
             error('could not find {} section in configuration file'.format(section), exit=True)
-        for option in config_options_mandatory:
-            if option not in configs[section]:
+
+        for options in config_options_mandatory:
+            mandatory_options = False
+
+            for option in options:
+                if (option in configs[section]) and configs[section][option]:
+                    mandatory_options = True
+
+            if not mandatory_options:
                 error('could not find {} mandatory option in section {} in configuration file'.format(option, section), exit=True)
 
 
@@ -276,7 +282,7 @@ def check_dependencies(configs, nproc, verbose=False):
 
 
 def database_list(databases_folder, exit=False):
-    info('Available databases:\n    {}\n'.format('\n    '.join([a.replace('.faa', '').replace('.bz2', '') for a in os.listdir(databases_folder)])), exit=exit)
+    info('Available databases:\n    {}\n'.format('\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit)
 
 
 def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
@@ -284,7 +290,7 @@ def compose_command(params, check=False, input_file=None, database=None, output_
     program_name = params['program_name']
 
     if (nproc > 1) and params['program_name_parallel']:
-        command_line.replace('#program_name_parallel#', params['program_name_parallel'])
+        command_line = command_line.replace('#program_name_parallel#', params['program_name_parallel'])
         program_name = params['program_name_parallel']
 
     if check:
@@ -294,32 +300,32 @@ def compose_command(params, check=False, input_file=None, database=None, output_
             command_line = '{} {}'.format(program_name, params['version'])
     else:
         if params['params']:
-            command_line.replace('#params#', params['params'])
+            command_line = command_line.replace('#params#', params['params'])
 
         if params['threads']:
-            command_line.replace('#threads#', '{} {}'.format(params['threads']), nproc)
+            command_line = command_line.replace('#threads#', '{} {}'.format(params['threads'], nproc))
 
         if output_path and params['output_path']:
-            command_line.replace('#output_path#', params['output_path'])
+            command_line = command_line.replace('#output_path#', '{} {}'.format(params['output_path'], output_path))
 
         if input_file:
             inp = input_file
 
-            if command.append(params['input']):
+            if params['input']:
                 inp = '{} {}'.format(params['input'], input_file)
 
-            command_line.replace('#input#', inp)
+            command_line = command_line.replace('#input#', inp)
 
         if database and params['database']:
-            command_line.replace('#database#', '{} {}'.format(params['database'], database))
+            command_line = command_line.replace('#database#', '{} {}'.format(params['database'], database))
 
         if output_file:
             out = output_file
 
-            if command.append(params['output']):
+            if params['output']:
                 out = '{} {}'.format(params['output'], output_file)
 
-            command_line.replace('#output#', out)
+            command_line = command_line.replace('#output#', out)
 
     return [str(a) for a in re.sub(' +', ' ', command_line).split(' ') if a]
 
@@ -413,30 +419,43 @@ def clean_project(data_folder, output_folder, verbose=False):
 
 
 def load_input_files(input_folder, tmp_folder, extension, verbose=False):
-    inputs, inputs_compressed = [], []
-    files = glob.iglob(input_folder+'*'+extension+'*')
+    inputs = []
 
-    for file in files:
-        if file.endswith('.bz2'):
-            if not os.path.isdir(tmp_folder):
-                os.mkdir(tmp_folder)
+    if os.path.isdir(input_folder):
+        files = glob.iglob(input_folder+'*'+extension+'*')
 
-            tmp_faa = tf.NamedTemporaryFile(suffix=extension, prefix=file[file.rfind('/')+1:file.find('.')], dir=tmp_folder)
+        for f in files:
+            if f.endswith('.bz2'):
+                if not os.path.isdir(tmp_folder):
+                    if verbose:
+                        info('Creating folder {}\n'.format(tmp_folder))
 
-            with open(tmp_faa.name, 'w') as f:
-                with bz2.open(file, 'rt') as g:
-                    records = list(SeqIO.parse(g, "fasta"))
+                    os.mkdir(tmp_folder)
 
-                SeqIO.write(records, f, "fasta")
+                hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
+                file_clean = f[f.rfind('/')+1:].replace(extension, '').replace('.bz2', '')
+                file_clean = tmp_folder+file_clean+'_'+hashh+extension
 
-            inputs_compressed.append(tmp_faa)
-            inputs.append(tmp_faa.name)
-        elif file.endswith(extension):
-            inputs.append(file)
-        else:
-            info('Input file {} not recognized\n'.format(file))
+                if not os.path.isfile(file_clean):
+                    with open(file_clean, 'w') as g:
+                        with bz2.open(f, 'rt') as h:
+                            # records = list(SeqIO.parse(h, "fasta"))
+                            SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
 
-    return (inputs, inputs_compressed)
+                        # SeqIO.write(records, g, "fasta")
+                elif verbose:
+                    info('File {} already decompressed\n'.format(file_clean))
+
+                inputs.append(file_clean)
+            elif f.endswith(extension):
+                inputs.append(f)
+            else:
+                info('Input file {} not recognized\n'.format(f))
+
+    elif verbose:
+        info('Folder {} does not exists\n'.format(input_folder))
+
+    return inputs
 
 
 def initt(terminating_):
@@ -476,13 +495,8 @@ def check_input_proteomes_rec(x):
         try:
             inp, min_len_protein, min_num_proteins, verbose = x
             info('Checking {}\n'.format(inp))
-            good_proteins = 0
 
-            for seq_record in SeqIO.parse(inp, "fasta"):
-                if len(seq_record) >= min_len_protein:
-                    good_proteins += 1
-
-            if good_proteins >= min_num_proteins:
+            if len([0 for seq_record in SeqIO.parse(inp, "fasta") if len(seq_record) >= min_len_protein]) >= min_num_proteins:
                 return inp
             elif verbose:
                 info('{} discarded, not enough proteins ({}/{}) of at least {} AAs\n'.format(inp, good_proteins, min_num_proteins, min_len_protein))
@@ -536,14 +550,9 @@ def clean_input_proteomes_rec(x):
     if not terminating.is_set():
         try:
             inp, out = x
-            counter = 0
-            output = []
             inp_clean = inp[inp.rfind('/')+1:inp.rfind('.')]
             info('Cleaning {}\n'.format(inp))
-
-            for seq_record in SeqIO.parse(inp, "fasta"):
-                output.append(SeqRecord(seq_record.seq, id='{}_{}'.format(inp_clean, counter), description=''))
-                counter += 1
+            output = (SeqRecord(seq_record.seq, id='{}_{}'.format(inp_clean, counter), description='') for counter, seq_record in enumerate(SeqIO.parse(inp, "fasta")))
 
             with open(out, 'w') as f:
                 SeqIO.write(output, f, "fasta")
@@ -900,9 +909,9 @@ def subsample(input_folder, output_folder, nproc=1, verbose=False):
 
     for inp in glob.iglob(input_folder+'*.aln'):
         out = output_folder+inp[inp.rfind('/')+1:]
-        marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
 
         try:
+            marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
             marker = int(marker)
             # npos = max(int(max(int((400-marker)*30/400.0), 1)**2/30.0), 3) # ~4k AAs (original PhyloPhlAn formulae)
             npos = max(int(math.ceil(max(int(math.ceil((400-marker)*30/400.0)), 1)**2/30.0)), 3) # ~4.6k AAs
@@ -953,26 +962,17 @@ def subsample_rec(x):
 
 
 def concatenate(all_inputs, input_folder, output_file, verbose=False):
-    inputs2alingments = {}
-    all_inputs = set(all_inputs)
-
     if os.path.isfile(output_file):
         info('Alignments already merged {}\n'.format(output_file))
         return
 
     info('Merging alignments {}\n'.format(output_file))
-
-    for inp in all_inputs:
-        inputs2alingments[inp] = SeqRecord(Seq(''), id='{}'.format(inp), description='')
+    all_inputs = set(all_inputs)
+    inputs2alingments = dict([(inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs])
 
     for a in glob.iglob(input_folder+'*'):
-        current_inputs = []
         alignment_length = None
-
-        for seq_record in SeqIO.parse(a, "fasta"):
-            current_inputs.append(seq_record.id)
-
-        current_inputs = set(current_inputs)
+        current_inputs = [seq_record.id for seq_record in SeqIO.parse(a, "fasta")]
 
         for seq_record in SeqIO.parse(a, "fasta"):
             if not alignment_length:
@@ -981,7 +981,7 @@ def concatenate(all_inputs, input_folder, output_file, verbose=False):
             for inp in all_inputs:
                 seq = inputs2alingments[inp]
 
-                if inp in current_inputs:
+                if inp in set(current_inputs):
                     seq.seq += seq_record.seq
                 else:
                     seq.seq += Seq('-'*alignment_length)
@@ -2278,30 +2278,28 @@ if __name__ == '__main__':
     database = init_database(args.database, args.databases_folder, configs['markers_db'], args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
-        input_fna_compressed, input_faa_compressed, input_faa_compressed_fake, input_faa_compressed_clean = [], [], [], []
-        input_fna, input_fna_compressed = load_input_files(args.input_folder, args.data_folder+'tmp/', args.genome_extension, args.verbose)
+        input_fna = load_input_files(args.input_folder, args.data_folder+'tmp/', args.genome_extension, args.verbose)
 
         if input_fna:
             gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.min_num_proteins, args.nproc, args.verbose)
             gene_markers_extraction(args.data_folder+'dna_map/', args.data_folder+'dna_markers/', args.input_folder, args.nproc, args.verbose)
             fake_proteomes(args.data_folder+'dna_markers/', args.data_folder+'fake_proteomes/', args.proteome_extension, args.nrpoc, args.verbose)
 
-        input_faa, input_faa_compressed = load_input_files(args.input_folder, args.data_folder+'tmp/', args.proteome_extension, args.verbose)
-        input_faa_fake, input_faa_compressed_fake = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
+        input_faa = load_input_files(args.input_folder, args.data_folder+'tmp/', args.proteome_extension, args.verbose)
+        input_faa_fake = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
 
         if input_faa+input_faa_fake:
             input_faa = check_input_proteomes(input_faa+input_faa_fake, args.min_num_proteins, args.min_len_protein, args.nproc, args.verbose)
 
         if input_faa:
             clean_input_proteomes(input_faa, args.data_folder+'aa_clean/', args.nproc, args.verbose)
-            input_faa_clean, input_faa_compressed_clean = load_input_files(args.data_folder+'aa_clean/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
+            input_faa_clean = load_input_files(args.data_folder+'aa_clean/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
             args.input_folder = args.data_folder+'aa_clean/'
+
+            sys.exit()
 
             if input_faa_clean:
                 gene_markers_identification(configs, 'aa_map', input_faa_clean, args.data_folder+'aa_map/', args.database, database, args.min_num_proteins, args.nproc, args.verbose)
-
-                sys.exit()
-
                 gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'aa_markers/', args.input_folder, args.proteome_extension, args.nproc, args.verbose)
 
         inputs2markers(args.data_folder+'aa_markers/', args.proteome_extension, args.data_folder+'markers/', args.verbose)
@@ -2312,12 +2310,6 @@ if __name__ == '__main__':
         concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), args.data_folder+'sub/', args.data_folder+'all.aln', args.verbose)
 
         build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', args.nproc, args.verbose)
-
-        for i in input_fna_compressed+input_faa_compressed+input_faa_compressed_fake+input_faa_compressed_clean: # close all NamedTemporaryFile
-            if args.verbose:
-                info('Removing temporary file {}\n'.format(i.name))
-
-            i.close()
     else: # metagenomic application
         pass
 

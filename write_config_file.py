@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 
 
 import configparser as cp
@@ -40,7 +40,7 @@ progs = {
                'database': '-db',
                'output': '-blast6out',
                'version': '-version',
-               'command_line': '#program_name# #params# #input# #output#'},
+               'command_line': '#program_name# #params# #threads# #input# #database# #output#'},
     'msa': {'program_name': 'muscle3.8.1551',
             'params': '-quiet -maxiters 2',
             'input': '-in',
@@ -58,7 +58,7 @@ progs = {
              'program_name_parallel': 'FastTreeMP-2.1.9-SSE3',
              'params': '-quiet -fastest -mlnni 4 -no2nd',
              'output': '-out',
-             'command_line': '#program_name# #params# #input# #output#'},
+             'command_line': '#program_name# #params# #output# #input#'},
             # {'program_name': 'raxmlHPC', 'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3', 'params': '-m PROTCATWAG -p 1989', 'threads': '-T', 'input': '-s', 'output_path':'-w', 'output': '-n', 'version': '-v'}
 }
 
