@@ -21,6 +21,7 @@ import bz2
 import math
 import re
 import hashlib
+import time
 # import tarfile
 # import collections
 # try:
@@ -40,7 +41,7 @@ import hashlib
 #     collections_counter = False
 
 
-config_sections_mandatory = ['markers_db', 'dna_map', 'aa_map', 'msa', 'trim', 'tree']
+config_sections_mandatory = ['db_aa', 'map_dna', 'map_aa', 'msa', 'trim', 'tree']
 config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
 config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
 # download = ""
@@ -251,6 +252,23 @@ def check_configs(configs, verbose=False):
             if not mandatory_options:
                 error('could not find {} mandatory option in section {} in configuration file'.format(option, section), exit=True)
 
+    for section, options in configs.items():
+        mandatory_options = None
+        actual_options = []
+
+        for option in options:
+            if option in ['command_line']:
+                mandatory_options = [a.strip() for a in configs[section][option].split('#') if a.strip()]
+            else:
+                actual_options.append(option)
+
+        if mandatory_options and actual_options:
+            for option in mandatory_options:
+                if option not in actual_options:
+                    error('option {} not defined in section {} in your configuration file'.format(option, section), exit=True)
+        else:
+            error('wrongly formatted configuration file?', exit=True)
+
 
 def check_and_create_folder(folder, create=False, exit=False, verbose=False):
     if not os.path.isdir(folder):
@@ -330,47 +348,55 @@ def compose_command(params, check=False, input_file=None, database=None, output_
     return [str(a) for a in re.sub(' +', ' ', command_line).split(' ') if a]
 
 
-def init_database(database, databases_folder, command, verbose=False):
-    db_fasta, db_output, markers = None, None, None
+def init_database(database, databases_folder, cmd_aa, verbose=False):
+    db_fasta, db_dna, db_aa, markers = None, None, None, None
 
     if os.path.isfile(databases_folder+database+'.faa'): # assumed to be a fasta file containing the markers
         db_fasta = databases_folder+database+'.faa'
-        db_output = databases_folder+database+'.udb'
+        db_dna = databases_folder+database+'.faa'
+        db_aa = databases_folder+database+'.udb'
     elif os.path.isfile(databases_folder+database+'.faa.bz2'):
         db_fasta = databases_folder+database+'.faa'
-        db_output = databases_folder+database+'.udb'
+        db_dna = databases_folder+database+'.faa'
+        db_aa = databases_folder+database+'.udb'
         markers = [databases_folder+database+'.faa.bz2']
     elif os.path.isdir(databases_folder+database): # assumed to be a folder with a fasta file for each marker
         db_fasta = databases_folder+database+'/'+database+'.faa'
-        db_output = databases_folder+database+'/'+database+'.udb'
+        db_dna = databases_folder+database+'/'+database+'.faa'
+        db_aa = databases_folder+database+'/'+database+'.udb'
         markers = glob.iglob(databases_folder+database+'/*.faa*')
     else: # what's that??
         error('custom set of markers not recognize', exit=True)
 
-    if db_fasta and db_output:
-        if not os.path.isfile(db_fasta):
-            with open(db_fasta, 'w') as f:
-                for i in markers:
-                    g = bz2.open(i, 'rt') if i.endswith('.bz2') else open(i)
-                    f.write(g.read())
-                    g.close()
+    for label, db, cmd in [('usearch', db_aa, cmd_aa)]:
+        if db and (not os.path.isfile(db)):
+            make_database(cmd, db_fasta, markers, db, label, verbose)
         elif verbose:
-            info('File {} already present\n'.format(db_fasta))
+            info('{} database {} already present\n'.format(label, db))
 
-        if not os.path.isfile(db_output):
-            try:
-                info('Generating usearch indexed DB {}\n'.format(db_output))
-                cmd = compose_command(command, input_file=db_fasta, output_file=db_output)
-                # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-                sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            except sb.CalledProcessError as cpe:
-                error('{}'.format(cpe), exit=True)
-            except:
-                error('{} not installed or not present in system path'.format(' '.join(cmd)), exit=True)
-        elif verbose:
-            info('Usearch database {} already present\n'.format(db_output))
+    return (db_dna, db_aa)
 
-    return db_output
+
+def make_database(command, fasta, markers, db, label, verbose=False):
+    if fasta and (not os.path.isfile(fasta)):
+        with open(fasta, 'w') as f:
+            for i in markers:
+                g = bz2.open(i, 'rt') if i.endswith('.bz2') else open(i)
+                f.write(g.read())
+                g.close()
+    elif verbose:
+        info('File {} already present\n'.format(fasta))
+
+    try:
+        info('Generating {} indexed database {}\n'.format(label, db))
+        cmd = compose_command(command, input_file=fasta, output_file=db)
+        # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
+        sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+        info('Generated {} {}\n'.format(label, db))
+    except sb.CalledProcessError as cpe:
+        error('{}'.format(cpe), exit=True)
+    except:
+        error('{} not installed or not present in system path'.format(' '.join(cmd)), exit=True)
 
 
 def clean_all(databases_folder, verbose=False):
@@ -422,6 +448,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
     inputs = []
 
     if os.path.isdir(input_folder):
+        info('Loading files from {}\n'.format(input_folder))
         files = glob.iglob(input_folder+'*'+extension+'*')
 
         for f in files:
@@ -439,10 +466,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 if not os.path.isfile(file_clean):
                     with open(file_clean, 'w') as g:
                         with bz2.open(f, 'rt') as h:
-                            # records = list(SeqIO.parse(h, "fasta"))
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
-
-                        # SeqIO.write(records, g, "fasta")
                 elif verbose:
                     info('File {} already decompressed\n'.format(file_clean))
 
@@ -580,7 +604,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
     for inp in inputs:
         out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.b6o'
 
-        if not os.path.isfile(out):
+        if (not os.path.isfile(out)) or (not os.path.isfile(out+'.bkp')):
             commands.append((configs[key], inp, database, out, min_num_proteins))
 
     if commands:
@@ -609,6 +633,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             params, inp, db, out, min_num_proteins = x
             info('Mapping {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp, database=db, output_file=out)
@@ -619,22 +644,23 @@ def gene_markers_identification_rec(x):
             best_matches = {}
 
             for entry in tab:
-                p = entry[1].split('_')[1]
+                p = entry[0].split('_')[1]
                 b = float(entry[-1])
 
-                if p in best_matches:
-                    if b > float(best_matches[p][-1]):
-                        best_matches[p] = entry
+                if (p in best_matches) and (b > float(best_matches[p][-1])):
+                    best_matches[p] = entry
                 else:
                     best_matches[p] = entry
 
             if len(best_matches) >= min_num_proteins: # there should be at least min_num_proteins mapped
                 with open(out, 'w') as f:
                     f.write('{}\n'.format('\n'.join(['\t'.join(v) for _, v in best_matches.items()])))
-            else:
-                os.remove(out)
 
-            info('{} generated\n'.format(out))
+                t1 = time.time()
+                info('{} generated in {}s\n'.format(out, int(t1-t0)))
+            else:
+                info('Not enough proteins mapped ({}/{}) in {} \n'.format(len(best_matches), min_num_proteins, out))
+                os.remove(out)
         except sb.CalledProcessError as cpe:
             error('{}'.format(cpe))
             terminating.set()
@@ -808,12 +834,14 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
 def msas_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             params, inp, out = x
             info('Aligning {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except sb.CalledProcessError as cpe:
             error('{}'.format(cpe))
             terminating.set()
@@ -997,11 +1025,13 @@ def concatenate(all_inputs, input_folder, output_file, verbose=False):
 def build_phylogeny(configs, key, input_alignment, output_path, output_tree, nproc=1, verbose=False):
     if not os.path.isfile(output_tree):
         try:
+            t0 = time.time()
             info('Building phylogeny {}\n'.format(output_tree))
             cmd = compose_command(configs[key], input_file=input_alignment, output_path=output_path, output_file=output_tree, nproc=nproc)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            info('{} generated\n'.format(output_tree))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
         except sb.CalledProcessError as cpe:
             error('{}'.format(cpe))
         except:
@@ -2275,34 +2305,37 @@ if __name__ == '__main__':
     configs = read_configs(args.config_file, args.verbose)
     check_configs(configs, args.verbose)
     check_dependencies(configs, args.nproc, args.verbose)
-    database = init_database(args.database, args.databases_folder, configs['markers_db'], args.verbose)
+    db_dna, db_aa = init_database(args.database, args.databases_folder, configs['db_aa'], args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
-        input_fna = load_input_files(args.input_folder, args.data_folder+'tmp/', args.genome_extension, args.verbose)
+        input_fna = load_input_files(args.input_folder, args.data_folder+'bz2/', args.genome_extension, args.verbose)
 
         if input_fna:
-            gene_markers_identification(configs, 'dna_map', input_fna, args.data_folder, args.database, database, args.min_num_proteins, args.nproc, args.verbose)
-            gene_markers_extraction(args.data_folder+'dna_map/', args.data_folder+'dna_markers/', args.input_folder, args.nproc, args.verbose)
-            fake_proteomes(args.data_folder+'dna_markers/', args.data_folder+'fake_proteomes/', args.proteome_extension, args.nrpoc, args.verbose)
+            gene_markers_identification(configs, 'map_dna', input_fna, args.data_folder+'map_dna/', args.database, db_dna, args.min_num_proteins, args.nproc, args.verbose)
 
-        input_faa = load_input_files(args.input_folder, args.data_folder+'tmp/', args.proteome_extension, args.verbose)
-        input_faa_fake = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
+            sys.exit()
+
+            gene_markers_extraction(args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.input_folder, args.nproc, args.verbose)
+            fake_proteomes(args.data_folder+'markers_dna/', args.data_folder+'fake_proteomes/', args.proteome_extension, args.nrpoc, args.verbose)
+
+        input_faa = load_input_files(args.input_folder, args.data_folder+'bz2/', args.proteome_extension, args.verbose)
+        input_faa_fake = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'bz2/', args.proteome_extension, args.verbose)
 
         if input_faa+input_faa_fake:
             input_faa = check_input_proteomes(input_faa+input_faa_fake, args.min_num_proteins, args.min_len_protein, args.nproc, args.verbose)
 
         if input_faa:
-            clean_input_proteomes(input_faa, args.data_folder+'aa_clean/', args.nproc, args.verbose)
-            input_faa_clean = load_input_files(args.data_folder+'aa_clean/', args.data_folder+'tmp/', args.proteome_extension, args.verbose)
-            args.input_folder = args.data_folder+'aa_clean/'
+            clean_input_proteomes(input_faa, args.data_folder+'clean_aa/', args.nproc, args.verbose)
+            input_faa_clean = load_input_files(args.data_folder+'clean_aa/', args.data_folder+'bz2/', args.proteome_extension, args.verbose)
+            args.input_folder = args.data_folder+'clean_aa/'
 
             sys.exit()
 
             if input_faa_clean:
-                gene_markers_identification(configs, 'aa_map', input_faa_clean, args.data_folder+'aa_map/', args.database, database, args.min_num_proteins, args.nproc, args.verbose)
-                gene_markers_extraction(args.data_folder+'aa_map/', args.data_folder+'aa_markers/', args.input_folder, args.proteome_extension, args.nproc, args.verbose)
+                gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, args.nproc, args.verbose)
+                gene_markers_extraction(args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.input_folder, args.proteome_extension, args.nproc, args.verbose)
 
-        inputs2markers(args.data_folder+'aa_markers/', args.proteome_extension, args.data_folder+'markers/', args.verbose)
+        inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', args.verbose)
 
         msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, args.data_folder+'msas/', args.nproc, args.verbose)
         trim(configs, 'trim', args.data_folder+'msas/', args.data_folder+'trim/', args.nproc, args.verbose)
