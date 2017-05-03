@@ -758,11 +758,6 @@ def gene_markers_extraction_rec(x):
 
             for l in open(b6o_file):
                 row = l.strip().split('\t')
-                # DNA
-                # contig = row[1].split(' ')[0].strip()
-                # marker = row[0].split('_')[1].strip()
-
-                # AA
                 contig = row[0].split(' ')[0].strip()
                 marker = row[1].split('_')[1].strip()
 
