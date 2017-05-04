@@ -17,6 +17,9 @@ import multiprocessing as mp
 from Bio import SeqIO # Biopython (v 1.69) require NumPy (v 1.12.1)
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
+from Bio import AlignIO
+from Bio.Align import MultipleSeqAlignment
+from collections import Counter
 import bz2
 import math
 import re
@@ -66,6 +69,7 @@ def read_params():
     group.add_argument('--strain', action='store_true', default=False, help="")
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
+    group.add_argument('--default', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default='input/', help="Path to the folder containing the folder with the input data, default input/")
@@ -79,7 +83,9 @@ def read_params():
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
-    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant'], help="")
+    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Determine which type of trimming to perform (if any). 'gappy' will uses trimal (?) to remove gappy colums; 'not_variant' will remove columns that have one letter above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
+    p.add_argument('--not_variant_threshold', type=float, default=0.9, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
+    p.add_argument('--subsample', action='store_true', default=False, help="Subsample columns from MSAs")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
@@ -179,16 +185,32 @@ def check_args(args, verbose):
         args.proteome_extension = args.proteome_extension[:-1]
 
     if args.strain: # params for strain-level phylogenies
-        print('\n>  ARGS.STRAIN  <\n')
+        print('\n>  ARGS.STRAIN  <')
+        args.trim = 'greedy'
+        args.not_variant_threshold = 0.95
+        args.subsample = False
+        print('{}\n'.format(args))
         pass
     elif args.tol: # params for tree-of-life phylogenies
-        print('\n>  ARGS.TOL  <\n')
+        print('\n>  ARGS.TOL  <')
+        args.trim = 'greedy'
+        args.not_variant_threshold = 0.85
+        args.subsample = True
+        print('{}\n'.format(args))
         pass
     elif args.meta: # params for phylogenetic placement of metagenomic contigs
-        print('\n>  ARGS.META  <\n')
+        print('\n>  ARGS.META  <')
+        print('{}\n'.format(print))
         pass
-    else: # default params
-        print('\n>  DEFAULT  <\n')
+    elif args.default: # default params
+        print('\n>  DEFAULT  <')
+        args.trim = 'gappy'
+        args.subsample = True
+        print('{}\n'.format(args))
+        pass
+    else:
+        print('\n>  CUSTOM  <')
+        print('{}\n'.format(args))
         pass
 
     return project_name
@@ -305,7 +327,22 @@ def compose_command(params, check=False, input_file=None, database=None, output_
 
             command_line = command_line.replace('#output#', out)
 
-    return [str(a) for a in re.sub(' +', ' ', command_line).split(' ') if a]
+    # find if there are string params sourrunded with " and make thme as one string
+    s, e = None, None
+
+    for i in [j for j, e in enumerate(command_line) if e == '"']:
+        if not s:
+            s = i
+            continue
+
+        if not e:
+            e = i
+
+        if s and e:
+            command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
+            s, e = None, None
+
+    return [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a]
 
 
 def init_database(database, databases_folder, cmd_aa, verbose=False):
@@ -646,11 +683,9 @@ def gene_markers_selection_rec(x):
             info('Selecting {}\n'.format(inp))
             matches = function(inp)
 
-            print('\n{}\n'.format(matches))
-
             if len(matches) >= min_num_proteins: # there should be at least min_num_proteins mapped
                 with open(out, 'w') as f:
-                    f.write('{}\n'.format('\n'.join(['\t'.join(v) for _, v in matches.items()])))
+                    f.write('{}\n'.format('\n'.join(['\t'.join(m) for m in matches])))
 
                 info('{} generated\n'.format(out))
             else:
@@ -668,39 +703,43 @@ def gene_markers_selection_rec(x):
 
 
 def best_hit(f):
-    tab = (tuple(ll.strip().split('\t')) for ll in open(f))
+    tab = (ll.strip().split('\t') for ll in open(f))
     best_matches = {}
 
     for entry in tab:
-        p = entry[1].split('_')[1]
-        b = float(entry[-1])
+        c = entry[0].split(' ')[0]
+        m = entry[1].split('_')[1]
+        s = entry[6]
+        e = entry[7]
+        b = entry[-1]
 
-        if (p in best_matches) and (b > float(best_matches[p][-1])):
-             best_matches[p] = entry
+        if (m in best_matches) and (float(b) > float(best_matches[m][-1])):
+             best_matches[m] = [c, m, s, e, b]
         else:
-             best_matches[p] = entry
+             best_matches[m] = [c, m, s, e, b]
 
-    return best_matches
+    return [v for _, v in best_matches.items()]
 
 
 def largest_cluster(f):
-    tab = (tuple(ll.strip().split('\t')) for ll in open(f))
+    tab = (ll.strip().split('\t') for ll in open(f))
     clusters = {}
-    largest_clusters = {}
+    largest_clusters = []
 
     for entry in tab:
-        p = entry[0].split('_')[1]
-        c = entry[1].split(' ')[0]
+        c = entry[0].split(' ')[0]
+        m = entry[1].split('_')[1]
 
-        if (p, c) in clusters:
-            clusters[(p, c)].append(entry)
+        if (c, m) in clusters:
+            clusters[(c, m)].append(entry)
         else:
-            clusters[(p, c)] = [entry]
+            clusters[(c, m)] = [entry]
 
-    for (p, c), entries in clusters.items():
+    for (c, m), entries in clusters.items():
         starts = [int(s) for _, _, _, _, _, _, s, _, _, _, _, _ in entries]
         ends = [int(e) for _, _, _, _, _, _, _, e, _, _, _, _ in entries]
-        largest_clusters[p] = entries[0][:6]+(str(min(starts+ends)), str(max(starts+ends)))+entries[0][8:]
+        bs = [float(b) for _, _, _, _, _, _, _, _, _, _, _, b in entries]
+        largest_clusters.append([c, m, str(min(starts+ends)), str(max(starts+ends)), str(max(bs))])
 
     return largest_clusters
 
@@ -758,8 +797,10 @@ def gene_markers_extraction_rec(x):
 
             for l in open(b6o_file):
                 row = l.strip().split('\t')
-                contig = row[0].split(' ')[0].strip()
-                marker = row[1].split('_')[1].strip()
+                contig = row[0]
+                marker = row[1]
+                start = int(row[2])
+                end = int(row[3])
 
                 if contig in contig2markers:
                     contig2markers[contig].append(marker)
@@ -769,13 +810,12 @@ def gene_markers_extraction_rec(x):
                 if marker in marker2b6o:
                     error('{}'.format(marker))
                 else:
-                    marker2b6o[marker] = row[2:]
+                    marker2b6o[marker] = (start, end)
 
             for seq_record in SeqIO.parse(src_file, "fasta"):
                 if seq_record.id in contig2markers:
                     for marker in contig2markers[seq_record.id]:
-                        _, _, _, _, s, e, _, _, _, _ = marker2b6o[marker]
-                        s, e = int(s), int(e)
+                        s, e = marker2b6o[marker]
                         out_file_seq.append(SeqRecord(seq_record.seq[s-1:e], id='{}_{}_{}-{}'.format(seq_record.id, marker, s, e), description=''))
 
             if out_file_seq:
@@ -958,7 +998,7 @@ def msas_rec(x):
         terminating.set()
 
 
-def trim(configs, key, inputt, output_folder, nproc=1, verbose=False):
+def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -984,7 +1024,7 @@ def trim(configs, key, inputt, output_folder, nproc=1, verbose=False):
         error('unrecognized input {} is not a folder nor a file'.format(inputt), exit=True)
 
     if commands:
-        info('Trimming {} markers (key: {})\n'.format(len(commands), key))
+        info('Trimming gappy form {} markers (key: {})\n'.format(len(commands), key))
         pool_error = False
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
@@ -992,7 +1032,7 @@ def trim(configs, key, inputt, output_folder, nproc=1, verbose=False):
         chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(trim_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize)
             pool.close()
         except:
             pool.terminate()
@@ -1001,16 +1041,16 @@ def trim(configs, key, inputt, output_folder, nproc=1, verbose=False):
         pool.join()
 
         if pool_error:
-            error('msas crashed', exit=True)
+            error('trim_gappy crashed', exit=True)
     else:
         info('Markers already trimmed (key: {})\n'.format(key))
 
 
-def trim_rec(x):
+def trim_gappy_rec(x):
     if not terminating.is_set():
         try:
             params, inp, out = x
-            info('Trimming {}\n'.format(inp))
+            info('Trimming gappy {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
@@ -1019,6 +1059,86 @@ def trim_rec(x):
             error('{}'.format(cpe))
             terminating.set()
             raise
+        except:
+            error('error while trimming {}'.format(', '.join(x)))
+            terminating.set()
+            raise
+    else:
+        terminating.set()
+
+
+def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=False):
+    commands = []
+
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder {}\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder {} already exists\n'.format(output_folder))
+
+    if os.path.isdir(inputt):
+        for inp in glob.iglob(inputt+'*.aln'):
+            out = output_folder+inp[inp.rfind('/')+1:]
+
+            if not os.path.isfile(out):
+                commands.append((inp, out, threshold))
+    elif os.path.isfile(inputt):
+        out = inputt[:inputt.rfind('.')]+'.trim'+inputt[inputt.rfind('.'):]
+
+        if not os.path.isfile(out):
+            commands.append((inputt, out, threshold))
+    else:
+        error('unrecognized input {} is not a folder nor a file'.format(inputt), exit=True)
+
+    if commands:
+        info('Trimming not variant from {} markers\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(commands)/(nproc*2))
+        chunksize = int(chunksize) if chunksize > 0 else 1
+
+        try:
+            pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('trim_not_variant crashed', exit=True)
+    else:
+        info('Markers already trimmed\n')
+
+
+def trim_not_variant_rec(x):
+    if not terminating.is_set():
+        try:
+            inp, out, thr = x
+            info('Trimming not variant {}\n'.format(inp))
+            inp_aln = AlignIO.read(inp, "fasta")
+            nrows = len(inp_aln)
+            cols_to_remove = []
+            sub_aln = []
+
+            for i in range(len(inp_aln[0])):
+                for aa, fq in Counter(inp_aln[:, i]).items():
+                    if float(fq/nrows) >= thr:
+                        cols_to_remove.append(i)
+                        break
+
+            for aln in inp_aln:
+                seq = ''.join([c for i, c in enumerate(aln.seq) if i not in cols_to_remove])
+                sub_aln.append(SeqRecord(Seq(seq), id=aln.id))
+
+            with open(out, 'w') as f:
+                AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
+
+            info('{} generated\n'.format(out))
         except:
             error('error while trimming {}'.format(', '.join(x)))
             terminating.set()
@@ -1145,58 +1265,66 @@ def build_phylogeny(configs, key, input_alignment, output_path, output_tree, npr
 
 if __name__ == '__main__':
     args = read_params()
-    project_name = check_args(args, args.verbose)
+    project_name = check_args(args, verbose=args.verbose)
 
     if args.clean_all:
-        clean_all(args.databases_folder, args.verbose)
+        clean_all(args.databases_folder, verbose=args.verbose)
 
     if args.clean:
-        clean_project(args.data_folder, args.output_folder, args.verbose)
+        clean_project(args.data_folder, args.output_folder, verbose=args.verbose)
 
-    configs = read_configs(args.config_file, args.verbose)
-    check_configs(configs, args.verbose)
-    check_dependencies(configs, args.nproc, args.verbose)
-    db_dna, db_aa = init_database(args.database, args.databases_folder, configs['db_aa'], args.verbose)
+    configs = read_configs(args.config_file, verbose=args.verbose)
+    check_configs(configs, verbose=args.verbose)
+    check_dependencies(configs, args.nproc, verbose=args.verbose)
+    db_dna, db_aa = init_database(args.database, args.databases_folder, configs['db_aa'], verbose=args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
-        input_fna = load_input_files(args.input_folder, args.data_folder+'bz2/', args.genome_extension, args.verbose)
+        input_fna = load_input_files(args.input_folder, args.data_folder+'bz2/', args.genome_extension, verbose=args.verbose)
 
         if input_fna:
-            gene_markers_identification(configs, 'map_dna', input_fna, args.data_folder+'map_dna/', args.database, db_dna, args.min_num_proteins, args.nproc, args.verbose)
-            gene_markers_selection(args.data_folder+'map_dna/', largest_cluster, args.min_num_proteins, args.nproc, args.verbose)
-            gene_markers_extraction(input_fna, args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.genome_extension, args.nproc, args.verbose)
-            fake_proteome(args.data_folder+'markers_dna/', args.data_folder+'fake_proteomes/', args.genome_extension, args.proteome_extension, args.nproc, args.verbose)
+            gene_markers_identification(configs, 'map_dna', input_fna, args.data_folder+'map_dna/', args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_selection(args.data_folder+'map_dna/', largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_extraction(input_fna, args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.genome_extension, nproc=args.nproc, verbose=args.verbose)
+            fake_proteome(args.data_folder+'markers_dna/', args.data_folder+'fake_proteomes/', args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
-        faa = load_input_files(args.input_folder, args.data_folder+'bz2/', args.proteome_extension, args.verbose)
-        input_faa = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'bz2/', args.proteome_extension, args.verbose)
+        faa = load_input_files(args.input_folder, args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
+        input_faa = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
         input_faa.update(faa) # if duplicates input keep the ones from 'faa'
 
         if input_faa:
-            input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.nproc, args.verbose)
+            input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, nproc=args.nproc, verbose=args.verbose)
 
             if input_faa_checked:
-                clean_input_proteomes(input_faa_checked, args.data_folder+'clean_aa/', args.nproc, args.verbose)
-                input_faa_clean = load_input_files(args.data_folder+'clean_aa/', args.data_folder+'bz2/', args.proteome_extension, args.verbose)
+                clean_input_proteomes(input_faa_checked, args.data_folder+'clean_aa/', nproc=args.nproc, verbose=args.verbose)
+                input_faa_clean = load_input_files(args.data_folder+'clean_aa/', args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
 
                 if input_faa_clean:
-                    gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, args.nproc, args.verbose)
-                    gene_markers_selection(args.data_folder+'map_aa/', best_hit, args.nproc, args.verbose)
-                    gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, args.nproc, args.verbose)
+                    gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_selection(args.data_folder+'map_aa/', best_hit, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
-        sys.exit()
+        inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', verbose=args.verbose)
 
-        inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', args.verbose)
+        msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, args.data_folder+'msas/', nproc=args.nproc, verbose=args.verbose)
 
-        msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, args.data_folder+'msas/', args.nproc, args.verbose)
+        inp_f = args.data_folder+'msas/'
 
         if args.trim:
-            trim(configs, 'trim', args.data_folder+'msas/', args.data_folder+'trim/', args.nproc, args.verbose)
+            if (args.trim == 'gappy') or (args.trim == 'greedy'):
+                out_f = args.data_folder+'trim_gappy/'
+                trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+                inp_f = out_f
 
-        sys.exit()
+            if (args.trim == 'not_variant') or (args.trim == 'greedy'):
+                out_f = args.data_folder+'trim_not_variant/'
+                trim_not_variant(inp_f, out_f, threshold=args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
+                inp_f = out_f
 
-        subsample(args.data_folder+'trim/', args.data_folder+'sub/', args.nproc, args.verbose)
-        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), args.data_folder+'sub/', args.data_folder+'all.aln', args.verbose)
+        if args.subsample:
+            subsample(inp_f, args.data_folder+'sub/', nproc=args.nproc, verbose=args.verbose)
 
-        build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', args.nproc, args.verbose)
+        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), args.data_folder+'sub/', args.data_folder+'all.aln', verbose=args.verbose)
+
+        build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
