@@ -33,7 +33,7 @@ progs = {
                    'version': '-version',
                    'command_line': '#program_name# #params# #input# #output#'},
     'map_dna': {'program_name': 'tblastn',
-                'params': '-outfmt "6 saccver qaccver pident length mismatch gapopen qstart qend sstart send evalue bitscore" -evalue 1e-50',
+                'params': '-outfmt "6 saccver qaccver pident length mismatch gapopen sstart send qstart qend evalue bitscore" -evalue 1e-50',
                 'input': '-subject',
                 'database': '-query',
                 'output': '-out',
