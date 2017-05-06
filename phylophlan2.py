@@ -1285,7 +1285,7 @@ def gap_cost(seq):
     pass
 
 
-def concatenate(all_inputs, input_folder, output_file, verbose=False):
+def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False):
     if os.path.isfile(output_file):
         info('Alignments already merged {}\n'.format(output_file))
         return
@@ -1293,24 +1293,23 @@ def concatenate(all_inputs, input_folder, output_file, verbose=False):
     info('Merging alignments {}\n'.format(output_file))
     all_inputs = set(all_inputs)
     inputs2alingments = dict([(inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs])
+    markers = glob.iglob(input_folder+'*')
 
-    for a in glob.iglob(input_folder+'*'):
+    if sort:
+        markers = sorted(markers)
+
+    for a in markers:
         alignment_length = None
         current_inputs = set([seq_record.id for seq_record in SeqIO.parse(a, "fasta")])
 
         for seq_record in SeqIO.parse(a, "fasta"):
+            inputs2alingments[seq_record.id].seq += seq_record.seq
+
             if not alignment_length:
                 alignment_length = len(seq_record.seq)
 
-            for inp in all_inputs:
-                seq = inputs2alingments[inp]
-
-                if inp in current_inputs:
-                    seq.seq += seq_record.seq
-                else:
-                    seq.seq += Seq('-'*alignment_length)
-
-                inputs2alingments[inp] = seq
+        for inp in all_inputs-current_inputs:
+            inputs2alingments[inp].seq += Seq('-'*alignment_length)
 
     with open(output_file, 'w') as f:
         SeqIO.write([v for _, v in inputs2alingments.items()], f, "fasta")
@@ -1398,7 +1397,8 @@ if __name__ == '__main__':
             subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
-        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', verbose=args.verbose)
+        sort = True if args.database == 'phylophlan' else False
+        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', sort=sort, verbose=args.verbose)
 
         build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
