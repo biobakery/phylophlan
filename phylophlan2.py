@@ -83,9 +83,9 @@ def read_params():
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
-    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Determine which type of trimming to perform (if any). 'gappy' will uses trimal (?) to remove gappy colums; 'not_variant' will remove columns that have one letter above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
-    p.add_argument('--not_variant_threshold', type=float, default=0.9, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
-    p.add_argument('--subsample', action='store_true', default=False, help="Subsample columns from MSAs")
+    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform (if any). 'gappy' will uses trimal (?) to remove gappy colums; 'not_variant' will remove columns that have one letter above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
+    p.add_argument('--not_variant_threshold', type=float, default=0.95, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
+    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain fromthe MSAs for the concatenated MSA. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan)")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
@@ -184,18 +184,26 @@ def check_args(args, verbose):
     if args.proteome_extension.endswith('.'):
         args.proteome_extension = args.proteome_extension[:-1]
 
+    if args.subsample:
+        if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
+            error("scoring function 'phylophlan_npos' is compatible only with 'phylophlan' database", exit=True)
+
     if args.strain: # params for strain-level phylogenies
         print('\n>  ARGS.STRAIN  <')
         args.trim = 'greedy'
-        args.not_variant_threshold = 0.95
-        args.subsample = False
+        args.not_variant_threshold = 0.99
+        args.subsample = None
         print('{}\n'.format(args))
         pass
     elif args.tol: # params for tree-of-life phylogenies
         print('\n>  ARGS.TOL  <')
         args.trim = 'greedy'
-        args.not_variant_threshold = 0.85
-        args.subsample = True
+        args.not_variant_threshold = 0.93
+        args.subsample = 'fifty'
+
+        if args.database == 'phylophlan':
+            args.subsample = 'phylophlan_npos'
+
         print('{}\n'.format(args))
         pass
     elif args.meta: # params for phylogenetic placement of metagenomic contigs
@@ -205,7 +213,11 @@ def check_args(args, verbose):
     elif args.default: # default params
         print('\n>  DEFAULT  <')
         args.trim = 'gappy'
-        args.subsample = True
+        args.subsample = 'onehundred'
+
+        if args.database == 'phylophlan':
+            args.subsample = 'phylophlan_npos'
+
         print('{}\n'.format(args))
         pass
     else:
@@ -328,19 +340,10 @@ def compose_command(params, check=False, input_file=None, database=None, output_
             command_line = command_line.replace('#output#', out)
 
     # find if there are string params sourrunded with " and make thme as one string
-    s, e = None, None
+    quotes = [j for j, e in enumerate(command_line) if e == '"']
 
-    for i in [j for j, e in enumerate(command_line) if e == '"']:
-        if not s:
-            s = i
-            continue
-
-        if not e:
-            e = i
-
-        if s and e:
-            command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
-            s, e = None, None
+    for s, e in zip(quotes[0::2], quotes[1::2]):
+        command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
 
     return [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a]
 
@@ -736,10 +739,26 @@ def largest_cluster(f):
             clusters[(c, m)] = [entry]
 
     for (c, m), entries in clusters.items():
-        starts = [int(s) for _, _, _, _, _, _, s, _, _, _, _, _ in entries]
-        ends = [int(e) for _, _, _, _, _, _, _, e, _, _, _, _ in entries]
-        bs = [float(b) for _, _, _, _, _, _, _, _, _, _, _, b in entries]
-        largest_clusters.append([c, m, str(min(starts+ends)), str(max(starts+ends)), str(max(bs))])
+        cs = [int(s) for _, _, _, _, _, _, s, _, _, _, _, _ in entries]
+        ce = [int(e) for _, _, _, _, _, _, _, e, _, _, _, _ in entries]
+        ms = (int(s) for _, _, _, _, s, _, _, _, _, _, _, _ in entries)
+        me = (int(e) for _, _, _, _, _, e, _, _, _, _, _, _ in entries)
+        b = max((float(b) for _, _, _, _, _, _, _, _, _, _, _, b in entries))
+        rev = False
+
+        # check if the contig positions are forward (s < e) or reverse (s > e)
+        for s, e in zip(cs, ce):
+            if s > e:
+                rev = True
+                break
+
+        if not rev: # if contig position are forward, check if the marker positions are forward or reverse
+            for s, e in zip(ms, me):
+                if s > e:
+                    rev = True
+                    break
+
+        largest_clusters.append([c, m, str(min(cs+ce)), str(max(cs+ce)), str(rev), str(b)])
 
     return largest_clusters
 
@@ -801,6 +820,7 @@ def gene_markers_extraction_rec(x):
                 marker = row[1]
                 start = int(row[2])
                 end = int(row[3])
+                rev = bool(row[4])
 
                 if contig in contig2markers:
                     contig2markers[contig].append(marker)
@@ -810,13 +830,19 @@ def gene_markers_extraction_rec(x):
                 if marker in marker2b6o:
                     error('{}'.format(marker))
                 else:
-                    marker2b6o[marker] = (start, end)
+                    marker2b6o[marker] = (start, end, rev)
 
             for seq_record in SeqIO.parse(src_file, "fasta"):
                 if seq_record.id in contig2markers:
                     for marker in contig2markers[seq_record.id]:
-                        s, e = marker2b6o[marker]
-                        out_file_seq.append(SeqRecord(seq_record.seq[s-1:e], id='{}_{}_{}-{}'.format(seq_record.id, marker, s, e), description=''))
+                        s, e, rev = marker2b6o[marker]
+                        idd = '{}_{}:'.format(seq_record.id, marker)
+
+                        if rev:
+                            idd += 'c'
+
+                        idd += '{}-{}'.format(s, e)
+                        out_file_seq.append(SeqRecord(seq_record.seq[s-1:e], id=idd, description=''))
 
             if out_file_seq:
                 with open(out_file, 'w') as f:
@@ -880,9 +906,14 @@ def fake_proteome_rec(x):
 
             for record in SeqIO.parse(inp, 'fasta'):
                 seq = record.seq
-                s, e = record.id.split('_')[-1].split('-')
+                s, e = record.id.split(':')[-1].split('-')
+                rev = False
 
-                if int(s) > int(e):
+                if s.startswith('c'):
+                    s = s[1:]
+                    rev = True
+
+                if rev:
                     seq = record.seq.reverse_complement()
 
                 while (len(seq) % 3) != 0:
@@ -923,7 +954,7 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
         inp = f[f.rfind('/')+1:f.rfind('.')]
 
         for seq_record in SeqIO.parse(f, "fasta"):
-            marker = seq_record.id.split('_')[-2]
+            marker = seq_record.id.split(':')[0].split('_')[-1]
 
             if marker in markers2inputs:
                 markers2inputs[marker].append(SeqRecord(seq_record.seq, id=inp, description=''))
@@ -1133,7 +1164,7 @@ def trim_not_variant_rec(x):
 
             for aln in inp_aln:
                 seq = ''.join([c for i, c in enumerate(aln.seq) if i not in cols_to_remove])
-                sub_aln.append(SeqRecord(Seq(seq), id=aln.id))
+                sub_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
 
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
@@ -1147,7 +1178,7 @@ def trim_not_variant_rec(x):
         terminating.set()
 
 
-def subsample(input_folder, output_folder, nproc=1, verbose=False):
+def subsample(input_folder, output_folder, positions_function, scoring_function, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -1161,16 +1192,8 @@ def subsample(input_folder, output_folder, nproc=1, verbose=False):
     for inp in glob.iglob(input_folder+'*.aln'):
         out = output_folder+inp[inp.rfind('/')+1:]
 
-        try:
-            marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
-            marker = int(marker)
-            # npos = max(int(max(int((400-marker)*30/400.0), 1)**2/30.0), 3) # ~4k AAs (original PhyloPhlAn formulae)
-            npos = max(int(math.ceil(max(int(math.ceil((400-marker)*30/400.0)), 1)**2/30.0)), 3) # ~4.6k AAs
-        except:
-            npos = 30
-
         if not os.path.isfile(out):
-            commands.append((inp, out, npos))
+            commands.append((inp, out, positions_function, scoring_function))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
@@ -1198,11 +1221,31 @@ def subsample(input_folder, output_folder, nproc=1, verbose=False):
 def subsample_rec(x):
     if not terminating.is_set():
         try:
-            inp, out, npos = x
+            inp, out, npos_function, score_function = x
             info('Subsampling {}\n'.format(inp))
-            #
-            # DO SOMETHING
-            #
+            inp_aln = AlignIO.read(inp, "fasta")
+            scores = []
+            out_aln = []
+
+            for i in range(len(inp_aln[0])):
+                scores.append(score_function(inp_aln[:, i]), i)
+
+            try:
+                marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
+                marker = int(marker)
+            except:
+                marker = None
+
+            npos = npos_function(marker)
+            best_npos = [p for _, p in sorted(scores)[-npos:]]
+
+            for aln in inp_aln:
+                seq = ''.join([c for i, c in enumerate(aln.seq) if i in best_npos])
+                out_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
+
+            with open(out, 'w') as f:
+                AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
+
             info('{} generated\n'.format(out))
         except:
             error('error while subsampling {}'.format(', '.join(x)))
@@ -1210,6 +1253,36 @@ def subsample_rec(x):
             raise
     else:
         terminating.set()
+
+
+def phylophlan(marker):
+    # return max(int(max(int((400-marker)*30/400.0), 1)**2/30.0), 3) # ~4k AAs (original PhyloPhlAn formulae)
+    return max(int(math.ceil(max(int(math.ceil((400-marker)*30/400.0)), 1)**2/30.0)), 3) # ~4.6k AAs
+
+
+def onehundred(void):
+    return 100
+
+
+def fifty(void):
+    return 50
+
+
+def trident(seq, alpha=1, beta=0.5, gamma=3):
+    (1-symbol_diversity())**alpha * (1-stereochemical_diversity())**beta * (1-gap_cost())**gamma
+    pass
+
+
+def symbol_diversity(seq):
+    pass
+
+
+def stereochemical_diversity(seq):
+    pass
+
+
+def gap_cost(seq):
+    pass
 
 
 def concatenate(all_inputs, input_folder, output_file, verbose=False):
@@ -1223,7 +1296,7 @@ def concatenate(all_inputs, input_folder, output_file, verbose=False):
 
     for a in glob.iglob(input_folder+'*'):
         alignment_length = None
-        current_inputs = [seq_record.id for seq_record in SeqIO.parse(a, "fasta")]
+        current_inputs = set([seq_record.id for seq_record in SeqIO.parse(a, "fasta")])
 
         for seq_record in SeqIO.parse(a, "fasta"):
             if not alignment_length:
@@ -1232,7 +1305,7 @@ def concatenate(all_inputs, input_folder, output_file, verbose=False):
             for inp in all_inputs:
                 seq = inputs2alingments[inp]
 
-                if inp in set(current_inputs):
+                if inp in current_inputs:
                     seq.seq += seq_record.seq
                 else:
                     seq.seq += Seq('-'*alignment_length)
@@ -1300,7 +1373,7 @@ if __name__ == '__main__':
 
                 if input_faa_clean:
                     gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_selection(args.data_folder+'map_aa/', best_hit, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_selection(args.data_folder+'map_aa/', best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                     gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
         inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', verbose=args.verbose)
@@ -1321,9 +1394,11 @@ if __name__ == '__main__':
                 inp_f = out_f
 
         if args.subsample:
-            subsample(inp_f, args.data_folder+'sub/', nproc=args.nproc, verbose=args.verbose)
+            out_f = args.data_folder+'sub/'
+            subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
+            inp_f = out_f
 
-        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), args.data_folder+'sub/', args.data_folder+'all.aln', verbose=args.verbose)
+        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', verbose=args.verbose)
 
         build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application

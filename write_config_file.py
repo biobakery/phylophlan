@@ -69,7 +69,7 @@ progs = {
              'command_line': '#program_name# #params# #input# #output#'},
     'tree': {'program_name': 'FastTree-2.1.9-SSE3',
              'program_name_parallel': 'FastTreeMP-2.1.9-SSE3',
-             'params': '-quiet -fastest -mlnni 4 -no2nd',
+             'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
              'output': '-out',
              'command_line': '#program_name# #params# #output# #input#'},
             # {'program_name': 'raxmlHPC', 'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3', 'params': '-m PROTCATWAG -p 1989', 'threads': '-T', 'input': '-s', 'output_path':'-w', 'output': '-n', 'version': '-v'}
