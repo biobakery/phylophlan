@@ -2,8 +2,8 @@
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
-__version__ = '0.02'
-__date__ = '2 May 2017'
+__version__ = '0.03'
+__date__ = '9 May 2017'
 
 
 import os
@@ -19,6 +19,7 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import AlignIO
 from Bio.Align import MultipleSeqAlignment
+from Bio.SubsMat import MatrixInfo
 from collections import Counter
 import bz2
 import math
@@ -85,7 +86,8 @@ def read_params():
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
     p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform (if any). 'gappy' will uses trimal (?) to remove gappy colums; 'not_variant' will remove columns that have one letter above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
     p.add_argument('--not_variant_threshold', type=float, default=0.95, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
-    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain fromthe MSAs for the concatenated MSA. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan)")
+    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty', 'full_length'], help="Specify which function to use to compute the number of positions to retain fromthe MSAs for the concatenated MSA. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan)")
+    p.add_argument('--sort', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
@@ -187,6 +189,12 @@ def check_args(args, verbose):
     if args.subsample:
         if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
             error("scoring function 'phylophlan_npos' is compatible only with 'phylophlan' database", exit=True)
+
+    if args.database == 'phylophlan':
+        args.sort = True
+
+        if verbose:
+            info('Setting args.sort=True because args.database=phylophlan')
 
     if args.strain: # params for strain-level phylogenies
         print('\n>  ARGS.STRAIN  <')
@@ -1268,21 +1276,70 @@ def fifty(void):
     return 50
 
 
+def full_length():
+    return 0
+
+
 def trident(seq, alpha=1, beta=0.5, gamma=3):
-    (1-symbol_diversity())**alpha * (1-stereochemical_diversity())**beta * (1-gap_cost())**gamma
-    pass
+    return (1-symbol_diversity(seq))**alpha * (1-stereochemical_diversity(seq))**beta * (1-gap_cost(seq))**gamma
 
 
-def symbol_diversity(seq):
-    pass
+def symbol_diversity(seq, log_base=21):
+    """
+    Sander C, Schneider R. Database of homology-derived protein structures and the structural meaning of sequence alignment. Proteins 1991;9:56 – 68.
+    """
+    sh = 0.0
+
+    for aa, abs_freq in Counter(seq).items():
+        rel_freq = float(abs_freq)/float(len(seq))
+        sh -= rel_freq*math.log(rel_freq)
+
+    sh /= math.log(min(len(seq), log_base))
+    return sh if (sh > 0.15) and (sh < 0.85) else 0.99
 
 
 def stereochemical_diversity(seq):
-    pass
+    """
+    Valdar W. Scoring Residue Conservation. PROTEINS: Structure, Function, and Genetics 48:227–241 (2002)
+    """
+    aa_avg = sum([blosum62_scores(aa) for aa in set(seq)])
+    aa_avg /= float(len(set(seq)))
+    r = sum([abs(aa_avg-blosum62_scores(aa)) for aa in set(seq)])
+    r /= float(len(set(seq)))
+    r /= math.sqrt(20*(max(MatrixInfo.blosum62.values())-min(MatrixInfo.blosum62.values()))**2)
+    return r
+
+
+def blosum62_scores(aa):
+    """
+    Karlin S, Brocchieri L. Evolutionary conservation of RecA genes in relation to protein structure and function. J Bacteriol 1996;178: 1881–1894.
+    """
+    aas = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
+    aa = aa.upper()
+    m = 0.0
+
+    if (aa != '-') and (aa != 'X'):
+        for bb in aas:
+            if (aa, bb) in MatrixInfo.blosum62:
+                a, b = aa, bb
+            else:
+                a, b = bb, aa
+
+            mab = float(MatrixInfo.blosum62[(a, b)])
+            maa = float(MatrixInfo.blosum62[(a, a)])
+            mbb = float(MatrixInfo.blosum62[(b, b)])
+            try:
+                m += mab/math.sqrt(maa*mbb)
+            except:
+                print('a:{}, b:{}, mab: {}, maa: {}, mbb: {}'.format(a, b, mab, maa, mbb))
+                print('\n{}\n'.format(sys.exc_info()))
+                sys.exit()
+
+    return m
 
 
 def gap_cost(seq):
-    pass
+    return float(seq.count('-'))/float(len(seq))
 
 
 def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False):
@@ -1397,8 +1454,7 @@ if __name__ == '__main__':
             subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
-        sort = True if args.database == 'phylophlan' else False
-        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', sort=sort, verbose=args.verbose)
+        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', sort=args.sort, verbose=args.verbose)
 
         build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
