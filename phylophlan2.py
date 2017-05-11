@@ -26,9 +26,11 @@ import math
 import re
 import hashlib
 import time
+import operator
+import functools
 
 
-config_sections_mandatory = ['db_aa', 'map_dna', 'map_aa', 'msa', 'trim', 'tree']
+config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['trim'], ['tree']]
 config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
 config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
 
@@ -88,6 +90,7 @@ def read_params():
     p.add_argument('--not_variant_threshold', type=float, default=0.95, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
     p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty', 'full_length'], help="Specify which function to use to compute the number of positions to retain fromthe MSAs for the concatenated MSA. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan)")
     p.add_argument('--sort', action='store_true', default=False, help="")
+    p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
@@ -107,17 +110,18 @@ def read_configs(config_file, verbose=False):
     if verbose:
         info('Reading configuration file {}\n'.format(config_file))
 
-    for section in config_sections_mandatory:
-        if section in config.sections(): # "DEFAULT" section not included!
-            configs[section] = {}
+    for sections in config_sections_mandatory:
+        for section in sections:
+            if section in config.sections(): # "DEFAULT" section not included!
+                configs[section] = {}
 
-            for option in config_options_all:
-                if option in config[section]:
-                    configs[section][option] = config[section][option]
-                else:
-                    configs[section][option] = ''
-        else:
-            configs[section] = ''
+                for option in config_options_all:
+                    if option in config[section]:
+                        configs[section][option] = config[section][option]
+                    else:
+                        configs[section][option] = ''
+            else:
+                configs[section] = ''
 
     return configs
 
@@ -237,11 +241,18 @@ def check_args(args, verbose):
 
 
 def check_configs(configs, verbose=False):
-    for section in config_sections_mandatory:
+    for sections in config_sections_mandatory:
+        mandatory_sections = False
+
         if verbose:
             info('Checking {} section in configuration file\n'.format(section))
 
-        if section not in configs:
+        for section in sections:
+            if section in configs:
+                mandatory_sections = True
+                break
+
+        if not mandatory_sections:
             error('could not find {} section in configuration file'.format(section), exit=True)
 
         for options in config_options_mandatory:
@@ -250,6 +261,7 @@ def check_configs(configs, verbose=False):
             for option in options:
                 if (option in configs[section]) and configs[section][option]:
                     mandatory_options = True
+                    break
 
             if not mandatory_options:
                 error('could not find {} mandatory option in section {} in configuration file'.format(option, section), exit=True)
@@ -356,7 +368,7 @@ def compose_command(params, check=False, input_file=None, database=None, output_
     return [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a]
 
 
-def init_database(database, databases_folder, cmd_aa, verbose=False):
+def init_database(database, databases_folder, params, key_dna, key_aa, verbose=False):
     db_fasta, db_dna, db_aa, markers = None, None, None, None
 
     if os.path.isfile(databases_folder+database+'.faa'): # assumed to be a fasta file containing the markers
@@ -376,11 +388,13 @@ def init_database(database, databases_folder, cmd_aa, verbose=False):
     else: # what's that??
         error('custom set of markers not recognize', exit=True)
 
-    for label, db, cmd in [('usearch', db_aa, cmd_aa)]:
-        if db and (not os.path.isfile(db)):
-            make_database(cmd, db_fasta, markers, db, label, verbose)
-        elif verbose:
-            info('{} database {} already present\n'.format(label, db))
+    if db_aa and (not os.path.isfile(db_aa)):
+        if key_aa in params:
+            make_database(params[key_aa], db_fasta, markers, db_aa, key_aa, verbose)
+        else:
+            error('cannot create database {}, section {} not present in configurations'.format(db_aa, key_aa), exit=True)
+    elif verbose:
+        info('{} database {} already present\n'.format(key_aa, db))
 
     return (db_dna, db_aa)
 
@@ -1186,6 +1200,72 @@ def trim_not_variant_rec(x):
         terminating.set()
 
 
+def remove_fragmentary_entries(input_folder, output_folder, verbose=False):
+    commands = []
+
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder {}\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder {} already exists\n'.format(output_folder))
+
+    for inp in glob.iglob(input_folder+'*.aln'):
+        out = output_folder+inp[inp.rfind('/')+1:]
+
+        if not os.path.isfile(out):
+            commands.append((inp, out))
+
+    if commands:
+        info('Removing {} fragmentary entries\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(commands)/(nproc*2))
+        chunksize = int(chunksize) if chunksize > 0 else 1
+
+        try:
+            pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('remove_fragmentary_entries crashed', exit=True)
+    else:
+        info('Fragmentary entries already removed\n')
+
+
+def remove_fragmentary_entries_rec(x):
+    if not terminating.is_set():
+        try:
+            inp, out = x
+            info('Fragmentary {}\n'.format(inp))
+            inp_aln = AlignIO.read(inp, "fasta")
+            col_scores = [gap_cost(inp_aln[:, i], norm=False) for i in range(len(inp_aln[0]))]
+            row_scores = {}
+
+            for aln in inp_aln:
+                row_scores[aln.id] = -(len(aln.seq)-aln.seq.count('-'))
+                gap_pos = (pos for in pos, aa enumerate(aln.seq) if aa == '-')
+                row_scores[aln.id] += functools.reduce(operator.mul, (col_scores[pos] for pos in gap_pos), 1.0)
+
+            with open(out, 'w') as f:
+                AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
+
+            info('{} generated\n'.format(out))
+        except:
+            error('error while subsampling {}'.format(', '.join(x)))
+            terminating.set()
+            raise
+    else:
+        terminating.set()
+
+
 def subsample(input_folder, output_folder, positions_function, scoring_function, nproc=1, verbose=False):
     commands = []
 
@@ -1338,8 +1418,13 @@ def blosum62_scores(aa):
     return m
 
 
-def gap_cost(seq):
-    return float(seq.count('-'))/float(len(seq))
+def gap_cost(seq, norm=True):
+    gaps = float(seq.count('-'))
+
+    if norm:
+        gaps /= float(len(seq))
+
+    return gaps
 
 
 def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False):
@@ -1405,7 +1490,7 @@ if __name__ == '__main__':
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
-    db_dna, db_aa = init_database(args.database, args.databases_folder, configs['db_aa'], verbose=args.verbose)
+    db_dna, db_aa = init_database(args.database, args.databases_folder, configs, '', 'db_aa', verbose=args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
         input_fna = load_input_files(args.input_folder, args.data_folder+'bz2/', args.genome_extension, verbose=args.verbose)
@@ -1433,10 +1518,16 @@ if __name__ == '__main__':
                     gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
         inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', verbose=args.verbose)
+        inp_f = args.data_folder+'markers/'
 
-        msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, args.data_folder+'msas/', nproc=args.nproc, verbose=args.verbose)
+        if args.integrate:
+            out_f =
+            integrate()
+            inp_f = out_f
 
-        inp_f = args.data_folder+'msas/'
+        out_f = args.data_folder+'msas/'
+        msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
 
         if args.trim:
             if (args.trim == 'gappy') or (args.trim == 'greedy'):
@@ -1448,6 +1539,11 @@ if __name__ == '__main__':
                 out_f = args.data_folder+'trim_not_variant/'
                 trim_not_variant(inp_f, out_f, threshold=args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
+
+        if args.remove_fragmentary_entries:
+            out_f = args.data_folder+'fragmentary/'
+            remove_fragmentary_entries(inp_f, out_f, verbose=args.verbose)
+            inp_f = out_f
 
         if args.subsample:
             out_f = args.data_folder+'sub/'
