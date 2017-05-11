@@ -114,18 +114,10 @@ def dep_checks(mafft, raxml, nproc):
         progs.append(["FastTree"])
 
     for prog in progs:
-        t = None
-
         try:
             with open(os.devnull, 'w') as devnull:
                 t = sb.call(prog, stdout=devnull, stderr=devnull)
-
-            if t:
-                t.wait()
-        except OSError:
-            if t:
-                t.kill()
-
+        except:
             error(' '.join(prog)+" not found or not present in system path", exit=True)
 
 
@@ -573,7 +565,6 @@ def exe_usearch(x):
             # info("Starting "+x[7][x[7].rfind('/')+1:]+"\n")
             info("Starting "+x[7]+"\n")
             tmp_faa = None
-            t = None
 
             if not os.path.isfile(x[3]):
                 tmp_faa = NamedTemporaryFile(suffix='.faa', prefix=x[3][x[3].rfind('/')+1:x[3].find('.')], dir=x[3][:x[3].rfind('/')+1])
@@ -588,11 +579,7 @@ def exe_usearch(x):
             else:
                 cmd = x
 
-            t = sb.call(cmd)
-
-            if t:
-                t.wait()
-
+            sb.call(cmd)
             shutil.copy2(x[7], x[7]+'.bkp') # copy the results of usearch
             screen_usearch_wdb(x[7])
 
@@ -602,9 +589,6 @@ def exe_usearch(x):
             # info(x[7][x[7].rfind('/')+1:]+" generated!\n")
             info(x[7]+" generated!\n")
         except:
-            if t:
-                t.kill()
-
             if tmp_faa:
                 tmp_faa.close()
 
@@ -676,7 +660,6 @@ def blastx_exe(x):
             # info("Starting "+x[6][x[6].rfind('/')+1:]+"\n")
             info("Starting "+x[6]+"\n")
             tmp_fna = None
-            t = None
 
             if not os.path.isfile(x[2]):
                 tmp_fna = NamedTemporaryFile(suffix='.fna', prefix=x[2][x[2].rfind('/')+1:x[2].find('.')], dir=x[2][:x[2].rfind('/')+1])
@@ -692,10 +675,7 @@ def blastx_exe(x):
                 cmd = x
 
             with open(os.devnull, 'w') as devnull:
-                t = sb.call(cmd, stderr=devnull) # tblastn quiet homemade!
-
-            if t:
-                t.wait()
+                sb.call(cmd, stderr=devnull) # tblastn quiet homemade!
 
             if tmp_fna:
                 tmp_fna.close()
@@ -703,9 +683,6 @@ def blastx_exe(x):
             # info(x[6][x[6].rfind('/')+1:]+" generated!\n")
             info(x[6]+" generated!\n")
         except:
-            if t:
-                t.kill()
-
             if tmp_fna:
                 tmp_fna.close()
 
@@ -874,7 +851,7 @@ def aln_subsample(inp_f, out_f, scores, unknown_fraction, namn):
 
 def exe_muscle(x):
     if not terminating.is_set():
-        i1, i2, i3, i4, t = None, None, None, None, None
+        i1, i2, i3, i4 = None, None, None, None
 
         try:
             if x[0] == 'muscle':
@@ -882,10 +859,7 @@ def exe_muscle(x):
                 info("Running muscle on "+i4+"\n")
 
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.call(x[:-3], stderr=devnull) # quiet mode
-
-                if t:
-                    t.wait()
+                    sb.call(x[:-3], stderr=devnull) # quiet mode
 
                 i1, i3 = x[5], x[-6]
             elif x[0] == 'mafft':
@@ -896,24 +870,13 @@ def exe_muscle(x):
 
                 with open(os.devnull, 'w') as devnull:
                     with open(o4+'.refine', 'w') as f:
-                        t = sb.call(x[:-5], stdout=f, stderr=devnull) # quiet mode
-
-                if t:
-                    t.wait()
-                    wait_for(o4+'.refine')
-                else:
-                    error(' '.join(x[:-5])+', t=None')
-
-                t = None
+                        sb.call(x[:-5], stdout=f, stderr=devnull) # quiet mode
 
                 # compute the score file with muscle (in any case, for the moment)
                 with open(os.devnull, 'w') as devnull:
-                    t = sb.call(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
+                    sb.call(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]], stderr=devnull) # quiet mode
 
-                if t:
-                    t.wait()
-                    wait_for(x[-4])
-                else:
+                if not os.path.isfile(x[-4]):
                     error(' '.join(['muscle', '-in', o4+'.refine', '-out', o4, '-refine', '-scorefile', x[-4]])+', t=None')
 
                 i1, i3 = o4, x[-4]
@@ -928,9 +891,6 @@ def exe_muscle(x):
             aln_subsample(i1, x[-3], i3, 0.1, pn)
             info(x[-3] + " generated (from "+i4+")\n")
         except:
-            if t:
-                t.kill()
-
             terminating.set()
             error(' '.join(x))
             return
@@ -1121,13 +1081,8 @@ def build_phylo_tree(proj, integrate, nproc, raxml):
         info("FastTree\n")
         cmd = ["FastTree", "-quiet", "-fastest", "-mlnni", "4", "-spr", "4", "-mlacc", "2", "-slownni", "-no2nd", "-out", out_fol+loc_out, aln_in]
 
-    t = None
-
     with open(os.devnull, 'w') as devnull:
-        t = sb.call(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
-
-    if t:
-        t.wait()
+        sb.call(cmd, stdout=devnull, stderr=devnull) # homemade quiet mode
 
     info("Tree built! The output newick file is in "+out_fol+"\n")
 
