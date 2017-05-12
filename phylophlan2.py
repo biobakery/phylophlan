@@ -86,11 +86,12 @@ def read_params():
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
-    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform (if any). 'gappy' will uses trimal (?) to remove gappy colums; 'not_variant' will remove columns that have one letter above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
-    p.add_argument('--not_variant_threshold', type=float, default=0.95, help="When '--trim not_variant' specified this is the threshold above which a column in a MSA will be considered not variant and hence discarded")
-    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty', 'full_length'], help="Specify which function to use to compute the number of positions to retain fromthe MSAs for the concatenated MSA. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan)")
-    p.add_argument('--sort', action='store_true', default=False, help="")
-    p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="")
+    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
+    p.add_argument('--not_variant_threshold', type=float, default=0.95, help="The value used to consider a column not variant when '--trim not_variant' is specified, default 0.95")
+    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred'; 'fifty'")
+    p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
+    p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
+    p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
@@ -1200,7 +1201,7 @@ def trim_not_variant_rec(x):
         terminating.set()
 
 
-def remove_fragmentary_entries(input_folder, output_folder, verbose=False):
+def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -1215,7 +1216,7 @@ def remove_fragmentary_entries(input_folder, output_folder, verbose=False):
         out = output_folder+inp[inp.rfind('/')+1:]
 
         if not os.path.isfile(out):
-            commands.append((inp, out))
+            commands.append((inp, out, threshold))
 
     if commands:
         info('Removing {} fragmentary entries\n'.format(len(commands)))
@@ -1243,16 +1244,14 @@ def remove_fragmentary_entries(input_folder, output_folder, verbose=False):
 def remove_fragmentary_entries_rec(x):
     if not terminating.is_set():
         try:
-            inp, out = x
+            inp, out, thr = x
             info('Fragmentary {}\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
-            col_scores = [gap_cost(inp_aln[:, i], norm=False) for i in range(len(inp_aln[0]))]
-            row_scores = {}
+            out_aln = []
 
             for aln in inp_aln:
-                row_scores[aln.id] = -(len(aln.seq)-aln.seq.count('-'))
-                gap_pos = (pos for in pos, aa enumerate(aln.seq) if aa == '-')
-                row_scores[aln.id] += functools.reduce(operator.mul, (col_scores[pos] for pos in gap_pos), 1.0)
+                if gap_cost(aln.seq) < thr:
+                    out_aln.append(aln)
 
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
@@ -1354,10 +1353,6 @@ def onehundred(void):
 
 def fifty(void):
     return 50
-
-
-def full_length():
-    return 0
 
 
 def trident(seq, alpha=1, beta=0.5, gamma=3):
@@ -1521,7 +1516,7 @@ if __name__ == '__main__':
         inp_f = args.data_folder+'markers/'
 
         if args.integrate:
-            out_f =
+            #out_f =
             integrate()
             inp_f = out_f
 
@@ -1542,7 +1537,7 @@ if __name__ == '__main__':
 
         if args.remove_fragmentary_entries:
             out_f = args.data_folder+'fragmentary/'
-            remove_fragmentary_entries(inp_f, out_f, verbose=args.verbose)
+            remove_fragmentary_entries(inp_f, out_f, threshold=args.fragmentary_threshold, verbose=args.verbose)
             inp_f = out_f
 
         if args.subsample:
