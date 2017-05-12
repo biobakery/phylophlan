@@ -786,7 +786,7 @@ def largest_cluster(f):
     return largest_clusters
 
 
-def gene_markers_extraction(inputs, input_folder, output_folder, extension, nproc=1, verbose=False):
+def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_num_markers, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -803,7 +803,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, npro
         out_file = output_folder+f_clean
 
         if os.path.isfile(src_file) and (not os.path.isfile(out_file)):
-            commands.append((out_file, src_file, f))
+            commands.append((out_file, src_file, f, min_num_markers))
 
     if commands:
         info('Extracting markers from {} inputs\n'.format(len(commands)))
@@ -831,7 +831,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, npro
 def gene_markers_extraction_rec(x):
     if not terminating.is_set():
         try:
-            out_file, src_file, b6o_file = x
+            out_file, src_file, b6o_file, min_num_markers = x
             out_file_seq = []
             contig2markers = {}
             marker2b6o = {}
@@ -867,11 +867,13 @@ def gene_markers_extraction_rec(x):
                         idd += '{}-{}'.format(s, e)
                         out_file_seq.append(SeqRecord(seq_record.seq[s-1:e], id=idd, description=''))
 
-            if out_file_seq:
+            if out_file_seq and (len(out_file_seq) >= min_num_markers):
                 with open(out_file, 'w') as f:
                     SeqIO.write(out_file_seq, f, 'fasta')
 
                 info('{} generated\n'.format(out_file))
+            else:
+                info('Not enough markers ({}/{}) found in {}\n'.format(len(out_file_seq), min_num_markers, b6o_file))
         except:
             error('error while extracting {}'.format(', '.join(x)))
             terminating.set()
@@ -987,6 +989,7 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
     for marker, sequences in markers2inputs.items():
         with open(output_folder+marker+extension, 'w') as f:
             SeqIO.write(sequences, f, 'fasta')
+
 
 
 def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=False):
@@ -1510,7 +1513,7 @@ if __name__ == '__main__':
                 if input_faa_clean:
                     gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                     gene_markers_selection(args.data_folder+'map_aa/', best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
 
         inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', verbose=args.verbose)
         inp_f = args.data_folder+'markers/'
@@ -1521,7 +1524,7 @@ if __name__ == '__main__':
             inp_f = out_f
 
         out_f = args.data_folder+'msas/'
-        msas(configs, 'msa', args.data_folder+'markers/', args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
+        msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
         if args.trim:
@@ -1547,6 +1550,6 @@ if __name__ == '__main__':
 
         concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', sort=args.sort, verbose=args.verbose)
 
-        build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
+        build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tree', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
