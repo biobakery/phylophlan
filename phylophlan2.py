@@ -245,10 +245,10 @@ def check_configs(configs, verbose=False):
     for sections in config_sections_mandatory:
         mandatory_sections = False
 
-        if verbose:
-            info('Checking {} section in configuration file\n'.format(section))
-
         for section in sections:
+            if verbose:
+                info('Checking {} section in configuration file\n'.format(section))
+
             if section in configs:
                 mandatory_sections = True
                 break
@@ -395,7 +395,7 @@ def init_database(database, databases_folder, params, key_dna, key_aa, verbose=F
         else:
             error('cannot create database {}, section {} not present in configurations'.format(db_aa, key_aa), exit=True)
     elif verbose:
-        info('{} database {} already present\n'.format(key_aa, db))
+        info('{} database {} already present\n'.format(key_aa, db_aa))
 
     return (db_dna, db_aa)
 
@@ -428,12 +428,13 @@ def clean_all(databases_folder, verbose=False):
             info('Removing {}\n'.format(f))
 
         os.remove(f)
+        f_clean = f[:f.rfind('.')]
 
-        if os.path.isfile(f[:f.rfind('.')]+'.faa') and os.path.isfile(f[:f.rfind('.')]+'.faa.bz2'):
+        if os.path.isfile(f_clean+'.faa') and os.path.isfile(f_clean+'.faa.bz2'):
             if verbose:
-                info('Removing {}\n'.format(f[:f.rfind('.')]+'.faa'))
+                info('Removing {}\n'.format(f_clean+'.faa'))
 
-            os.remove(f[:f.rfind('.')]+'.faa')
+            os.remove(f_clean+'.faa')
 
     for database in os.listdir(databases_folder):
         for f in glob.iglob(databases_folder+database+'/'+database+'.faa'):
@@ -464,6 +465,7 @@ def clean_project(data_folder, output_folder, verbose=False):
 
         shutil.rmtree(output_folder)
 
+    info('Folders {} and {} removed\n'.format(data_folder, output_folder))
     sys.exit(0)
 
 
@@ -990,6 +992,80 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
         with open(output_folder+marker+extension, 'w') as f:
             SeqIO.write(sequences, f, 'fasta')
 
+
+def integrate(inp_f, database, nproc=1, verbose=False):
+    commands = []
+
+    if os.path.isdir(database):
+        markers = glob.glob(database+'/*')
+        folder = True
+    elif os.path.isfile(database+'.faa'):
+        mrk_db = database+'.faa'
+        folder = False
+    else:
+        error("what's this {}??".format(database), exit=True)
+
+    for mrk in glob.iglob(inp_f+'*'):
+        marker = mrk[mrk.rfind('/')+1:mrk.rfind('.')]
+
+        if folder:
+            mrks = [m for m in markers if marker in m]
+
+            if len(mrks) == 1:
+                mrk_db = mrks[0]
+                marker = None
+            else:
+                error('ambigous marker {} in [{}]'.format(marker, ', '.join(mrks)), exit=True)
+
+        commands.append((mrk, mrk_db, marker))
+
+    if commands:
+        info('Integrating {} markers\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(commands)/(nproc*2))
+        chunksize = int(chunksize) if chunksize > 0 else 1
+
+        try:
+            pool.imap_unordered(integrate_rec, commands, chunksize=chunksize)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('integrate crashed', exit=True)
+    else:
+        info('Markers already aligned (key: {})\n'.format(key))
+
+
+def integrate_rec(x):
+    if not terminating.is_set():
+        try:
+            t0 = time.time()
+            mrk_in, mrk_db, marker = x
+            info('Integrating {}\n'.format(mrk_in))
+            f = open(mrk_in, 'a')
+
+            if marker:
+                SeqIO.write((record for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id), f, "fasta")
+            else:
+                with open(mrk_db) as g:
+                    f.write(g.read())
+
+            f.close()
+            t1 = time.time()
+            info('{} finished in {}s\n'.format(mrk_in, int(t1-t0)))
+        except:
+            error('error while integrating {}'.format(mrk_in))
+            print('\n\n{}\n\n'.format(x))
+            terminating.set()
+            raise
+    else:
+        terminating.set()
 
 
 def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=False):
@@ -1519,9 +1595,7 @@ if __name__ == '__main__':
         inp_f = args.data_folder+'markers/'
 
         if args.integrate:
-            #out_f =
-            integrate()
-            inp_f = out_f
+            integrate(inp_f, args.databases_folder+args.database, nproc=args.nproc, verbose=args.verbose)
 
         out_f = args.data_folder+'msas/'
         msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
