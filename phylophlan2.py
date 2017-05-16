@@ -2,8 +2,8 @@
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
-__version__ = '0.03'
-__date__ = '9 May 2017'
+__version__ = '0.04'
+__date__ = '15 May 2017'
 
 
 import os
@@ -28,11 +28,13 @@ import hashlib
 import time
 import operator
 import functools
+import pickle
 
 
-config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['trim'], ['tree']]
-config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['tree']]
+config_sections_all = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree', 'tree']
 config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
+config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -65,8 +67,8 @@ def read_params():
     group.add_argument('-u', '--user_tree', metavar='PROJECT_NAME', type=str, default=None, help="Build a phylogenetic tree using only genomes provided by the user")
     group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None, help="Clean the final and partial data produced for the specified project")
 
-    p.add_argument('-d', '--database', type=str, default=None, required=False, help="The name of the database to use")
-    p.add_argument('-f', '--config_file', type=str, default='configs/software.config', help="The filename of the configuration file to load, configs/software.config")
+    p.add_argument('-d', '--database', type=str, default=None, help="The name of the database to use")
+    p.add_argument('-f', '--config_file', type=str, default=None, help="The configuration file to load")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
@@ -146,8 +148,6 @@ def check_args(args, verbose):
     elif (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
         error('database {} not found in {}'.format(args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
-    elif not os.path.isfile(args.config_file):
-        error('configuration file {} not found'.format(args.config), exit=True)
 
     if args.integrate:
         project_name = args.integrate
@@ -156,12 +156,8 @@ def check_args(args, verbose):
     elif args.clean:
         project_name = args.clean
 
-    args.input_folder += project_name
     args.data_folder += project_name+'_'+args.database
     args.output_folder += project_name+'_'+args.database
-
-    if not args.input_folder.endswith('/'):
-        args.input_folder += '/'
 
     if not args.data_folder.endswith('/'):
         args.data_folder += '/'
@@ -173,6 +169,14 @@ def check_args(args, verbose):
         check_and_create_folder(args.data_folder, exit=True, verbose=verbose)
         check_and_create_folder(args.output_folder, exit=True, verbose=verbose)
         return None
+
+    if not args.config_file or not os.path.isfile(args.config_file):
+        error('invalid configuration file {}'.format(args.config_file), exit=True)
+
+    args.input_folder += project_name
+
+    if not args.input_folder.endswith('/'):
+        args.input_folder += '/'
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
@@ -514,28 +518,42 @@ def initt(terminating_):
     terminating = terminating_
 
 
-def check_input_proteomes(inputs, min_num_proteins, min_len_protein, nproc=1, verbose=False):
+def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder, nproc=1, verbose=False):
     good_inputs = []
-    info('Checking {} inputs\n'.format(len(inputs)))
-    pool_error = False
-    terminating = mp.Event()
-    pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-    chunksize = math.floor(len(inputs)/(nproc*2))
-    chunksize = int(chunksize) if chunksize > 0 else 1
 
-    try:
-        good_inputs = pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize)
-        pool.close()
-    except:
-        pool.terminate()
-        pool_error = True
+    if os.path.isfile(data_folder+'checked_inputs.pkl'):
+        info('Inputs already checked\n')
 
-    pool.join()
+        if verbose:
+            info('Loading checked inputs from {}\n'.format(data_folder+'checked_inputs.pkl'))
 
-    if pool_error:
-        error('check_input_proteomes crashed', exit=True)
+        with open(data_folder+'checked_inputs.pkl', 'rb') as f:
+            good_inputs = pickle.load(f)
+    else:
+        info('Checking {} inputs\n'.format(len(inputs)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(inputs)/(nproc*2))
 
-    return [a for a in good_inputs if a]
+        try:
+            good_inputs = pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('check_input_proteomes crashed', exit=True)
+
+        good_inputs = [a for a in good_inputs if a]
+
+        with open(data_folder+'checked_inputs.pkl', 'wb') as f:
+            pickle.dump(good_inputs, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    return good_inputs
 
 
 def check_input_proteomes_rec(x):
@@ -578,10 +596,9 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -598,6 +615,7 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
 def clean_input_proteomes_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out = x
             inp_clean = inp[inp.rfind('/')+1:inp.rfind('.')]
             info('Cleaning {}\n'.format(inp))
@@ -606,7 +624,8 @@ def clean_input_proteomes_rec(x):
             with open(out, 'w') as f:
                 SeqIO.write(output, f, "fasta")
 
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except:
             error('error while cleaning {}'.format(', '.join(x)))
             terminating.set()
@@ -638,10 +657,9 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -687,10 +705,9 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, ve
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -707,6 +724,7 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, ve
 def gene_markers_selection_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out, function, min_num_proteins = x
             info('Selecting {}\n'.format(inp))
             matches = function(inp)
@@ -715,7 +733,8 @@ def gene_markers_selection_rec(x):
                 with open(out, 'w') as f:
                     f.write('{}\n'.format('\n'.join(['\t'.join(m) for m in matches])))
 
-                info('{} generated\n'.format(out))
+                t1 = time.time()
+                info('{} generated in {}s\n'.format(out, int(t1-t0)))
             else:
                 info('Not enough markers mapped ({}/{}) in {}\n'.format(len(matches), min_num_proteins, inp))
         except sb.CalledProcessError as cpe:
@@ -771,15 +790,14 @@ def largest_cluster(f):
         b = max((float(b) for _, _, _, _, _, _, _, _, _, _, _, b in entries))
         rev = False
 
-        # check if the contig positions are forward (s < e) or reverse (s > e)
         for s, e in zip(cs, ce):
-            if s > e:
+            if s > e: # check if the contig positions are reverse
                 rev = True
                 break
 
-        if not rev: # if contig position are forward, check if the marker positions are forward or reverse
+        if not rev: # if contig position are forward
             for s, e in zip(ms, me):
-                if s > e:
+                if s > e: # check if the marker positions are forward or reverse
                     rev = True
                     break
 
@@ -813,10 +831,9 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -833,6 +850,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
 def gene_markers_extraction_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             out_file, src_file, b6o_file, min_num_markers = x
             out_file_seq = []
             contig2markers = {}
@@ -873,7 +891,8 @@ def gene_markers_extraction_rec(x):
                 with open(out_file, 'w') as f:
                     SeqIO.write(out_file_seq, f, 'fasta')
 
-                info('{} generated\n'.format(out_file))
+                t1 = time.time()
+                info('{} generated in {}s\n'.format(out_file, int(t1-t0)))
             else:
                 info('Not enough markers ({}/{}) found in {}\n'.format(len(out_file_seq), min_num_markers, b6o_file))
         except:
@@ -907,10 +926,9 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(fake_proteome_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(fake_proteome_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -927,6 +945,7 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
 def fake_proteome_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out = x
             proteome = []
             info('Generating {}\n'.format(inp))
@@ -951,7 +970,8 @@ def fake_proteome_rec(x):
             with open(out, 'w') as f:
                 SeqIO.write(proteome, f, 'fasta')
 
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except:
             error('error while generating {}'.format(', '.join(x)))
             terminating.set()
@@ -993,72 +1013,95 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
             SeqIO.write(sequences, f, 'fasta')
 
 
-def integrate(inp_f, database, nproc=1, verbose=False):
-    commands = []
+def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
+    commands, ret_ids = [], []
 
-    if os.path.isdir(database):
-        markers = glob.glob(database+'/*')
-        folder = True
-    elif os.path.isfile(database+'.faa'):
-        mrk_db = database+'.faa'
-        folder = False
+    if os.path.isfile(data_folder+'integrate_ids.pkl'):
+        info('Integration already performed\n')
+
+        if verbose:
+            info('Loading integrated ids from {}\n'.format(data_folder+'integrate_ids.pkl'))
+
+        with open(data_folder+'integrate_ids.pkl', 'rb') as f:
+            ret_ids = pickle.load(f)
     else:
-        error("what's this {}??".format(database), exit=True)
+        if os.path.isdir(database):
+            markers = glob.glob(database+'/*')
+            folder = True
+        elif os.path.isfile(database+'.faa'):
+            mrk_db = database+'.faa'
+            folder = False
+        else:
+            error("integrate() what's this {}??".format(database), exit=True)
 
-    for mrk in glob.iglob(inp_f+'*'):
-        marker = mrk[mrk.rfind('/')+1:mrk.rfind('.')]
+        for mrk in glob.iglob(inp_f+'*'):
+            marker = mrk[mrk.rfind('/')+1:mrk.rfind('.')]
 
-        if folder:
-            mrks = [m for m in markers if marker in m]
+            if folder:
+                mrks = [m for m in markers if marker in m]
 
-            if len(mrks) == 1:
-                mrk_db = mrks[0]
-                marker = None
-            else:
-                error('ambigous marker {} in [{}]'.format(marker, ', '.join(mrks)), exit=True)
+                if len(mrks) == 1:
+                    mrk_db = mrks[0]
+                    marker = None
+                else:
+                    error('ambiguous marker {} in [{}]'.format(marker, ', '.join(mrks)), exit=True)
 
-        commands.append((mrk, mrk_db, marker))
+            commands.append((mrk, mrk_db, marker))
 
-    if commands:
-        info('Integrating {} markers\n'.format(len(commands)))
-        pool_error = False
-        terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-        chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
+        if commands:
+            info('Integrating {} markers\n'.format(len(commands)))
+            pool_error = False
+            terminating = mp.Event()
+            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+            chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(integrate_rec, commands, chunksize=chunksize)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+            try:
+                ret_ids = pool.imap_unordered(integrate_rec, commands, chunksize=chunksize if chunksize else 1)
+                pool.close()
+            except:
+                pool.terminate()
+                pool_error = True
 
-        pool.join()
+            pool.join()
 
-        if pool_error:
-            error('integrate crashed', exit=True)
-    else:
-        info('Markers already aligned (key: {})\n'.format(key))
+            if pool_error:
+                error('integrate crashed', exit=True)
+
+            ret_ids = set([a for sublist in ret_ids for a in sublist])
+
+            with open(data_folder+'integrate_ids.pkl', 'wb') as f:
+                pickle.dump(ret_ids, f, protocol=pickle.HIGHEST_PROTOCOL)
+        else:
+            info('No markers to integrate\n')
+
+    return ret_ids
 
 
 def integrate_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
+            ret_ids = None
             mrk_in, mrk_db, marker = x
             info('Integrating {}\n'.format(mrk_in))
-            f = open(mrk_in, 'a')
 
-            if marker:
-                SeqIO.write((record for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id), f, "fasta")
-            else:
-                with open(mrk_db) as g:
-                    f.write(g.read())
+            with open(mrk_in, 'a') as f:
+                if marker:
+                    SeqIO.write((record for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id), f, "fasta")
+                    ret_ids = [record.id for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id]
+                else:
+                    with open(mrk_db) as g:
+                        f.write(g.read())
 
-            f.close()
+                    ret_ids = [record.id for record in SeqIO.parse(mrk_db, "fasta")]
+
             t1 = time.time()
             info('{} finished in {}s\n'.format(mrk_in, int(t1-t0)))
+
+            if ret_ids:
+                return set(ret_ids)
+            else:
+                print('\n\nNO ret_ids {}\n\n'.format(x))
         except:
             error('error while integrating {}'.format(mrk_in))
             print('\n\n{}\n\n'.format(x))
@@ -1091,10 +1134,9 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(msas_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(msas_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -1162,10 +1204,9 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -1182,12 +1223,14 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
 def trim_gappy_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             params, inp, out = x
             info('Trimming gappy {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except sb.CalledProcessError as cpe:
             error('{}'.format(cpe))
             terminating.set()
@@ -1231,10 +1274,9 @@ def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=Fals
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -1251,6 +1293,7 @@ def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=Fals
 def trim_not_variant_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out, thr = x
             info('Trimming not variant {}\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
@@ -1271,7 +1314,8 @@ def trim_not_variant_rec(x):
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
 
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except:
             error('error while trimming {}'.format(', '.join(x)))
             terminating.set()
@@ -1303,10 +1347,9 @@ def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=F
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -1323,6 +1366,7 @@ def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=F
 def remove_fragmentary_entries_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out, thr = x
             info('Fragmentary {}\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
@@ -1335,9 +1379,10 @@ def remove_fragmentary_entries_rec(x):
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
 
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except:
-            error('error while subsampling {}'.format(', '.join(x)))
+            error('error while removing fragmentary {}'.format(', '.join(x)))
             terminating.set()
             raise
     else:
@@ -1367,10 +1412,9 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
         terminating = mp.Event()
         pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
-        chunksize = int(chunksize) if chunksize > 0 else 1
 
         try:
-            pool.imap_unordered(subsample_rec, commands, chunksize=chunksize)
+            pool.imap_unordered(subsample_rec, commands, chunksize=chunksize if chunksize else 1)
             pool.close()
         except:
             pool.terminate()
@@ -1387,6 +1431,7 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
 def subsample_rec(x):
     if not terminating.is_set():
         try:
+            t0 = time.time()
             inp, out, npos_function, score_function = x
             info('Subsampling {}\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
@@ -1412,7 +1457,8 @@ def subsample_rec(x):
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
 
-            info('{} generated\n'.format(out))
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except:
             error('error while subsampling {}'.format(', '.join(x)))
             terminating.set()
@@ -1506,23 +1552,30 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
         info('Alignments already merged {}\n'.format(output_file))
         return
 
-    info('Merging alignments {}\n'.format(output_file))
+    info('Concatenating alignments\n')
     all_inputs = set(all_inputs)
-    inputs2alingments = dict([(inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs])
+    print('\nlen(all_inputs): {}'.format(len(all_inputs)))
+    inputs2alingments = dict(((inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs))
+    print('len(inputs2alingments): {}\n'.format(len(inputs2alingments)))
     markers = glob.iglob(input_folder+'*')
 
     if sort:
         markers = sorted(markers)
 
     for a in markers:
+        print('\nmarker: {}'.format(a))
         alignment_length = None
-        current_inputs = set([seq_record.id for seq_record in SeqIO.parse(a, "fasta")])
 
         for seq_record in SeqIO.parse(a, "fasta"):
             inputs2alingments[seq_record.id].seq += seq_record.seq
 
             if not alignment_length:
                 alignment_length = len(seq_record.seq)
+                print('alignment_length: {}'.format(alignment_length))
+
+        current_inputs = set([seq_record.id for seq_record in SeqIO.parse(a, "fasta")])
+        print('len(current_inputs): {}'.format(len(current_inputs)))
+        print('len(all_inputs-current_inputs): {}\n'.format(len(all_inputs-current_inputs)))
 
         for inp in all_inputs-current_inputs:
             inputs2alingments[inp].seq += Seq('-'*alignment_length)
@@ -1530,15 +1583,95 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
     with open(output_file, 'w') as f:
         SeqIO.write([v for _, v in inputs2alingments.items()], f, "fasta")
 
-    info('Alignments merged {}\n'.format(output_file))
+    info('Alignments concatenated {}\n'.format(output_file))
 
 
-def build_phylogeny(configs, key, input_alignment, output_path, output_tree, nproc=1, verbose=False):
+def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=False):
+    commands = []
+
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder {}\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder {} already exists\n'.format(output_folder))
+
+    for inp in glob.iglob(input_folder+'*'):
+        out = output_folder+inp[inp.rfind('/')+1:]
+
+        if not os.path.isfile(out):
+            commands.append((configs[key], inp, out))
+
+    if commands:
+        info('Building {} gene trees\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(commands)/(nproc*2))
+
+        try:
+            pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('build_gene_tree crashed', exit=True)
+    else:
+        info('Gene trees already built\n')
+
+
+def build_gene_tree_rec(x):
+    if not terminating.is_set():
+        try:
+            t0 = time.time()
+            params, inp, out = x
+            info('Building gene tree {}\n'.format(inp))
+            cmd = compose_command(params, input_file=inp, output_file=out)
+            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
+            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
+        except sb.CalledProcessError as cpe:
+            error('{}'.format(cpe))
+            terminating.set()
+            raise
+        except:
+            error('error while building gene tree {}'.format(', '.join(x)))
+            terminating.set()
+            raise
+    else:
+        terminating.set()
+
+
+def merging_single_trees(trees_folder, output_file, verbose=False):
+    if path.exists(output_file):
+        info('Gene trees already merged {}\n'.format(output_folder))
+        return
+
+    info('Merging single-gene trees\n')
+
+    with open(output_file, 'w') as f:
+        for gtree in glob.iglob(trees_folder+"*"):
+            if verbose:
+                info('{} '.format(gtree))
+
+            with open(gtree) as g:
+                f.write(g.read())
+
+    if verbose:
+        info('\n'.format(gtree))
+
+
+def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, verbose=False):
     if not os.path.isfile(output_tree):
         try:
             t0 = time.time()
-            info('Building phylogeny {}\n'.format(output_tree))
-            cmd = compose_command(configs[key], input_file=input_alignment, output_path=output_path, output_file=output_tree, nproc=nproc)
+            cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
             t1 = time.time()
@@ -1580,7 +1713,7 @@ if __name__ == '__main__':
         input_faa.update(faa) # if duplicates input keep the ones from 'faa'
 
         if input_faa:
-            input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, nproc=args.nproc, verbose=args.verbose)
+            input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
             if input_faa_checked:
                 clean_input_proteomes(input_faa_checked, args.data_folder+'clean_aa/', nproc=args.nproc, verbose=args.verbose)
@@ -1595,14 +1728,14 @@ if __name__ == '__main__':
         inp_f = args.data_folder+'markers/'
 
         if args.integrate:
-            integrate(inp_f, args.databases_folder+args.database, nproc=args.nproc, verbose=args.verbose)
+            input_integrate = integrate(inp_f, args.databases_folder+args.database, args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
         out_f = args.data_folder+'msas/'
         msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
         if args.trim:
-            if (args.trim == 'gappy') or (args.trim == 'greedy'):
+            if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
                 out_f = args.data_folder+'trim_gappy/'
                 trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
@@ -1622,8 +1755,25 @@ if __name__ == '__main__':
             subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
-        concatenate((i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean), inp_f, args.data_folder+'all.aln', sort=args.sort, verbose=args.verbose)
+        if 'gene_tree' in configs:
+            out_f = args.data_folder+'merge/'
+            build_gene_tree(configs, 'gene_tree', inp_f, out_f, nproc=1, verbose=False)
+            inp_f = out_f
+            out_f = args.data_folder+'gene_trees.tre/'
+            merging_single_trees(inp_f, out_f, verbose=args.verbose)
+            inp_f = out_f
+        else:
+            all_inputs = (i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean)
 
-        build_phylogeny(configs, 'tree', args.data_folder+'all.aln', os.path.abspath(args.output_folder), args.output_folder+project_name+'.tree', nproc=args.nproc, verbose=args.verbose)
+            if args.integrate:
+                all_inputs = (a for a in list(all_inputs)+list(input_integrate))
+
+            out_f = args.data_folder+'all.aln'
+            concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
+            inp_f = out_f
+
+        build_phylogeny(configs, 'tree', inp_f, os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
+
+    sys.exit(0)

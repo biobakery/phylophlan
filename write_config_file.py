@@ -72,10 +72,11 @@ progs = {
                   'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                   'output': '-out',
                   'command_line': '#program_name# #params# #output# #input#'},
-    'tree': {'program_name': '/CM/tools/astral-4.10.8/astral.4.10.8.jar',
+    'tree': {'program_name': '/CM/tools/astral-4.10.12/astral.4.10.12.jar',
              'params': 'java -jar',
              'input': '-i',
              'output': '-o',
+             'version': '--help',
              'command_line': '#params# #program_name# #input# #output#'},
     # 'tree': {'program_name': 'FastTree-2.1.9-SSE3',
     #          'program_name_parallel': 'FastTreeMP-2.1.9-SSE3',
@@ -91,5 +92,5 @@ for prog, options in progs.items():
     for option, value in options.items():
         config[prog][option] = value
 
-with open(config_folder_files+'software.config', 'w') as f:
+with open(config_folder_files+'supertree.cfg', 'w') as f:
     config.write(f)
