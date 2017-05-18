@@ -29,10 +29,11 @@ import time
 import operator
 import functools
 import pickle
+from itertools import combinations
 
 
-config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['tree']]
-config_sections_all = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree', 'tree']
+config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
+config_sections_all = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
 config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
 config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
 
@@ -69,6 +70,7 @@ def read_params():
 
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database to use")
     p.add_argument('-f', '--config_file', type=str, default=None, help="The configuration file to load")
+    p.add_argument('-s', '--submat', type=str, default=None, help="Specify which substitution matrix to use")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
@@ -80,17 +82,19 @@ def read_params():
     group.add_argument('--input_folder', type=str, default='input/', help="Path to the folder containing the folder with the input data, default input/")
     group.add_argument('--data_folder', type=str, default='data/', help="Path to the folder where to store the intermediate files, default data/")
     group.add_argument('--databases_folder', type=str, default='databases/', help="Path to the folder where to store the intermediate files, default databases/")
+    group.add_argument('--submat_folder', type=str, default='substition_matrices/', help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
     group.add_argument('--output_folder', type=str, default='output/', help="Path to the output folder where to save the results, default output/")
 
     p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database file that is automatically extracted and formatted at the first pipeline run")
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
+    p.add_argument('--submat_list', action='store_true', default=False, help="If specified lists the available substitution matrices that can be specified with the -s (or --submat) option")
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use, default 1")
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
     p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
     p.add_argument('--not_variant_threshold', type=float, default=0.95, help="The value used to consider a column not variant when '--trim not_variant' is specified, default 0.95")
-    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan_npos' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred'; 'fifty'")
+    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
@@ -133,6 +137,9 @@ def check_args(args, verbose):
     if not args.databases_folder.endswith('/'):
         args.databases_folder += '/'
 
+    if not args.submat_folder.endswith('/'):
+        args.submat_folder += '/'
+
     if args.clean_all:
         check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
         return None
@@ -140,6 +147,8 @@ def check_args(args, verbose):
         info('PhyloPhlAn2 version {} ({})\n'.format(__version__, __date__), exit=True)
     elif args.database_list:
         database_list(args.databases_folder, exit=True)
+    elif args.submat_list:
+        submat_list(args.submat_folder, exit=True)
     elif (not args.integrate) and (not args.user_tree) and (not args.clean):
         error('either -i (--integrate), or -u (--user_tree), or -c (--clean) must be specified', exit=True)
     elif not args.database:
@@ -148,6 +157,9 @@ def check_args(args, verbose):
     elif (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
         error('database {} not found in {}'.format(args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
+    elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
+        error('substitution matrix {} not found in {}'.format(args.submat, args.submat_folder), exit=True)
+        submat_list(args.submat_folder, exit=True)
 
     if args.integrate:
         project_name = args.integrate
@@ -197,7 +209,7 @@ def check_args(args, verbose):
 
     if args.subsample:
         if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
-            error("scoring function 'phylophlan_npos' is compatible only with 'phylophlan' database", exit=True)
+            error("scoring function 'phylophlan' is compatible only with 'phylophlan' database", exit=True)
 
     if args.database == 'phylophlan':
         args.sort = True
@@ -210,6 +222,8 @@ def check_args(args, verbose):
         args.trim = 'greedy'
         args.not_variant_threshold = 0.99
         args.subsample = None
+        args.submat_folder = 'substitution_matrices/'
+        args.submat = None
         print('{}\n'.format(args))
         pass
     elif args.tol: # params for tree-of-life phylogenies
@@ -217,9 +231,11 @@ def check_args(args, verbose):
         args.trim = 'greedy'
         args.not_variant_threshold = 0.93
         args.subsample = 'fifty'
+        args.submat_folder = 'substitution_matrices/'
+        args.submat = 'vtml240'
 
         if args.database == 'phylophlan':
-            args.subsample = 'phylophlan_npos'
+            args.subsample = 'phylophlan'
 
         print('{}\n'.format(args))
         pass
@@ -231,9 +247,11 @@ def check_args(args, verbose):
         print('\n>  DEFAULT  <')
         args.trim = 'gappy'
         args.subsample = 'onehundred'
+        args.submat_folder = 'substitution_matrices/'
+        args.submat = 'vtml200'
 
         if args.database == 'phylophlan':
-            args.subsample = 'phylophlan_npos'
+            args.subsample = 'phylophlan'
 
         print('{}\n'.format(args))
         pass
@@ -320,6 +338,10 @@ def check_dependencies(configs, nproc, verbose=False):
 
 def database_list(databases_folder, exit=False):
     info('Available databases:\n    {}\n'.format('\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit)
+
+
+def submat_list(submat_folder, exit=False):
+    info('Available substitution matrices:\n    {}\n'.format('\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit)
 
 
 def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
@@ -1598,10 +1620,10 @@ def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=
         info('Folder {} already exists\n'.format(output_folder))
 
     for inp in glob.iglob(input_folder+'*'):
-        out = output_folder+inp[inp.rfind('/')+1:]
+        out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
 
         if not os.path.isfile(out):
-            commands.append((configs[key], inp, out))
+            commands.append((configs[key], inp, output_folder, out))
 
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
@@ -1629,9 +1651,10 @@ def build_gene_tree_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            params, inp, out = x
+            params, inp, wf, out, nproc = x
+            abs_wf = os.path.abspath(wf)
             info('Building gene tree {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, output_file=out)
+            cmd = compose_command(params, input_file=inp,  output_path=abs_wf, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
             t1 = time.time()
@@ -1648,12 +1671,79 @@ def build_gene_tree_rec(x):
         terminating.set()
 
 
-def merging_single_trees(trees_folder, output_file, verbose=False):
+def refine_gene_tree(configs, key, input_alns, input_trees, output_folder, nproc=1, verbose=False):
+    commands = []
+
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder {}\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder {} already exists\n'.format(output_folder))
+
+    for inp in glob.iglob(input_alns+'*'):
+        starting_tree = input_trees+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
+        out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
+
+        if os.path.isfile(starting_tree):
+            if not os.path.isfile(out):
+                commands.append((configs[key], inp, starting_tree, output_folder, out))
+        else:
+            error('starting tree {} not found in {}, derived from {}'.format(starting_tree, input_trees, inp))
+
+    if commands:
+        info('Refining {} gene trees\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
+        chunksize = math.floor(len(commands)/(nproc*2))
+
+        try:
+            pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)
+            pool.close()
+        except:
+            pool.terminate()
+            pool_error = True
+
+        pool.join()
+
+        if pool_error:
+            error('refine_gene_tree crashed', exit=True)
+    else:
+        info('Gene trees already refined\n')
+
+
+def refine_gene_tree_rec(x):
+    if not terminating.is_set():
+        try:
+            t0 = time.time()
+            params, inp, st, wf, out = x
+            abs_wf = os.path.abspath(wf)
+            info('Refining gene tree {}\n'.format(inp))
+            cmd = compose_command(params, input_file=inp, database=st, output_path=abs_wf, output_file=out)
+            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
+            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(out, int(t1-t0)))
+        except sb.CalledProcessError as cpe:
+            error('{}'.format(cpe))
+            terminating.set()
+            raise
+        except:
+            error('error while refining gene tree {}'.format(', '.join(x)))
+            terminating.set()
+            raise
+    else:
+        terminating.set()
+
+
+def merging_gene_trees(trees_folder, output_file, verbose=False):
     if path.exists(output_file):
         info('Gene trees already merged {}\n'.format(output_folder))
         return
 
-    info('Merging single-gene trees\n')
+    info('Merging gene trees\n')
 
     with open(output_file, 'w') as f:
         for gtree in glob.iglob(trees_folder+"*"):
@@ -1671,6 +1761,7 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
     if not os.path.isfile(output_tree):
         try:
             t0 = time.time()
+            info('Building phylogeny {}\n'.format(inputt))
             cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
@@ -1682,6 +1773,24 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
             error('error while executing {}'.format(' '.join(cmd)), exit=True)
     else:
         info('Phylogeny {} already built\n'.format(output_tree))
+
+
+def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tree, nproc=1, verbose=False):
+    if not os.path.isfile(output_tree):
+        try:
+            t0 = time.time()
+            info('Refining phylogeny {}\n'.format(inputt))
+            cmd = compose_command(configs[key], input_file=inputt, database=starting_tree, output_path=output_path, output_file=output_tree, nproc=nproc)
+            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
+            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            t1 = time.time()
+            info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
+        except sb.CalledProcessError as cpe:
+            error('{}'.format(cpe))
+        except:
+            error('error while executing {}'.format(' '.join(cmd)), exit=True)
+    else:
+        info('Phylogeny {} already refined\n'.format(output_tree))
 
 
 if __name__ == '__main__':
@@ -1755,12 +1864,18 @@ if __name__ == '__main__':
             subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
-        if 'gene_tree' in configs:
-            out_f = args.data_folder+'merge/'
-            build_gene_tree(configs, 'gene_tree', inp_f, out_f, nproc=1, verbose=False)
+        if 'gene_tree1' in configs:
+            out_f = args.data_folder+'merge1/'
+            build_gene_tree(configs, 'gene_tree1', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+
+            if 'gene_tree2' in configs:
+                outt = args.data_folder+'merge2/'
+                refine_gene_tree(configs, 'gene_tree2', inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
+                out_f = outt
+
             inp_f = out_f
-            out_f = args.data_folder+'gene_trees.tre/'
-            merging_single_trees(inp_f, out_f, verbose=args.verbose)
+            out_f = args.data_folder+'gene_trees.tre'
+            merging_gene_trees(inp_f, out_f, verbose=args.verbose)
             inp_f = out_f
         else:
             all_inputs = (i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean)
@@ -1772,7 +1887,13 @@ if __name__ == '__main__':
             concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
             inp_f = out_f
 
-        build_phylogeny(configs, 'tree', inp_f, os.path.abspath(args.output_folder), args.output_folder+project_name+'.tre', nproc=args.nproc, verbose=args.verbose)
+        out_f = args.output_folder+project_name+'.tre'
+        build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
+
+        if 'tree2' in configs:
+            outt = args.output_folder+project_name+'.refine.tre'
+            refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), outt, nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
 
