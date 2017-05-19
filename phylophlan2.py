@@ -19,7 +19,6 @@ from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import AlignIO
 from Bio.Align import MultipleSeqAlignment
-from Bio.SubsMat import MatrixInfo
 from collections import Counter
 import bz2
 import math
@@ -70,7 +69,7 @@ def read_params():
 
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database to use")
     p.add_argument('-f', '--config_file', type=str, default=None, help="The configuration file to load")
-    p.add_argument('-s', '--submat', type=str, default=None, help="Specify which substitution matrix to use")
+    p.add_argument('-s', '--submat', type=str, default=None, help="Specify the substitution matrix to use")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
@@ -85,7 +84,7 @@ def read_params():
     group.add_argument('--submat_folder', type=str, default='substition_matrices/', help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
     group.add_argument('--output_folder', type=str, default='output/', help="Path to the output folder where to save the results, default output/")
 
-    p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database file that is automatically extracted and formatted at the first pipeline run")
+    p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database files that are automatically generated at the first run of the pipeline")
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
     p.add_argument('--submat_list', action='store_true', default=False, help="If specified lists the available substitution matrices that can be specified with the -s (or --submat) option")
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use, default 1")
@@ -95,6 +94,7 @@ def read_params():
     p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
     p.add_argument('--not_variant_threshold', type=float, default=0.95, help="The value used to consider a column not variant when '--trim not_variant' is specified, default 0.95")
     p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
+    p.add_argument('--scoring_function', default=None, choices=['trident', 'muscle'], help="Specify which scoring function to use to evaluate columns in the MSA results")
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
@@ -413,7 +413,7 @@ def init_database(database, databases_folder, params, key_dna, key_aa, verbose=F
         db_aa = databases_folder+database+'/'+database+'.udb'
         markers = glob.iglob(databases_folder+database+'/*.faa*')
     else: # what's that??
-        error('custom set of markers not recognize', exit=True)
+        error('custom set of markers ({}, {}, or {}) not recognize'.format(databases_folder+database+'.faa', databases_folder+database+'.faa.bz2', databases_folder+database+'/'), exit=True)
 
     if db_aa and (not os.path.isfile(db_aa)):
         if key_aa in params:
@@ -1325,7 +1325,7 @@ def trim_not_variant_rec(x):
 
             for i in range(len(inp_aln[0])):
                 for aa, fq in Counter(inp_aln[:, i]).items():
-                    if float(fq/nrows) >= thr:
+                    if (fq/nrows) >= thr:
                         cols_to_remove.append(i)
                         break
 
@@ -1411,8 +1411,18 @@ def remove_fragmentary_entries_rec(x):
         terminating.set()
 
 
-def subsample(input_folder, output_folder, positions_function, scoring_function, nproc=1, verbose=False):
+def subsample(input_folder, output_folder, positions_function, scoring_function, submat, nproc=1, verbose=False):
     commands = []
+    mat = {}
+
+    if not os.path.isfile(submat):
+        error('could not find substitution matrix {}'.format(submat), exit=True)
+    else:
+        with open(submat, 'rb') as f:
+            mat = pickle.load(f)
+
+        if verbose:
+            info('substitution matrix {} loaded\n'.format(submat))
 
     if not os.path.isdir(output_folder):
         if verbose:
@@ -1426,7 +1436,7 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
         out = output_folder+inp[inp.rfind('/')+1:]
 
         if not os.path.isfile(out):
-            commands.append((inp, out, positions_function, scoring_function))
+            commands.append((inp, out, positions_function, scoring_function, mat))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
@@ -1454,14 +1464,21 @@ def subsample_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, npos_function, score_function = x
+            inp, out, npos_function, score_function, mat = x
             info('Subsampling {}\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
             scores = []
             out_aln = []
 
             for i in range(len(inp_aln[0])):
-                scores.append(score_function(inp_aln[:, i]), i)
+                col = seq(inp_aln[:, i])
+
+                if (len(seq) == 1) or \
+                   (len(seq) == 2 and ("-" in seq or "X" in seq)) or \
+                   (len(seq) == 3 and "X" in seq and "-" in seq):
+                    continue
+
+                scores.append(score_function(inp_aln[:, i], mat), i)
 
             try:
                 marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
@@ -1494,16 +1511,26 @@ def phylophlan(marker):
     return max(int(math.ceil(max(int(math.ceil((400-marker)*30/400.0)), 1)**2/30.0)), 3) # ~4.6k AAs
 
 
-def onehundred(void):
+def onehundred(_):
     return 100
 
 
-def fifty(void):
+def fifty(_):
     return 50
 
 
-def trident(seq, alpha=1, beta=0.5, gamma=3):
-    return (1-symbol_diversity(seq))**alpha * (1-stereochemical_diversity(seq))**beta * (1-gap_cost(seq))**gamma
+def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
+    return (1-symbol_diversity(seq))**alpha * (1-stereochemical_diversity(seq, submat))**beta * (1-gap_cost(seq))**gamma
+
+
+def muscle(sep, submat):
+    combos = [submat[a, b] for a, b in combinations(seq.upper().replace('-', ''), 2)]
+    retval = 0.0
+
+    if len(combos):
+        retval = sum(combos)/len(combos) # average score over pairs of letters in the column.
+
+    return retval
 
 
 def symbol_diversity(seq, log_base=21):
@@ -1512,27 +1539,28 @@ def symbol_diversity(seq, log_base=21):
     """
     sh = 0.0
 
-    for aa, abs_freq in Counter(seq).items():
-        rel_freq = float(abs_freq)/float(len(seq))
+    for aa, abs_freq in Counter(seq.upper()).items():
+        rel_freq = abs_freq/len(seq)
         sh -= rel_freq*math.log(rel_freq)
 
     sh /= math.log(min(len(seq), log_base))
     return sh if (sh > 0.15) and (sh < 0.85) else 0.99
 
 
-def stereochemical_diversity(seq):
+def stereochemical_diversity(seq, submat):
     """
     Valdar W. Scoring Residue Conservation. PROTEINS: Structure, Function, and Genetics 48:227–241 (2002)
     """
-    aa_avg = sum([blosum62_scores(aa) for aa in set(seq)])
-    aa_avg /= float(len(set(seq)))
-    r = sum([abs(aa_avg-blosum62_scores(aa)) for aa in set(seq)])
-    r /= float(len(set(seq)))
-    r /= math.sqrt(20*(max(MatrixInfo.blosum62.values())-min(MatrixInfo.blosum62.values()))**2)
+    set_seq = set(seq.upper())
+    aa_avg = sum([normalized_submat_scores(aa, submat) for aa in set_seq])
+    aa_avg /= len(set_seq)
+    r = sum([abs(aa_avg-normalized_submat_scores(aa, submat)) for aa in set_seq])
+    r /= len(set_seq)
+    r /= math.sqrt(20*(max(submat.values())-min(submat.values()))**2)
     return r
 
 
-def blosum62_scores(aa):
+def normalized_submat_scores(aa, submat):
     """
     Karlin S, Brocchieri L. Evolutionary conservation of RecA genes in relation to protein structure and function. J Bacteriol 1996;178: 1881–1894.
     """
@@ -1542,18 +1570,10 @@ def blosum62_scores(aa):
 
     if (aa != '-') and (aa != 'X'):
         for bb in aas:
-            if (aa, bb) in MatrixInfo.blosum62:
-                a, b = aa, bb
-            else:
-                a, b = bb, aa
-
-            mab = float(MatrixInfo.blosum62[(a, b)])
-            maa = float(MatrixInfo.blosum62[(a, a)])
-            mbb = float(MatrixInfo.blosum62[(b, b)])
             try:
-                m += mab/math.sqrt(maa*mbb)
+                m += submat[(aa, bb)]/math.sqrt(submat[(aa, aa)]*submat[(bb, bb)])
             except:
-                print('a:{}, b:{}, mab: {}, maa: {}, mbb: {}'.format(a, b, mab, maa, mbb))
+                print('aa:{}, bb:{}, submat: {}'.format(aa, bb, submat))
                 print('\n{}\n'.format(sys.exc_info()))
                 sys.exit()
 
@@ -1561,10 +1581,10 @@ def blosum62_scores(aa):
 
 
 def gap_cost(seq, norm=True):
-    gaps = float(seq.count('-'))
+    gaps = seq.count('-')
 
     if norm:
-        gaps /= float(len(seq))
+        gaps /= len(seq)
 
     return gaps
 
@@ -1623,7 +1643,7 @@ def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=
         out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
 
         if not os.path.isfile(out):
-            commands.append((configs[key], inp, output_folder, out))
+            commands.append((configs[key], inp, os.path.abspath(output_folder), out))
 
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
@@ -1651,8 +1671,7 @@ def build_gene_tree_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            params, inp, wf, out, nproc = x
-            abs_wf = os.path.abspath(wf)
+            params, inp, abs_wf, out = x
             info('Building gene tree {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp,  output_path=abs_wf, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
@@ -1688,7 +1707,7 @@ def refine_gene_tree(configs, key, input_alns, input_trees, output_folder, nproc
 
         if os.path.isfile(starting_tree):
             if not os.path.isfile(out):
-                commands.append((configs[key], inp, starting_tree, output_folder, out))
+                commands.append((configs[key], inp, starting_tree, os.path.abspath(output_folder), out))
         else:
             error('starting tree {} not found in {}, derived from {}'.format(starting_tree, input_trees, inp))
 
@@ -1718,8 +1737,7 @@ def refine_gene_tree_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            params, inp, st, wf, out = x
-            abs_wf = os.path.abspath(wf)
+            params, inp, st, abs_wf, out = x
             info('Refining gene tree {}\n'.format(inp))
             cmd = compose_command(params, input_file=inp, database=st, output_path=abs_wf, output_file=out)
             # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
@@ -1861,15 +1879,16 @@ if __name__ == '__main__':
 
         if args.subsample:
             out_f = args.data_folder+'sub/'
-            subsample(inp_f, out_f, args.subsample, trident, nproc=args.nproc, verbose=args.verbose)
+            # subsample(inp_f, out_f, args.subsample, trident, args.submat_folder, args.submat, nproc=args.nproc, verbose=args.verbose)
+            subsample(inp_f, out_f, args.subsample, args.scoring_function, args.submat_folder+args.submat+'.pkl', nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if 'gene_tree1' in configs:
-            out_f = args.data_folder+'merge1/'
+            out_f = args.data_folder+'gene_tree1/'
             build_gene_tree(configs, 'gene_tree1', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
             if 'gene_tree2' in configs:
-                outt = args.data_folder+'merge2/'
+                outt = args.data_folder+'gene_tree2/'
                 refine_gene_tree(configs, 'gene_tree2', inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
                 out_f = outt
 
@@ -1892,7 +1911,7 @@ if __name__ == '__main__':
         inp_f = out_f
 
         if 'tree2' in configs:
-            outt = args.output_folder+project_name+'.refine.tre'
+            outt = args.output_folder+project_name+'_refine.tre'
             refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), outt, nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
