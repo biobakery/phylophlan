@@ -73,9 +73,14 @@ def read_params():
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
+    group.add_argument('--species', action='store_true', default=False, help="")
+    group.add_argument('--genus', action='store_true', default=False, help="")
+    group.add_argument('--family', action='store_true', default=False, help="")
+    group.add_argument('--order', action='store_true', default=False, help="")
+    group.add_argument('--class', action='store_true', default=False, help="")
+    group.add_argument('--phylum', action='store_true', default=False, help="")
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
-    group.add_argument('--default', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default='input/', help="Path to the folder containing the folder with the input data, default input/")
@@ -182,9 +187,6 @@ def check_args(args, verbose):
         check_and_create_folder(args.output_folder, exit=True, verbose=verbose)
         return None
 
-    if not args.config_file or not os.path.isfile(args.config_file):
-        error('invalid configuration file {}'.format(args.config_file), exit=True)
-
     args.input_folder += project_name
 
     if not args.input_folder.endswith('/'):
@@ -219,6 +221,7 @@ def check_args(args, verbose):
 
     if args.strain: # params for strain-level phylogenies
         print('\n>  ARGS.STRAIN  <')
+        args.config_file = ''
         args.trim = 'greedy'
         args.not_variant_threshold = 0.99
         args.subsample = None
@@ -226,8 +229,33 @@ def check_args(args, verbose):
         args.submat = None
         print('{}\n'.format(args))
         pass
+    elif args.species: # params for species-level phylogenies
+        print('\n>  ARGS.SPECIES  <')
+        print('{}\n'.format(args))
+        pass
+    elif args.genus: # params for genus-level phylogenies
+        print('\n>  ARGS.GENUS  <')
+        print('{}\n'.format(args))
+        pass
+    elif args.family: # params for family-level phylogenies
+        print('\n>  ARGS.FAMILY  <')
+        print('{}\n'.format(args))
+        pass
+    elif args.order: # params for order-level phylogenies
+        print('\n>  ARGS.ORDER  <')
+        print('{}\n'.format(args))
+        pass
+    elif args.class: # params for class-level phylogenies
+        print('\n>  ARGS.CLASS  <')
+        print('{}\n'.format(args))
+        pass
+    elif args.phylum: # params for phylum-level phylogenies
+        print('\n>  ARGS.PHYLUM  <')
+        print('{}\n'.format(args))
+        pass
     elif args.tol: # params for tree-of-life phylogenies
         print('\n>  ARGS.TOL  <')
+        args.config_file = ''
         args.trim = 'greedy'
         args.not_variant_threshold = 0.93
         args.subsample = 'fifty'
@@ -241,24 +269,16 @@ def check_args(args, verbose):
         pass
     elif args.meta: # params for phylogenetic placement of metagenomic contigs
         print('\n>  ARGS.META  <')
+        args.config_file = ''
         print('{}\n'.format(print))
-        pass
-    elif args.default: # default params
-        print('\n>  DEFAULT  <')
-        args.trim = 'gappy'
-        args.subsample = 'onehundred'
-        args.submat_folder = 'substitution_matrices/'
-        args.submat = 'vtml200'
-
-        if args.database == 'phylophlan':
-            args.subsample = 'phylophlan'
-
-        print('{}\n'.format(args))
         pass
     else:
         print('\n>  CUSTOM  <')
         print('{}\n'.format(args))
         pass
+
+    if not args.config_file or not os.path.isfile(args.config_file):
+        error('invalid configuration file {}'.format(args.config_file), exit=True)
 
     return project_name
 
