@@ -1491,14 +1491,20 @@ def subsample_rec(x):
             out_aln = []
 
             for i in range(len(inp_aln[0])):
-                col = seq(inp_aln[:, i])
+                col = set(inp_aln[:, i].upper())
 
-                if (len(seq) == 1) or \
-                   (len(seq) == 2 and ("-" in seq or "X" in seq)) or \
-                   (len(seq) == 3 and "X" in seq and "-" in seq):
+                if (len(col) == 1) or \
+                   (len(col) == 2 and ("-" in col or "X" in col)) or \
+                   (len(col) == 3 and "X" in col and "-" in col):
                     continue
 
-                scores.append(score_function(inp_aln[:, i], mat), i)
+                unknowns = col.count("-")
+                unknowns += col.count("X")
+
+                if unknowns > (len(col)*0.1):
+                    continue
+
+                scores.append((score_function(inp_aln[:, i], mat), i))
 
             try:
                 marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
@@ -1543,7 +1549,7 @@ def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
     return (1-symbol_diversity(seq))**alpha * (1-stereochemical_diversity(seq, submat))**beta * (1-gap_cost(seq))**gamma
 
 
-def muscle(sep, submat):
+def muscle(seq, submat):
     combos = [submat[a, b] for a, b in combinations(seq.upper().replace('-', ''), 2)]
     retval = 0.0
 
