@@ -31,10 +31,21 @@ import pickle
 from itertools import combinations
 
 
-config_sections_mandatory = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
-config_sections_all = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
-config_options_mandatory = [['program_name', 'program_name_parallel'], ['command_line']]
-config_options_all = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
+CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
+CONFIG_OPTIONS_MANDATORY = [['program_name', 'program_name_parallel'], ['command_line']]
+CONFIG_OPTIONS_ALL = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+INPUT_FOLDER = 'input/'
+DATA_FOLDER = 'data/'
+DATABASES_FOLDER = 'databases/'
+SUBMAT_FOLDER = 'substitution_matrices/'
+CONFIG_FOLDER = 'configs/'
+OUTPUT_FOLDER = 'output/'
+TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
+SUBSAMPLE_CHOICES = ['phylophlan', 'onehundred', 'fifty']
+SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
+GENOME_EXTENSION = '.fna'
+PROTEOME_EXTENSION = '.faa'
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -77,17 +88,17 @@ def read_params():
     group.add_argument('--genus', action='store_true', default=False, help="")
     group.add_argument('--family', action='store_true', default=False, help="")
     group.add_argument('--order', action='store_true', default=False, help="")
-    group.add_argument('--class', action='store_true', default=False, help="")
+    group.add_argument('--classs', action='store_true', default=False, help="")
     group.add_argument('--phylum', action='store_true', default=False, help="")
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
-    group.add_argument('--input_folder', type=str, default='input/', help="Path to the folder containing the folder with the input data, default input/")
-    group.add_argument('--data_folder', type=str, default='data/', help="Path to the folder where to store the intermediate files, default data/")
-    group.add_argument('--databases_folder', type=str, default='databases/', help="Path to the folder where to store the intermediate files, default databases/")
-    group.add_argument('--submat_folder', type=str, default='substition_matrices/', help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
-    group.add_argument('--output_folder', type=str, default='output/', help="Path to the output folder where to save the results, default output/")
+    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default input/")
+    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default data/")
+    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default databases/")
+    group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER, help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
+    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default output/")
 
     p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database files that are automatically generated at the first run of the pipeline")
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
@@ -96,17 +107,17 @@ def read_params():
     p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
     p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
     p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
-    p.add_argument('--trim', default=None, choices=['gappy', 'not_variant', 'greedy'], help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
+    p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
     p.add_argument('--not_variant_threshold', type=float, default=0.95, help="The value used to consider a column not variant when '--trim not_variant' is specified, default 0.95")
-    p.add_argument('--subsample', default=None, choices=['phylophlan', 'onehundred', 'fifty'], help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
-    p.add_argument('--scoring_function', default=None, choices=['trident', 'muscle'], help="Specify which scoring function to use to evaluate columns in the MSA results")
+    p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES, help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
+    p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES, help="Specify which scoring function to use to evaluate columns in the MSA results")
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
-    group.add_argument('--genome_extension', type=str, default='.fna', help="Set the extension for the genomes in your inputs, default .fna")
-    group.add_argument('--proteome_extension', type=str, default='.faa', help="Set the extension for the proteomes in your inputs, default .faa")
+    group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
+    group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Set the extension for the proteomes in your inputs, default .faa")
 
     p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn2 verbose")
     p.add_argument('-v', '--version', action='store_true', default=False, help="Prints the current PhyloPhlAn2 version")
@@ -122,12 +133,12 @@ def read_configs(config_file, verbose=False):
     if verbose:
         info('Reading configuration file {}\n'.format(config_file))
 
-    for sections in config_sections_mandatory:
+    for sections in CONFIG_SECTIONS_MANDATORY:
         for section in sections:
             if section in config.sections(): # "DEFAULT" section not included!
                 configs[section] = {}
 
-                for option in config_options_all:
+                for option in CONFIG_OPTIONS_ALL:
                     if option in config[section]:
                         configs[section][option] = config[section][option]
                     else:
@@ -162,9 +173,6 @@ def check_args(args, verbose):
     elif (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
         error('database {} not found in {}'.format(args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
-    elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
-        error('substitution matrix {} not found in {}'.format(args.submat, args.submat_folder), exit=True)
-        submat_list(args.submat_folder, exit=True)
 
     if args.integrate:
         project_name = args.integrate
@@ -221,84 +229,97 @@ def check_args(args, verbose):
 
     if args.strain: # params for strain-level phylogenies
         print('\n>  ARGS.STRAIN  <')
-        args.config_file = ''
+        args.config_file = None
         args.trim = 'greedy'
         args.not_variant_threshold = 0.99
         args.subsample = None
-        args.submat_folder = 'substitution_matrices/'
+        args.submat_folder = SUBMAT_FOLDER
         args.submat = None
         print('{}\n'.format(args))
-        pass
     elif args.species: # params for species-level phylogenies
         print('\n>  ARGS.SPECIES  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
     elif args.genus: # params for genus-level phylogenies
         print('\n>  ARGS.GENUS  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
     elif args.family: # params for family-level phylogenies
         print('\n>  ARGS.FAMILY  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
     elif args.order: # params for order-level phylogenies
         print('\n>  ARGS.ORDER  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
-    elif args.class: # params for class-level phylogenies
+    elif args.classs: # params for class-level phylogenies
         print('\n>  ARGS.CLASS  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
     elif args.phylum: # params for phylum-level phylogenies
         print('\n>  ARGS.PHYLUM  <')
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(args))
-        pass
     elif args.tol: # params for tree-of-life phylogenies
         print('\n>  ARGS.TOL  <')
-        args.config_file = ''
+        args.config_file = None
         args.trim = 'greedy'
         args.not_variant_threshold = 0.93
         args.subsample = 'fifty'
-        args.submat_folder = 'substitution_matrices/'
+        args.submat_folder = SUBMAT_FOLDER
         args.submat = 'vtml240'
 
         if args.database == 'phylophlan':
             args.subsample = 'phylophlan'
 
         print('{}\n'.format(args))
-        pass
     elif args.meta: # params for phylogenetic placement of metagenomic contigs
         print('\n>  ARGS.META  <')
-        args.config_file = ''
+        args.submat = None
+        args.config_file = None
         print('{}\n'.format(print))
-        pass
     else:
         print('\n>  CUSTOM  <')
         print('{}\n'.format(args))
-        pass
 
-    if not args.config_file or not os.path.isfile(args.config_file):
-        error('invalid configuration file {}'.format(args.config_file), exit=True)
+    if not args.config_file:
+        error('-f (or --config_file) must be specified')
+        config_list(CONFIG_FOLDER, exit=True)
+    elif not os.path.isfile(args.config_file):
+        error('configuration file "{}" not found'.format(args.config_file))
+        config_list(CONFIG_FOLDER, exit=True)
+    elif not args.submat:
+        error('-s (or --submat) must be specified')
+        submat_list(args.submat_folder, exit=True)
+    elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
+        error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
+        submat_list(args.submat_folder, exit=True)
 
     return project_name
 
 
 def check_configs(configs, verbose=False):
-    for sections in config_sections_mandatory:
+    for sections in CONFIG_SECTIONS_MANDATORY:
         mandatory_sections = False
 
         for section in sections:
             if verbose:
-                info('Checking {} section in configuration file\n'.format(section))
+                info('Checking "{}" section in configuration file\n'.format(section))
 
             if section in configs:
                 mandatory_sections = True
                 break
 
         if not mandatory_sections:
-            error('could not find {} section in configuration file'.format(section), exit=True)
+            error('could not find "{}" section in configuration file'.format(section), exit=True)
 
-        for options in config_options_mandatory:
+        for options in CONFIG_OPTIONS_MANDATORY:
             mandatory_options = False
 
             for option in options:
@@ -307,7 +328,7 @@ def check_configs(configs, verbose=False):
                     break
 
             if not mandatory_options:
-                error('could not find {} mandatory option in section {} in configuration file'.format(option, section), exit=True)
+                error('could not find "{}" mandatory option in section "{}" in configuration file'.format(option, section), exit=True)
 
     for section, options in configs.items():
         mandatory_options = None
@@ -357,11 +378,15 @@ def check_dependencies(configs, nproc, verbose=False):
 
 
 def database_list(databases_folder, exit=False):
-    info('Available databases:\n    {}\n'.format('\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit)
+    info('Available databases in "{}":\n    {}\n'.format(databases_folder, '\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit)
 
 
 def submat_list(submat_folder, exit=False):
-    info('Available substitution matrices:\n    {}\n'.format('\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit)
+    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit)
+
+
+def config_list(config_folder, exit=False):
+    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit)
 
 
 def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):

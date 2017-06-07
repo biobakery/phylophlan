@@ -45,7 +45,7 @@ def read_params():
 
 def check_params(args):
     if (not args.map_dna) and (not args.map_aa):
-        error('at least one of {} and {} must be specified'.format(args.map_dna, args.map_aa), exit=True)
+        error('at least one of --map_dna and --map_aa must be specified', exit=True)
 
     if os.path.isfile(args.output):
         error('cannot write ouptut file {} because it already exists'.format(args.output), exit=True)
@@ -132,12 +132,12 @@ if __name__ == '__main__':
         progs['tree1'] = {'program_name_parallel': 'FastTreeMP-2.1.9-SSE3',
                           'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
-                          'command_line': '#program_name_parallel# #params# #output# #input#'},
+                          'command_line': '#program_name_parallel# #params# #output# #input#'}
 
     if args.gene_tree2:
         progs['gene_tree2'] = {'program_name': 'raxmlHPC',
                                'params': '-m ',
-                               'database': '-t', # starting tree
+                               'database': '-g', # starting tree
                                'input': '-s',
                                'output_path':'-w',
                                'output': '-n',
@@ -147,8 +147,8 @@ if __name__ == '__main__':
     if args.tree2:
         progs['tree2'] = {'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3',
                           'params': '-m ',
-                          'threads': '-T'
-                          'database': '-t', # starting tree
+                          'threads': '-T',
+                          'database': '-g', # starting tree
                           'input': '-s',
                           'output_path':'-w',
                           'output': '-n',
