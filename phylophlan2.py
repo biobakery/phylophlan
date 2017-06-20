@@ -141,10 +141,10 @@ def read_configs(config_file, verbose=False):
                 for option in CONFIG_OPTIONS_ALL:
                     if option in config[section]:
                         configs[section][option] = config[section][option]
-                    else:
-                        configs[section][option] = ''
-            else:
-                configs[section] = ''
+            #         else:
+            #             configs[section][option] = ''
+            # else:
+            #     configs[section] = ''
 
     return configs
 
@@ -305,40 +305,44 @@ def check_args(args, verbose):
 
 
 def check_configs(configs, verbose=False):
+    # checking whether mandatory sections and options are present
     for sections in CONFIG_SECTIONS_MANDATORY:
         mandatory_sections = False
 
         for section in sections:
             if verbose:
-                info('Checking "{}" section in configuration file\n'.format(section))
+                info('Checking "{}" section\n'.format(section))
 
             if section in configs:
                 mandatory_sections = True
-                break
+
+                for options in CONFIG_OPTIONS_MANDATORY:
+                    mandatory_options = False
+
+                    for option in options:
+                        if verbose:
+                            info('Checking "{}" option in "{}" section\n'.format(option, section))
+
+                        if (option in configs[section]) and configs[section][option]:
+                            mandatory_options = True
+                            break
+
+                    if not mandatory_options:
+                        error('could not find "{}" mandatory option in section "{}"'.format(option, section), exit=True)
 
         if not mandatory_sections:
-            error('could not find "{}" section in configuration file'.format(section), exit=True)
+            error('could not find "{}" section'.format(section), exit=True)
 
-        for options in CONFIG_OPTIONS_MANDATORY:
-            mandatory_options = False
-
-            for option in options:
-                if (option in configs[section]) and configs[section][option]:
-                    mandatory_options = True
-                    break
-
-            if not mandatory_options:
-                error('could not find "{}" mandatory option in section "{}" in configuration file'.format(option, section), exit=True)
-
+    # checking that all the options (but 'version') are defined in the 'command_line' value
     for section, options in configs.items():
-        mandatory_options = None
         actual_options = []
+        mandatory_options = []
 
         for option in options:
             if option in ['command_line']:
-                mandatory_options = [a.strip() for a in configs[section][option].split('#') if a.strip()]
-            else:
-                actual_options.append(option)
+                actual_options = [a.strip() for a in configs[section][option].split('#') if a.strip()]
+            elif option not in ['version']:
+                mandatory_options.append(option)
 
         if mandatory_options and actual_options:
             for option in mandatory_options:
@@ -390,48 +394,53 @@ def config_list(config_folder, exit=False):
 
 
 def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
-    command_line = params['command_line'].replace('#program_name#', params['program_name'])
-    program_name = params['program_name']
+    program_name = None
+    command_line = params['command_line']
 
-    if (nproc > 1) and params['program_name_parallel']:
+    if 'program_name' in params.keys():
+        command_line = command_line.replace('#program_name#', params['program_name'])
+        program_name = params['program_name']
+    elif 'program_name_parallel' in params.keys():
         command_line = command_line.replace('#program_name_parallel#', params['program_name_parallel'])
         program_name = params['program_name_parallel']
+    else:
+        error('something wrong... either "program_name" or "program_name_parallel" should be present and checked', exit=True)
 
     if check:
         command_line = program_name
 
-        if params['version']:
+        if 'version' in params:
             command_line = '{} {}'.format(program_name, params['version'])
     else:
-        if params['params']:
+        if 'params' in params:
             command_line = command_line.replace('#params#', params['params'])
 
-        if params['threads']:
+        if 'threads' in params:
             command_line = command_line.replace('#threads#', '{} {}'.format(params['threads'], nproc))
 
-        if output_path and params['output_path']:
+        if output_path and ('output_path' in params):
             command_line = command_line.replace('#output_path#', '{} {}'.format(params['output_path'], output_path))
 
         if input_file:
             inp = input_file
 
-            if params['input']:
+            if 'input' in params:
                 inp = '{} {}'.format(params['input'], input_file)
 
             command_line = command_line.replace('#input#', inp)
 
-        if database and params['database']:
+        if database and ('database' in params):
             command_line = command_line.replace('#database#', '{} {}'.format(params['database'], database))
 
         if output_file:
             out = output_file
 
-            if params['output']:
+            if 'output' in params:
                 out = '{} {}'.format(params['output'], output_file)
 
             command_line = command_line.replace('#output#', out)
 
-    # find if there are string params sourrunded with " and make thme as one string
+    # find if there are string params sourrunded with " and make them as one string
     quotes = [j for j, e in enumerate(command_line) if e == '"']
 
     for s, e in zip(quotes[0::2], quotes[1::2]):
@@ -1875,6 +1884,7 @@ if __name__ == '__main__':
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
+
     db_dna, db_aa = init_database(args.database, args.databases_folder, configs, '', 'db_aa', verbose=args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
@@ -1883,7 +1893,7 @@ if __name__ == '__main__':
         if input_fna:
             gene_markers_identification(configs, 'map_dna', input_fna, args.data_folder+'map_dna/', args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
             gene_markers_selection(args.data_folder+'map_dna/', largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-            gene_markers_extraction(input_fna, args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.genome_extension, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_extraction(input_fna, args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.genome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
             fake_proteome(args.data_folder+'markers_dna/', args.data_folder+'fake_proteomes/', args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
         faa = load_input_files(args.input_folder, args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
