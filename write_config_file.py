@@ -118,12 +118,11 @@ if __name__ == '__main__':
                          'command_line': '#program_name# #params# #input# #output#'}
 
     if args.gene_tree1:
-        progs['tree1'] = {'program_name': '/CM/tools/astral-4.10.12/astral.4.10.12.jar',
-                          'params': 'java -jar',
+        progs['tree1'] = {'program_name': 'java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar',
                           'input': '-i',
                           'output': '-o',
                           'version': '--help',
-                          'command_line': '#params# #program_name# #input# #output#'}
+                          'command_line': '#program_name# #input# #output#'}
         progs['gene_tree1'] = {'program_name': 'FastTree-2.1.9-SSE3',
                                'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                                'output': '-out',
@@ -136,17 +135,18 @@ if __name__ == '__main__':
 
     if args.gene_tree2:
         progs['gene_tree2'] = {'program_name': 'raxmlHPC',
-                               'params': '-m ',
+                               'params': '-p 1989',
+                               'model': '-m',
                                'database': '-g', # starting tree
                                'input': '-s',
                                'output_path':'-w',
                                'output': '-n',
                                'version': '-v',
-                               'command_line': '#program_name# #params# #database# #output_path# #input# #output#'}
+                               'command_line': '#program_name# #model# #params# #database# #output_path# #input# #output#'}
 
     if args.tree2:
         progs['tree2'] = {'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3',
-                          'params': '-m ',
+                          'params': '-m PROTGAMMAAUTO -p 1989',
                           'threads': '-T',
                           'database': '-g', # starting tree
                           'input': '-s',
