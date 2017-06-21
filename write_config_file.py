@@ -76,18 +76,16 @@ if __name__ == '__main__':
                   'output': '-output',
                   'version': '-version',
                   'command_line': '#program_name# #params# #input# #output#'},
-        'msa': {'program_name': 'muscle3.8.1551',
-                'params': '-quiet -maxiters 2',
-                'input': '-in',
-                'output': '-out',
-                'version': '-version',
-                'command_line': '#program_name# #params# #input# #output#'}
-               # {'program_name': 'mafft',
-               #  'params': '--anysymbol --quiet',
-               #  'input': '',
-               #  'output': '',
-               #  'version': '--version'},
+        'msa': # {'program_name': 'muscle3.8.1551',
+               #  'params': '-quiet -maxiters 2',
+               #  'input': '-in',
+               #  'output': '-out',
+               #  'version': '-version',
                #  'command_line': '#program_name# #params# #input# #output#'}
+               {'program_name': 'mafft',
+                'params': '--quiet',
+                'version': '--version',
+                'command_line': '#program_name# #params# #input# > #output#'}
     }
 
     if args.map_dna:
