@@ -2,8 +2,8 @@
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
-__version__ = '0.04'
-__date__ = '15 May 2017'
+__version__ = '0.05'
+__date__ = '21 Jun 2017'
 
 
 import os
@@ -133,18 +133,11 @@ def read_configs(config_file, verbose=False):
     if verbose:
         info('Reading configuration file {}\n'.format(config_file))
 
-    for sections in CONFIG_SECTIONS_MANDATORY:
-        for section in sections:
-            if section in config.sections(): # "DEFAULT" section not included!
-                configs[section] = {}
+    for section in config.sections(): # "DEFAULT" section not included!
+        configs[section] = {}
 
-                for option in CONFIG_OPTIONS_ALL:
-                    if option in config[section]:
-                        configs[section][option] = config[section][option]
-            #         else:
-            #             configs[section][option] = ''
-            # else:
-            #     configs[section] = ''
+        for option in config[section]:
+            configs[section][option] = config[section][option]
 
     return configs
 
@@ -288,18 +281,45 @@ def check_args(args, verbose):
         print('\n>  CUSTOM  <')
         print('{}\n'.format(args))
 
+    # checking configuration file
     if not args.config_file:
         error('-f (or --config_file) must be specified')
         config_list(CONFIG_FOLDER, exit=True)
     elif not os.path.isfile(args.config_file):
         error('configuration file "{}" not found'.format(args.config_file))
         config_list(CONFIG_FOLDER, exit=True)
-    elif not args.submat:
+
+    # checking substitution matrix
+    if not args.submat:
         error('-s (or --submat) must be specified')
         submat_list(args.submat_folder, exit=True)
     elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
         error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
         submat_list(args.submat_folder, exit=True)
+
+    # get scoring function
+    score_function = None
+
+    if args.scoring_function in globals():
+        score_function = globals().get(args.scoring_function)
+    elif (not score_function) and (args.scoring_function in locals()):
+        score_function = locals().get(args.scoring_function)
+    else:
+        error('cannot find function "{}"'.format(args.scoring_function), exit=True)
+
+    args.scoring_function = score_function
+
+    # get position function
+    npos_function = None
+
+    if args.subsample in globals():
+        npos_function = globals().get(args.subsample)
+    elif (not npos_function) and (args.subsample in locals()):
+        npos_function = locals().get(args.subsample)
+    else:
+        error('cannot find function "{}"'.format(args.subsample), exit=True)
+
+    args.subsample = npos_function
 
     return project_name
 
@@ -368,17 +388,38 @@ def check_and_create_folder(folder, create=False, exit=False, verbose=False):
 
 
 def check_dependencies(configs, nproc, verbose=False):
-    for prog in [compose_command(configs[params], check=True, nproc=nproc) for params in configs]:
-        try:
-            if verbose:
-                info('Checking {}\n'.format(' '.join(prog)))
+    for params in configs:
+        cmd = compose_command(configs[params], check=True, nproc=nproc)
 
-            # sb.run(prog, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True)
-            sb.check_call(prog, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe), exit=True)
-        except:
-            error('{} not installed or not present in system path'.format(' '.join(prog)), exit=True)
+        if verbose:
+            info('Checking {}\n'.format(' '.join(cmd['command_line'])))
+
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
+        try:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
+            if verbose:
+                error('{}\n{}\n{}'.format(e, type(e), e.args))
+
+            error('{} not installed or not present in system path'.format(' '.join(cmd['command_line'])), exit=True)
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
 
 
 def database_list(databases_folder, exit=False):
@@ -395,6 +436,8 @@ def config_list(config_folder, exit=False):
 
 def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
     program_name = None
+    stdin = None
+    stdout = None
     command_line = params['command_line']
 
     if 'program_name' in params.keys():
@@ -427,7 +470,12 @@ def compose_command(params, check=False, input_file=None, database=None, output_
             if 'input' in params:
                 inp = '{} {}'.format(params['input'], input_file)
 
-            command_line = command_line.replace('#input#', inp)
+            if '<' in command_line:
+                command_line = command_line.replace('<', '')
+                command_line = command_line.replace('#input#', '')
+                stdin = inp
+            else:
+                command_line = command_line.replace('#input#', inp)
 
         if database and ('database' in params):
             command_line = command_line.replace('#database#', '{} {}'.format(params['database'], database))
@@ -438,7 +486,12 @@ def compose_command(params, check=False, input_file=None, database=None, output_
             if 'output' in params:
                 out = '{} {}'.format(params['output'], output_file)
 
-            command_line = command_line.replace('#output#', out)
+            if '>' in command_line:
+                command_line = command_line.replace('>', '')
+                command_line = command_line.replace('#output#', '')
+                stdout = out
+            else:
+                command_line = command_line.replace('#output#', out)
 
     # find if there are string params sourrunded with " and make them as one string
     quotes = [j for j, e in enumerate(command_line) if e == '"']
@@ -446,7 +499,7 @@ def compose_command(params, check=False, input_file=None, database=None, output_
     for s, e in zip(quotes[0::2], quotes[1::2]):
         command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
 
-    return [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a]
+    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a], 'stdin': stdin, 'stdout': stdout}
 
 
 def init_database(database, databases_folder, params, key_dna, key_aa, verbose=False):
@@ -490,16 +543,36 @@ def make_database(command, fasta, markers, db, label, verbose=False):
     elif verbose:
         info('File {} already present\n'.format(fasta))
 
+    info('Generating {} indexed database {}\n'.format(label, db))
+    cmd = compose_command(command, input_file=fasta, output_file=db)
+    inp_f = None
+    out_f = sb.DEVNULL
+    close_inp_f = False
+    close_out_f = False
+
+    if cmd['stdin']:
+        inp_f = open(cmd['stdin'], 'r')
+        close_inp_f = True
+
+    if cmd['stdout']:
+        out_f = open(cmd['stdout'], 'w')
+        close_out_f = True
+
     try:
-        info('Generating {} indexed database {}\n'.format(label, db))
-        cmd = compose_command(command, input_file=fasta, output_file=db)
-        # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-        sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-        info('Generated {} {}\n'.format(label, db))
-    except sb.CalledProcessError as cpe:
-        error('{}'.format(cpe), exit=True)
-    except:
-        error('{} not installed or not present in system path'.format(' '.join(cmd)), exit=True)
+        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+    except Exception as e:
+        if verbose:
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
+
+        error('cannot execute command {}'.format(' '.join(cmd)), exit=True)
+
+    if close_inp_f:
+        inp_f.close()
+
+    if close_out_f:
+        out_f.close()
+
+    info('Generated {} {}\n'.format(label, db))
 
 
 def clean_all(databases_folder, verbose=False):
@@ -609,22 +682,16 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder
         info('Checking {} inputs\n'.format(len(inputs)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(inputs)/(nproc*2))
 
-        try:
-            good_inputs = pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                good_inputs = [a for a in pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1) if a]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('check_input_proteomes crashed', exit=True)
-
-        good_inputs = [a for a in good_inputs if a]
+                error('check_input_proteomes crashed', exit=True)
 
         with open(data_folder+'checked_inputs.pkl', 'wb') as f:
             pickle.dump(good_inputs, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -645,8 +712,12 @@ def check_input_proteomes_rec(x):
                 info('{} discarded, not enough proteins ({}/{}) of at least {} AAs\n'.format(inp, num_proteins, min_num_proteins, min_len_protein))
 
             return None
-        except:
+        except Exception as e:
             error('error while checking {}'.format(', '.join(x)))
+
+            if verbose:
+                error('{}\n{}\n{}'.format(e, type(e), e.args))
+
             terminating.set()
             raise
     else:
@@ -670,20 +741,16 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
         info('Cleaning {} inputs\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('clean_input_proteomes crashed', exit=True)
+                error('clean_input_proteomes crashed', exit=True)
     else:
         info('Inputs already cleaned\n')
 
@@ -702,8 +769,9 @@ def clean_input_proteomes_rec(x):
 
             t1 = time.time()
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except:
+        except Exception as e:
             error('error while cleaning {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -731,43 +799,56 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         info('Mapping {} on {} inputs (key: {})\n'.format(database_name, len(commands), key))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
+                error('gene_markers_identification crashed', exit=True)
 
-        if pool_error:
-            error('gene_markers_identification crashed', exit=True)
     else:
         info('{} markers already mapped (key: {})\n'.format(database_name, key))
 
 
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
+        t0 = time.time()
+        params, inp, db, out, min_num_proteins = x
+        info('Mapping {}\n'.format(inp))
+        cmd = compose_command(params, input_file=inp, database=db, output_file=out)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            params, inp, db, out, min_num_proteins = x
-            info('Mapping {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, database=db, output_file=out)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-            terminating.set()
-            raise
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
             error('cannot execute command {}'.format(' '.join(cmd)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -779,20 +860,16 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, ve
         info('Selecting {} markers from {}\n'.format(len(commands), input_folder))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('gene_markers_selection crashed', exit=True)
+                error('gene_markers_selection crashed', exit=True)
     else:
         info('Markers already selected\n')
 
@@ -813,12 +890,9 @@ def gene_markers_selection_rec(x):
                 info('{} generated in {}s\n'.format(out, int(t1-t0)))
             else:
                 info('Not enough markers mapped ({}/{}) in {}\n'.format(len(matches), min_num_proteins, inp))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-            terminating.set()
-            raise
-        except:
+        except Exception as e:
             error('cannot execute command {}'.format(' '.join(cmd)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -905,20 +979,15 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
         info('Extracting markers from {} inputs\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        try:
-            pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
-
-        pool.join()
-
-        if pool_error:
-            error('gene_markers_extraction crashed', exit=True)
+                error('gene_markers_extraction crashed', exit=True)
     else:
         info('Markers already extracted\n')
 
@@ -971,8 +1040,9 @@ def gene_markers_extraction_rec(x):
                 info('{} generated in {}s\n'.format(out_file, int(t1-t0)))
             else:
                 info('Not enough markers ({}/{}) found in {}\n'.format(len(out_file_seq), min_num_markers, b6o_file))
-        except:
+        except Exception as e:
             error('error while extracting {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1000,20 +1070,15 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
         info('Generated proteomes from {} genomes\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(fake_proteome_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
-
-        pool.join()
-
-        if pool_error:
-            error('fake_proteomes crashed', exit=True)
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(fake_proteome_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
+                error('fake_proteomes crashed', exit=True)
     else:
         info('Fake proteomes already generated\n')
 
@@ -1048,8 +1113,9 @@ def fake_proteome_rec(x):
 
             t1 = time.time()
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except:
+        except Exception as e:
             error('error while generating {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1085,8 +1151,11 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
                 markers2inputs[marker] = [SeqRecord(seq_record.seq, id=inp, description='')]
 
     for marker, sequences in markers2inputs.items():
-        with open(output_folder+marker+extension, 'w') as f:
-            SeqIO.write(sequences, f, 'fasta')
+        if len(sequences) >= 3: # 3 is the minimun number of inputs to infer a phylogeny (gene tree reconstruction pipeline)
+            with open(output_folder+marker+extension, 'w') as f:
+                SeqIO.write(sequences, f, 'fasta')
+        elif verbose:
+            info('{} marker discarded, not enough inputs, len(sequences): {}\n'.format(marker, len(sequences)))
 
 
 def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
@@ -1128,22 +1197,14 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
             info('Integrating {} markers\n'.format(len(commands)))
             pool_error = False
             terminating = mp.Event()
-            pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
-            chunksize = math.floor(len(commands)/(nproc*2))
+            with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+                try:
+                    ret_ids = set([a for sublist in pool.imap_unordered(integrate_rec, commands, chunksize=chunksize if chunksize else 1) for a in sublist])
+                except Exception as e:
+                    if verbose:
+                        error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-            try:
-                ret_ids = pool.imap_unordered(integrate_rec, commands, chunksize=chunksize if chunksize else 1)
-                pool.close()
-            except:
-                pool.terminate()
-                pool_error = True
-
-            pool.join()
-
-            if pool_error:
-                error('integrate crashed', exit=True)
-
-            ret_ids = set([a for sublist in ret_ids for a in sublist])
+                    error('integrate crashed', exit=True)
 
             with open(data_folder+'integrate_ids.pkl', 'wb') as f:
                 pickle.dump(ret_ids, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1178,9 +1239,9 @@ def integrate_rec(x):
                 return set(ret_ids)
             else:
                 print('\n\nNO ret_ids {}\n\n'.format(x))
-        except:
+        except Exception as e:
             error('error while integrating {}'.format(mrk_in))
-            print('\n\n{}\n\n'.format(x))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1208,43 +1269,56 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
         info('Aligning {} markers (key: {})\n'.format(len(commands), key))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(msas_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(msas_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
+                error('msas crashed', exit=True)
 
-        if pool_error:
-            error('msas crashed', exit=True)
     else:
         info('Markers already aligned (key: {})\n'.format(key))
 
 
 def msas_rec(x):
     if not terminating.is_set():
+        t0 = time.time()
+        params, inp, out = x
+        info('Aligning {}\n'.format(inp))
+        cmd = compose_command(params, input_file=inp, output_file=out)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            params, inp, out = x
-            info('Aligning {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, output_file=out)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-            terminating.set()
-            raise
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
             error('error while aligning {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1278,43 +1352,55 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         info('Trimming gappy form {} markers (key: {})\n'.format(len(commands), key))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('trim_gappy crashed', exit=True)
+                error('trim_gappy crashed', exit=True)
     else:
         info('Markers already trimmed (key: {})\n'.format(key))
 
 
 def trim_gappy_rec(x):
     if not terminating.is_set():
+        t0 = time.time()
+        params, inp, out = x
+        info('Trimming gappy {}\n'.format(inp))
+        cmd = compose_command(params, input_file=inp, output_file=out)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            params, inp, out = x
-            info('Trimming gappy {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, output_file=out)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
+            error('error while trimming {}'.format(', '.join([str(a) for a in x])))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
-        except:
-            error('error while trimming {}'.format(', '.join(x)))
-            terminating.set()
-            raise
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1348,20 +1434,16 @@ def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=Fals
         info('Trimming not variant from {} markers\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('trim_not_variant crashed', exit=True)
+                error('trim_not_variant crashed', exit=True)
     else:
         info('Markers already trimmed\n')
 
@@ -1392,8 +1474,9 @@ def trim_not_variant_rec(x):
 
             t1 = time.time()
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except:
+        except Exception as e:
             error('error while trimming {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1421,20 +1504,16 @@ def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=F
         info('Removing {} fragmentary entries\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('remove_fragmentary_entries crashed', exit=True)
+                error('remove_fragmentary_entries crashed', exit=True)
     else:
         info('Fragmentary entries already removed\n')
 
@@ -1457,8 +1536,9 @@ def remove_fragmentary_entries_rec(x):
 
             t1 = time.time()
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except:
+        except Exception as e:
             error('error while removing fragmentary {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1467,7 +1547,7 @@ def remove_fragmentary_entries_rec(x):
 
 def subsample(input_folder, output_folder, positions_function, scoring_function, submat, nproc=1, verbose=False):
     commands = []
-    mat = {}
+    mat = None
 
     if not os.path.isfile(submat):
         error('could not find substitution matrix {}'.format(submat), exit=True)
@@ -1496,20 +1576,16 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
         info('Subsampling {} markers\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(subsample_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(subsample_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('subsample crashed', exit=True)
+                error('subsample crashed', exit=True)
     else:
         info('Markers already subsampled\n')
 
@@ -1532,10 +1608,10 @@ def subsample_rec(x):
                    (len(col) == 3 and "X" in col and "-" in col):
                     continue
 
-                unknowns = col.count("-")
-                unknowns += col.count("X")
+                unknowns = ''.join(col).count("-")
+                unknowns += ''.join(col).count("X")
 
-                if unknowns > (len(col)*0.1):
+                if unknowns > (len(inp_aln[:, i])*0.1):
                     continue
 
                 scores.append((score_function(inp_aln[:, i], mat), i))
@@ -1558,8 +1634,9 @@ def subsample_rec(x):
 
             t1 = time.time()
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except:
-            error('error while subsampling {}'.format(', '.join(x)))
+        except Exception as e:
+            error('error while subsampling {}'.format(', '.join([str(a) for a in x])))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1656,16 +1733,13 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
 
     info('Concatenating alignments\n')
     all_inputs = set(all_inputs)
-    print('\nlen(all_inputs): {}'.format(len(all_inputs)))
     inputs2alingments = dict(((inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs))
-    print('len(inputs2alingments): {}\n'.format(len(inputs2alingments)))
     markers = glob.iglob(input_folder+'*')
 
     if sort:
         markers = sorted(markers)
 
     for a in markers:
-        print('\nmarker: {}'.format(a))
         alignment_length = None
 
         for seq_record in SeqIO.parse(a, "fasta"):
@@ -1673,11 +1747,8 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
 
             if not alignment_length:
                 alignment_length = len(seq_record.seq)
-                print('alignment_length: {}'.format(alignment_length))
 
         current_inputs = set([seq_record.id for seq_record in SeqIO.parse(a, "fasta")])
-        print('len(current_inputs): {}'.format(len(current_inputs)))
-        print('len(all_inputs-current_inputs): {}\n'.format(len(all_inputs-current_inputs)))
 
         for inp in all_inputs-current_inputs:
             inputs2alingments[inp].seq += Seq('-'*alignment_length)
@@ -1709,43 +1780,55 @@ def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=
         info('Building {} gene trees\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('build_gene_tree crashed', exit=True)
+                error('build_gene_tree crashed', exit=True)
     else:
         info('Gene trees already built\n')
 
 
 def build_gene_tree_rec(x):
     if not terminating.is_set():
+        t0 = time.time()
+        params, inp, abs_wf, out = x
+        info('Building gene tree {}\n'.format(inp))
+        cmd = compose_command(params, input_file=inp,  output_path=abs_wf, output_file=out)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            params, inp, abs_wf, out = x
-            info('Building gene tree {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp,  output_path=abs_wf, output_file=out)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-            terminating.set()
-            raise
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
             error('error while building gene tree {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1775,43 +1858,55 @@ def refine_gene_tree(configs, key, input_alns, input_trees, output_folder, nproc
         info('Refining {} gene trees\n'.format(len(commands)))
         pool_error = False
         terminating = mp.Event()
-        pool = mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc)
         chunksize = math.floor(len(commands)/(nproc*2))
 
-        try:
-            pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)
-            pool.close()
-        except:
-            pool.terminate()
-            pool_error = True
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                if verbose:
+                    error('{}\n{}\n{}'.format(e, type(e), e.args))
 
-        pool.join()
-
-        if pool_error:
-            error('refine_gene_tree crashed', exit=True)
+                error('refine_gene_tree crashed', exit=True)
     else:
         info('Gene trees already refined\n')
 
 
 def refine_gene_tree_rec(x):
     if not terminating.is_set():
+        t0 = time.time()
+        params, inp, st, abs_wf, out = x
+        info('Refining gene tree {}\n'.format(inp))
+        cmd = compose_command(params, input_file=inp, database=st, output_path=abs_wf, output_file=out)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            params, inp, st, abs_wf, out = x
-            info('Refining gene tree {}\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, database=st, output_path=abs_wf, output_file=out)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(out, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-            terminating.set()
-            raise
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
             error('error while refining gene tree {}'.format(', '.join(x)))
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
             terminating.set()
             raise
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1837,36 +1932,76 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
 
 def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, verbose=False):
     if not os.path.isfile(output_tree):
+        t0 = time.time()
+        info('Building phylogeny {}\n'.format(inputt))
+        cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+            out_f = open(cmd['stdout'], 'w')
+            close_out_f = True
+
         try:
-            t0 = time.time()
-            info('Building phylogeny {}\n'.format(inputt))
-            cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
+            if verbose:
+                error('{}\n{}\n{}'.format(e, type(e), e.args))
+
             error('error while executing {}'.format(' '.join(cmd)), exit=True)
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
     else:
         info('Phylogeny {} already built\n'.format(output_tree))
 
 
 def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tree, nproc=1, verbose=False):
     if not os.path.isfile(output_tree):
+        t0 = time.time()
+        info('Refining phylogeny {}\n'.format(starting_tree))
+        cmd = compose_command(configs[key], input_file=inputt, database=starting_tree, output_path=output_path, output_file=output_tree, nproc=nproc)
+        inp_f = None
+        out_f = sb.DEVNULL
+        close_inp_f = False
+        close_out_f = False
+
+        if cmd['stdin']:
+            inp_f = open(cmd['stdin'], 'r')
+            close_inp_f = True
+
+        if cmd['stdout']:
+             out_f = open(cmd['stdout'], 'w')
+             close_out_f = True
+
         try:
-            t0 = time.time()
-            info('Refining phylogeny {}\n'.format(inputt))
-            cmd = compose_command(configs[key], input_file=inputt, database=starting_tree, output_path=output_path, output_file=output_tree, nproc=nproc)
-            # sb.run(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL, check=True))
-            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            t1 = time.time()
-            info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
-        except sb.CalledProcessError as cpe:
-            error('{}'.format(cpe))
-        except:
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        except Exception as e:
+            if verbose:
+                error('{}\n{}\n{}'.format(e, type(e), e.args))
+
             error('error while executing {}'.format(' '.join(cmd)), exit=True)
+
+        if close_inp_f:
+            inp_f.close()
+
+        if close_out_f:
+            out_f.close()
+
+        t1 = time.time()
+        info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
     else:
         info('Phylogeny {} already refined\n'.format(output_tree))
 
@@ -1940,7 +2075,6 @@ if __name__ == '__main__':
 
         if args.subsample:
             out_f = args.data_folder+'sub/'
-            # subsample(inp_f, out_f, args.subsample, trident, args.submat_folder, args.submat, nproc=args.nproc, verbose=args.verbose)
             subsample(inp_f, out_f, args.subsample, args.scoring_function, args.submat_folder+args.submat+'.pkl', nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
@@ -1969,11 +2103,9 @@ if __name__ == '__main__':
 
         out_f = args.output_folder+project_name+'.tre'
         build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
-        inp_f = out_f
 
         if 'tree2' in configs:
-            outt = args.output_folder+project_name+'_refine.tre'
-            refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), outt, nproc=args.nproc, verbose=args.verbose)
+            refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
 
