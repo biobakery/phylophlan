@@ -61,7 +61,7 @@ def check_params(args):
 # output_path: specify the to option to use to set the path of the folder that will contains the output file
 # output: specify the option to use for the output file
 # version: specify the option to use to get the version of the sotware, used to verify the software installation
-# command_line: specify the command line to generate with the position of each argument
+# command_line: specify the command line to generate with the position of each argument, '<' and '>' can be used to specify input/output redirection, respectivily
 
 
 if __name__ == '__main__':
