@@ -114,6 +114,7 @@ def read_params():
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
+    p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the model of amino acid susbstitution to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
 
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
@@ -1726,6 +1727,20 @@ def gap_cost(seq, norm=True):
     return gaps
 
 
+def load_substitution_model(input_file):
+    if not os.path.isfile(input_file):
+        error('file "{}" not found'.format(input_file), exit=True)
+
+    sub_mod = {}
+
+    with open(input_file) as f:
+        for line in f:
+            line_clean = line.strip()
+            sub_mod[line_clean.split('\t')[0]] = line_clean.split('\t')[1]
+
+    return sub_mod
+
+
 def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False):
     if os.path.isfile(output_file):
         info('Alignments already merged {}\n'.format(output_file))
@@ -2079,6 +2094,7 @@ if __name__ == '__main__':
             inp_f = out_f
 
         if 'gene_tree1' in configs:
+            sub_mod = load_substitution_model(args.maas)
             out_f = args.data_folder+'gene_tree1/'
             build_gene_tree(configs, 'gene_tree1', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
