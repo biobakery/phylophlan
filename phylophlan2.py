@@ -435,7 +435,7 @@ def config_list(config_folder, exit=False):
     info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit)
 
 
-def compose_command(params, check=False, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
+def compose_command(params, check=False, sub_mod=None, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
     program_name = None
     stdin = None
     stdout = None
@@ -448,7 +448,7 @@ def compose_command(params, check=False, input_file=None, database=None, output_
         command_line = command_line.replace('#program_name_parallel#', params['program_name_parallel'])
         program_name = params['program_name_parallel']
     else:
-        error('something wrong... either "program_name" or "program_name_parallel" should be present and checked', exit=True)
+        error('something wrong... either "program_name" or "program_name_parallel" should be present!', exit=True)
 
     if check:
         command_line = program_name
@@ -464,6 +464,14 @@ def compose_command(params, check=False, input_file=None, database=None, output_
 
         if output_path and ('output_path' in params):
             command_line = command_line.replace('#output_path#', '{} {}'.format(params['output_path'], output_path))
+
+        if sub_mod:
+            mod = sub_mod
+
+            if 'model' in params:
+                mod = '{} {}'.format(params['model'], sub_mod)
+
+            command_line = command_line.replace('#model#', mod)
 
         if input_file:
             inp = input_file
@@ -1774,22 +1782,24 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
     info('Alignments concatenated {}\n'.format(output_file))
 
 
-def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=False):
+def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
         if verbose:
-            info('Creating folder {}\n'.format(output_folder))
+            info('Creating folder "{}"\n'.format(output_folder))
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder {} already exists\n'.format(output_folder))
+        info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(input_folder+'*'):
-        out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
+        marker = inp[inp.rfind('/')+1:inp.rfind('.')]
+        out = output_folder+marker+'.tre'
+        model = sub_mod[marker]
 
         if not os.path.isfile(out):
-            commands.append((configs[key], inp, os.path.abspath(output_folder), out))
+            commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
 
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
@@ -1812,9 +1822,9 @@ def build_gene_tree(configs, key, input_folder, output_folder, nproc=1, verbose=
 def build_gene_tree_rec(x):
     if not terminating.is_set():
         t0 = time.time()
-        params, inp, abs_wf, out = x
+        params, model, inp, abs_wf, out = x
         info('Building gene tree {}\n'.format(inp))
-        cmd = compose_command(params, input_file=inp,  output_path=abs_wf, output_file=out)
+        cmd = compose_command(params, sub_mod=model, input_file=inp,  output_path=abs_wf, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
         close_inp_f = False
@@ -1848,26 +1858,28 @@ def build_gene_tree_rec(x):
         terminating.set()
 
 
-def refine_gene_tree(configs, key, input_alns, input_trees, output_folder, nproc=1, verbose=False):
+def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_folder, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
         if verbose:
-            info('Creating folder {}\n'.format(output_folder))
+            info('Creating folder "{}"\n'.format(output_folder))
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder {} already exists\n'.format(output_folder))
+        info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(input_alns+'*'):
-        starting_tree = input_trees+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
-        out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.tre'
+        marker = inp[inp.rfind('/')+1:inp.rfind('.')]
+        starting_tree = input_trees+marker+'.tre'
+        out = output_folder+marker+'.tre'
+        model = sub_mod[marker]
 
         if os.path.isfile(starting_tree):
             if not os.path.isfile(out):
-                commands.append((configs[key], inp, starting_tree, os.path.abspath(output_folder), out))
+                commands.append((configs[key], model, inp, starting_tree, os.path.abspath(output_folder), out))
         else:
-            error('starting tree {} not found in {}, derived from {}'.format(starting_tree, input_trees, inp))
+            error('starting tree "{}" not found in "{}", built from "{}"'.format(starting_tree, input_trees, inp))
 
     if commands:
         info('Refining {} gene trees\n'.format(len(commands)))
@@ -1890,9 +1902,9 @@ def refine_gene_tree(configs, key, input_alns, input_trees, output_folder, nproc
 def refine_gene_tree_rec(x):
     if not terminating.is_set():
         t0 = time.time()
-        params, inp, st, abs_wf, out = x
+        params, model, inp, st, abs_wf, out = x
         info('Refining gene tree {}\n'.format(inp))
-        cmd = compose_command(params, input_file=inp, database=st, output_path=abs_wf, output_file=out)
+        cmd = compose_command(params, sub_mod=model, input_file=inp, database=st, output_path=abs_wf, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
         close_inp_f = False
@@ -1931,6 +1943,7 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
         info('Gene trees already merged {}\n'.format(output_folder))
         return
 
+    t0 = time.time()
     info('Merging gene trees\n')
 
     with open(output_file, 'w') as f:
@@ -1941,46 +1954,47 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
             with open(gtree) as g:
                 f.write(g.read())
 
-    if verbose:
-        info('\n'.format(gtree))
+    t1 = time.time()
+    info('Gene trees merged into {} in {}s\n'.format(output_file, int(t1-t0)))
 
 
 def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, verbose=False):
-    if not os.path.isfile(output_tree):
-        t0 = time.time()
-        info('Building phylogeny {}\n'.format(inputt))
-        cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
-        inp_f = None
-        out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
-
-        try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
-        except Exception as e:
-            if verbose:
-                error('{}\n{}\n{}'.format(e, type(e), e.args))
-
-            error('error while executing {}'.format(' '.join(cmd)), exit=True)
-
-        if close_inp_f:
-            inp_f.close()
-
-        if close_out_f:
-            out_f.close()
-
-        t1 = time.time()
-        info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
-    else:
+    if os.path.isfile(output_tree):
         info('Phylogeny {} already built\n'.format(output_tree))
+        return
+
+    t0 = time.time()
+    info('Building phylogeny {}\n'.format(inputt))
+    cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
+    inp_f = None
+    out_f = sb.DEVNULL
+    close_inp_f = False
+    close_out_f = False
+
+    if cmd['stdin']:
+        inp_f = open(cmd['stdin'], 'r')
+        close_inp_f = True
+
+    if cmd['stdout']:
+        out_f = open(cmd['stdout'], 'w')
+        close_out_f = True
+
+    try:
+        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+    except Exception as e:
+        if verbose:
+            error('{}\n{}\n{}'.format(e, type(e), e.args))
+
+        error('error while executing {}'.format(' '.join(cmd)), exit=True)
+
+    if close_inp_f:
+        inp_f.close()
+
+    if close_out_f:
+        out_f.close()
+
+    t1 = time.time()
+    info('{} generated in {}s\n'.format(output_tree, int(t1-t0)))
 
 
 def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tree, nproc=1, verbose=False):
@@ -2096,11 +2110,11 @@ if __name__ == '__main__':
         if 'gene_tree1' in configs:
             sub_mod = load_substitution_model(args.maas)
             out_f = args.data_folder+'gene_tree1/'
-            build_gene_tree(configs, 'gene_tree1', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+            build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
             if 'gene_tree2' in configs:
                 outt = args.data_folder+'gene_tree2/'
-                refine_gene_tree(configs, 'gene_tree2', inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
+                refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
                 out_f = outt
 
             inp_f = out_f
