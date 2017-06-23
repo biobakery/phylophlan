@@ -115,7 +115,7 @@ def read_params():
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
     p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the model of amino acid susbstitution to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
-
+    p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed")
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
     group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Set the extension for the proteomes in your inputs, default .faa")
@@ -723,10 +723,7 @@ def check_input_proteomes_rec(x):
             return None
         except Exception as e:
             error('error while checking {}'.format(', '.join(x)))
-
-            if verbose:
-                error('{}\n{}\n{}'.format(e, type(e), e.args))
-
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -780,7 +777,7 @@ def clean_input_proteomes_rec(x):
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             error('error while cleaning {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -846,7 +843,7 @@ def gene_markers_identification_rec(x):
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
         except Exception as e:
             error('cannot execute command {}'.format(' '.join(cmd)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
 
@@ -901,7 +898,7 @@ def gene_markers_selection_rec(x):
                 info('Not enough markers mapped ({}/{}) in {}\n'.format(len(matches), min_num_proteins, inp))
         except Exception as e:
             error('cannot execute command {}'.format(' '.join(cmd)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1051,7 +1048,7 @@ def gene_markers_extraction_rec(x):
                 info('Not enough markers ({}/{}) found in {}\n'.format(len(out_file_seq), min_num_markers, b6o_file))
         except Exception as e:
             error('error while extracting {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1124,7 +1121,7 @@ def fake_proteome_rec(x):
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             error('error while generating {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1247,10 +1244,10 @@ def integrate_rec(x):
             if ret_ids:
                 return set(ret_ids)
             else:
-                print('\n\nNO ret_ids {}\n\n'.format(x))
+                print('\nNO ret_ids {}\n'.format(x))
         except Exception as e:
             error('error while integrating {}'.format(mrk_in))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1316,7 +1313,7 @@ def msas_rec(x):
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
         except Exception as e:
             error('error while aligning {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
 
@@ -1398,7 +1395,7 @@ def trim_gappy_rec(x):
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
         except Exception as e:
             error('error while trimming {}'.format(', '.join([str(a) for a in x])))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
 
@@ -1463,7 +1460,7 @@ def trim_not_variant_rec(x):
             t0 = time.time()
             inp, out, thr = x
             info('Trimming not variant {}\n'.format(inp))
-            inp_aln = AlignIO.read(inp, "fasta")
+            inp_aln = AlignIO.parse(inp, "fasta")
             nrows = len(inp_aln)
             cols_to_remove = []
             sub_aln = []
@@ -1485,14 +1482,14 @@ def trim_not_variant_rec(x):
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             error('error while trimming {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
         terminating.set()
 
 
-def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=False):
+def remove_fragmentary_entries(input_folder, output_folder, threshold=0.85, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -1510,7 +1507,7 @@ def remove_fragmentary_entries(input_folder, output_folder, threshold, verbose=F
             commands.append((inp, out, threshold))
 
     if commands:
-        info('Removing {} fragmentary entries\n'.format(len(commands)))
+        info('Checking {} alignments for fragmentary entries (thr: {})\n'.format(len(commands), threshold))
         pool_error = False
         terminating = mp.Event()
         chunksize = math.floor(len(commands)/(nproc*2))
@@ -1533,7 +1530,7 @@ def remove_fragmentary_entries_rec(x):
             t0 = time.time()
             inp, out, thr = x
             info('Fragmentary {}\n'.format(inp))
-            inp_aln = AlignIO.read(inp, "fasta")
+            inp_aln = AlignIO.parse(inp, "fasta")
             out_aln = []
 
             for aln in inp_aln:
@@ -1547,7 +1544,7 @@ def remove_fragmentary_entries_rec(x):
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             error('error while removing fragmentary {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1605,7 +1602,7 @@ def subsample_rec(x):
             t0 = time.time()
             inp, out, npos_function, score_function, mat = x
             info('Subsampling {}\n'.format(inp))
-            inp_aln = AlignIO.read(inp, "fasta")
+            inp_aln = AlignIO.parse(inp, "fasta")
             scores = []
             out_aln = []
 
@@ -1645,7 +1642,7 @@ def subsample_rec(x):
             info('{} generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             error('error while subsampling {}'.format(', '.join([str(a) for a in x])))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
     else:
@@ -1736,15 +1733,18 @@ def gap_cost(seq, norm=True):
 
 
 def load_substitution_model(input_file):
-    if not os.path.isfile(input_file):
+    if not input_file:
+        error('mapping file (--maas) not specified', exit=True)
+    elif not os.path.isfile(input_file):
         error('file "{}" not found'.format(input_file), exit=True)
 
     sub_mod = {}
 
     with open(input_file) as f:
         for line in f:
-            line_clean = line.strip()
-            sub_mod[line_clean.split('\t')[0]] = line_clean.split('\t')[1]
+            if not line.startswith('#'):
+                line_clean = line.strip()
+                sub_mod[line_clean.split('\t')[0]] = line_clean.split('\t')[1]
 
     return sub_mod
 
@@ -1793,7 +1793,7 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_folder+'*'):
+    for inp in glob.iglob(input_folder+'*.aln'):
         marker = inp[inp.rfind('/')+1:inp.rfind('.')]
         out = output_folder+marker+'.tre'
         model = sub_mod[marker]
@@ -1811,9 +1811,7 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
             try:
                 [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                if verbose:
-                    error('{}\n{}\n{}'.format(e, type(e), e.args))
-
+                error('{}\n{}\n{}\n'.format(e, type(e), e.args))
                 error('build_gene_tree crashed', exit=True)
     else:
         info('Gene trees already built\n')
@@ -1842,7 +1840,7 @@ def build_gene_tree_rec(x):
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
         except Exception as e:
             error('error while building gene tree {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
 
@@ -1869,10 +1867,10 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_alns+'*'):
+    for inp in glob.iglob(input_alns+'*.aln'):
         marker = inp[inp.rfind('/')+1:inp.rfind('.')]
         starting_tree = input_trees+marker+'.tre'
-        out = output_folder+marker+'.tre'
+        out = marker+'.tre'
         model = sub_mod[marker]
 
         if os.path.isfile(starting_tree):
@@ -1921,8 +1919,8 @@ def refine_gene_tree_rec(x):
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
         except Exception as e:
-            error('error while refining gene tree {}'.format(', '.join(x)))
-            error('{}\n{}\n{}'.format(e, type(e), e.args))
+            error('error while refining gene tree {}'.format(', '.join([str(a) for a in x])))
+            error('{}\n{}\n{}\n'.format(e, type(e), e.args))
             terminating.set()
             raise
 
@@ -1939,7 +1937,7 @@ def refine_gene_tree_rec(x):
 
 
 def merging_gene_trees(trees_folder, output_file, verbose=False):
-    if path.exists(output_file):
+    if os.path.exists(output_file):
         info('Gene trees already merged {}\n'.format(output_folder))
         return
 
@@ -1948,9 +1946,6 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
 
     with open(output_file, 'w') as f:
         for gtree in glob.iglob(trees_folder+"*"):
-            if verbose:
-                info('{} '.format(gtree))
-
             with open(gtree) as g:
                 f.write(g.read())
 
@@ -2099,7 +2094,7 @@ if __name__ == '__main__':
 
         if args.remove_fragmentary_entries:
             out_f = args.data_folder+'fragmentary/'
-            remove_fragmentary_entries(inp_f, out_f, threshold=args.fragmentary_threshold, verbose=args.verbose)
+            remove_fragmentary_entries(inp_f, out_f, threshold=args.fragmentary_threshold, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if args.subsample:
@@ -2108,6 +2103,11 @@ if __name__ == '__main__':
             inp_f = out_f
 
         if 'gene_tree1' in configs:
+            if args.remove_only_gaps_entries:
+                out_f = args.data_folder+'only_gaps/'
+                remove_fragmentary_entries(inp_f, out_f, threshold=1, nproc=args.nproc, verbose=args.verbose)
+                inp_f = out_f
+
             sub_mod = load_substitution_model(args.maas)
             out_f = args.data_folder+'gene_tree1/'
             build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
