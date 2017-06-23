@@ -11,3 +11,6 @@ python3 serialize_matrix.py vtml200
 
 # MIQS
 python3 serialize_matrix.py miqs
+
+# PFASUM60
+python3 serialize_matrix.py pfasum60
