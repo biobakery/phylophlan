@@ -53,7 +53,6 @@ def check_params(args):
 
 # AVAILABLE OPTIONS:
 # program_name: name of the executable to use
-# program_name_parallel: name of the parallel (or multi-core) version of the executable
 # params: params to use
 # threads: specify the option to use to pass the number of threads
 # input: specify the option to use for the input file
@@ -126,10 +125,10 @@ if __name__ == '__main__':
                                'output': '-out',
                                'command_line': '#program_name# #params# #output# #input#'}
     else:
-        progs['tree1'] = {'program_name_parallel': 'FastTreeMP-2.1.9-SSE3',
+        progs['tree1'] = {'program_name': 'FastTreeMP-2.1.9-SSE3',
                           'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
-                          'command_line': '#program_name_parallel# #params# #output# #input#'}
+                          'command_line': '#program_name# #params# #output# #input#'}
 
     if args.gene_tree2:
         progs['gene_tree2'] = {'program_name': 'raxmlHPC',
@@ -143,15 +142,15 @@ if __name__ == '__main__':
                                'command_line': '#program_name# #model# #params# #database# #output_path# #input# #output#'}
 
     if args.tree2:
-        progs['tree2'] = {'program_name_parallel': 'raxmlHPC-PTHREADS-SSE3',
-                          'params': '-m PROTGAMMAAUTO -p 1989',
+        progs['tree2'] = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
+                          'params': '-m PROTCATLG -p 1989',
                           'threads': '-T',
                           'database': '-g', # starting tree
                           'input': '-s',
                           'output_path':'-w',
                           'output': '-n',
                           'version': '-v',
-                          'command_line': '#program_name_parallel# #params# #threads# #database# #output_path# #input# #output#'}
+                          'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
 
     for prog, options in progs.items():
         config[prog] = {}

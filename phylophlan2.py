@@ -2,8 +2,8 @@
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
-__version__ = '0.05'
-__date__ = '21 Jun 2017'
+__version__ = '0.06'
+__date__ = '26 Jun 2017'
 
 
 import os
@@ -33,19 +33,25 @@ from itertools import combinations
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
-CONFIG_OPTIONS_MANDATORY = [['program_name', 'program_name_parallel'], ['command_line']]
-CONFIG_OPTIONS_ALL = ['program_name', 'program_name_parallel', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+CONFIG_OPTIONS_MANDATORY = [['program_name'], ['command_line']]
+CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
 INPUT_FOLDER = 'input/'
 DATA_FOLDER = 'data/'
 DATABASES_FOLDER = 'databases/'
 SUBMAT_FOLDER = 'substitution_matrices/'
 CONFIG_FOLDER = 'configs/'
 OUTPUT_FOLDER = 'output/'
+MIN_NUM_PROTEINS = 100
+MIN_LEN_PROTEIN = 50
+MIN_NUM_MARKERS = 0
 TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
 SUBSAMPLE_CHOICES = ['phylophlan', 'onehundred', 'fifty']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
+MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
+NOT_VARIANT_THRESHOLD = 0.95
+FRAGMENTARY_THRESHOLD = 0.85
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -104,18 +110,19 @@ def read_params():
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
     p.add_argument('--submat_list', action='store_true', default=False, help="If specified lists the available substitution matrices that can be specified with the -s (or --submat) option")
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use, default 1")
-    p.add_argument('--min_num_proteins', type=int, default=100, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is 100")
-    p.add_argument('--min_len_protein', type=int, default=50, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is 50\n")
-    p.add_argument('--min_num_markers', type=int, default=0, help="Inputs that map less than this number of markers will be discarded, default is 0, i.e., no input will be discarded")
+    p.add_argument('--min_num_proteins', type=int, default=MIN_NUM_PROTEINS, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is {}".format(MIN_NUM_PROTEINS))
+    p.add_argument('--min_len_protein', type=int, default=MIN_LEN_PROTEIN, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is {}".format(MIN_LEN_PROTEIN))
+    p.add_argument('--min_num_markers', type=int, default=MIN_NUM_MARKERS, help="Inputs that map less than this number of markers will be discarded, default is {}".format(MIN_NUM_MARKERS))
     p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
-    p.add_argument('--not_variant_threshold', type=float, default=0.95, help="The value used to consider a column not variant when '--trim not_variant' is specified, default 0.95")
+    p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD, help="The value used to consider a column not variant when '--trim not_variant' is specified, default {}".format(NOT_VARIANT_THRESHOLD))
     p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES, help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
     p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES, help="Specify which scoring function to use to evaluate columns in the MSA results")
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
-    p.add_argument('--fragmentary_threshold', type=float, default=0.85, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default 0.85")
+    p.add_argument('--fragmentary_threshold', type=float, default=FRAGMENTARY_THRESHOLD, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default {}".format(FRAGMENTARY_THRESHOLD))
+    p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES, help="The minimum number of entries to be present for each fo the markers in the database, default {}".format(MIN_NUM_ENTRIES))
     p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the model of amino acid susbstitution to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
-    p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed")
+    p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed. This is equivalent to specify '--remove_fragmentary_entries --fragmentary_threshold 1'")
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
     group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Set the extension for the proteomes in your inputs, default .faa")
@@ -135,10 +142,10 @@ def read_configs(config_file, verbose=False):
         info('Reading configuration file "{}"\n'.format(config_file))
 
     for section in config.sections(): # "DEFAULT" section not included!
-        configs[section] = {}
+        configs[section.lower()] = {}
 
         for option in config[section]:
-            configs[section][option] = config[section][option]
+            configs[section.lower()][option.lower()] = config[section][option]
 
     return configs
 
@@ -211,16 +218,6 @@ def check_args(args, verbose):
     if args.proteome_extension.endswith('.'):
         args.proteome_extension = args.proteome_extension[:-1]
 
-    if args.subsample:
-        if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
-            error('scoring function "phylophlan" is compatible only with "phylophlan" database', exit=True)
-
-    if (args.database == 'phylophlan') and (not args.sort):
-        args.sort = True
-
-        if verbose:
-            info('Setting "args.sort=True" because "args.database=phylophlan"')
-
     if args.strain: # params for strain-level phylogenies
         print('\n>  ARGS.STRAIN  <')
         args.config_file = None
@@ -268,6 +265,7 @@ def check_args(args, verbose):
         args.subsample = 'fifty'
         args.submat_folder = SUBMAT_FOLDER
         args.submat = 'vtml240'
+        args.scoring_function = 'muscle'
 
         if args.database == 'phylophlan':
             args.subsample = 'phylophlan'
@@ -282,21 +280,38 @@ def check_args(args, verbose):
         print('\n>  CUSTOM  <')
         print('{}\n'.format(args))
 
+    if args.subsample:
+        if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
+            error('scoring function "phylophlan" is compatible only with "phylophlan" database', exit=True)
+
+    if (args.database == 'phylophlan') and (not args.sort):
+        args.sort = True
+
+        if verbose:
+            info('Setting "sort={}" because "database={}"'.format(args.sort, args.database))
+
+    if args.remove_only_gaps_entries:
+        args.fragmentary_threshold = 1.0
+
+        if args.remove_fragmentary_entries:
+            args.fragmentary_threshold = min(FRAGMENTARY_THRESHOLD, args.fragmentary_threshold)
+            info('[w] both "--remove_only_gaps_entries" and "--remove_fragmentary_entries" have been specified, setting "fragmentary_threshold={}"'.format(args.fragmentary_threshold))
+
     # checking configuration file
     if not args.config_file:
         error('-f (or --config_file) must be specified')
-        config_list(CONFIG_FOLDER, exit=True)
+        config_list(CONFIG_FOLDER, exit=True, exit_value=1)
     elif not os.path.isfile(args.config_file):
         error('configuration file "{}" not found'.format(args.config_file))
-        config_list(CONFIG_FOLDER, exit=True)
+        config_list(CONFIG_FOLDER, exit=True, exit_value=1)
 
     # checking substitution matrix
     if not args.submat:
         error('-s (or --submat) must be specified')
-        submat_list(args.submat_folder, exit=True)
+        submat_list(args.submat_folder, exit=True, exit_value=1)
     elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
         error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
-        submat_list(args.submat_folder, exit=True)
+        submat_list(args.submat_folder, exit=True, exit_value=1)
 
     # get scoring function
     if args.scoring_function:
@@ -399,16 +414,12 @@ def check_dependencies(configs, nproc, verbose=False):
 
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -416,23 +427,23 @@ def check_dependencies(configs, nproc, verbose=False):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             error('"{}" not installed or not present in system path'.format(' '.join(cmd['command_line'])), exit=True)
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
 
-def database_list(databases_folder, exit=False):
-    info('Available databases in "{}":\n    {}\n'.format(databases_folder, '\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit)
+def database_list(databases_folder, exit=False, exit_value=1):
+    info('Available databases in "{}":\n    {}\n'.format(databases_folder, '\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit, exit_value=1)
 
 
-def submat_list(submat_folder, exit=False):
-    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit)
+def submat_list(submat_folder, exit=False, exit_value=1):
+    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit, exit_value=1)
 
 
-def config_list(config_folder, exit=False):
-    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit)
+def config_list(config_folder, exit=False, exit_value=1):
+    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit, exit_value=1)
 
 
 def compose_command(params, check=False, sub_mod=None, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
@@ -444,9 +455,6 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
     if 'program_name' in params.keys():
         command_line = command_line.replace('#program_name#', params['program_name'])
         program_name = params['program_name']
-    elif 'program_name_parallel' in params.keys():
-        command_line = command_line.replace('#program_name_parallel#', params['program_name_parallel'])
-        program_name = params['program_name_parallel']
     else:
         error('something wrong... either "program_name" or "program_name_parallel" should be present!', exit=True)
 
@@ -562,16 +570,12 @@ def make_database(command, fasta, markers, db, label, verbose=False):
     cmd = compose_command(command, input_file=fasta, output_file=db)
     inp_f = None
     out_f = sb.DEVNULL
-    close_inp_f = False
-    close_out_f = False
 
     if cmd['stdin']:
         inp_f = open(cmd['stdin'], 'r')
-        close_inp_f = True
 
     if cmd['stdout']:
         out_f = open(cmd['stdout'], 'w')
-        close_out_f = True
 
     try:
         sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -579,10 +583,10 @@ def make_database(command, fasta, markers, db, label, verbose=False):
         error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
         error('cannot execute command "{}"'.format(' '.join(cmd)), exit=True)
 
-    if close_inp_f:
+    if cmd['stdin']:
         inp_f.close()
 
-    if close_out_f:
+    if cmd['stdout']:
         out_f.close()
 
     info('Generated "{}" "{}"\n'.format(label, db))
@@ -826,16 +830,12 @@ def gene_markers_identification_rec(x):
         cmd = compose_command(params, input_file=inp, database=db, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -845,10 +845,10 @@ def gene_markers_identification_rec(x):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             raise
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -1121,7 +1121,7 @@ def fake_proteome_rec(x):
         terminating.set()
 
 
-def inputs2markers(input_folder, extension, output_folder, verbose=False):
+def inputs2markers(input_folder, output_folder, min_num_entries, proteome_extension, verbose=False):
     markers2inputs = {}
 
     if not os.path.isdir(output_folder):
@@ -1129,16 +1129,15 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
             info('Creating folder "{}"\n'.format(output_folder))
 
         os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+    else:
+        if verbose:
+            info('Folder "{}" already exists\n'.format(output_folder))
 
-        for f in glob.iglob(output_folder+'*'+extension):
-            info('Markers already extracted\n')
-            break
+        for f in glob.iglob(output_folder+'*'+proteome_extension):
+            info('Inputs already translated into markers\n')
+            return
 
-        return
-
-    for f in glob.iglob(input_folder+'*'+extension):
+    for f in glob.iglob(input_folder+'*'+proteome_extension):
         inp = f[f.rfind('/')+1:f.rfind('.')]
 
         for seq_record in SeqIO.parse(f, "fasta"):
@@ -1150,11 +1149,11 @@ def inputs2markers(input_folder, extension, output_folder, verbose=False):
                 markers2inputs[marker] = [SeqRecord(seq_record.seq, id=inp, description='')]
 
     for marker, sequences in markers2inputs.items():
-        if len(sequences) >= 4: # 4 is the minimun number of inputs to infer a phylogeny (gene tree reconstruction pipeline)
-            with open(output_folder+marker+extension, 'w') as f:
+        if len(sequences) >= min_num_entries:
+            with open(output_folder+marker+proteome_extension, 'w') as f:
                 SeqIO.write(sequences, f, 'fasta')
         elif verbose:
-            info('"{}" discarded, not enough inputs, len(sequences): {}\n'.format(marker, len(sequences)))
+            info('"{}" discarded, not enough inputs ({}/{})\n'.format(marker, len(sequences), min_num_entries))
 
 
 def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
@@ -1287,16 +1286,12 @@ def msas_rec(x):
         cmd = compose_command(params, input_file=inp, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -1306,10 +1301,10 @@ def msas_rec(x):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             raise
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -1367,16 +1362,12 @@ def trim_gappy_rec(x):
         cmd = compose_command(params, input_file=inp, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -1386,10 +1377,10 @@ def trim_gappy_rec(x):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             raise
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -1398,7 +1389,7 @@ def trim_gappy_rec(x):
         terminating.set()
 
 
-def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=False):
+def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -1414,12 +1405,12 @@ def trim_not_variant(inputt, output_folder, threshold=0.9, nproc=1, verbose=Fals
             out = output_folder+inp[inp.rfind('/')+1:]
 
             if not os.path.isfile(out):
-                commands.append((inp, out, threshold))
+                commands.append((inp, out, not_variant_threshold))
     elif os.path.isfile(inputt):
         out = inputt[:inputt.rfind('.')]+'.trim'+inputt[inputt.rfind('.'):]
 
         if not os.path.isfile(out):
-            commands.append((inputt, out, threshold))
+            commands.append((inputt, out, not_variant_threshold))
     else:
         error('unrecognized input "{}" is not a folder nor a file'.format(inputt), exit=True)
 
@@ -1474,7 +1465,7 @@ def trim_not_variant_rec(x):
         terminating.set()
 
 
-def remove_fragmentary_entries(input_folder, data_folder, output_folder, threshold=0.85, nproc=1, verbose=False):
+def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmentary_threshold, min_num_entries, nproc=1, verbose=False):
     commands = []
     frag_entries = []
 
@@ -1501,10 +1492,10 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, thresho
         out = output_folder+inp[inp.rfind('/')+1:]
 
         if not os.path.isfile(out):
-            commands.append((inp, out, threshold, verbose))
+            commands.append((inp, out, fragmentary_threshold, min_num_entries, verbose))
 
     if commands:
-        info('Checking {} alignments for fragmentary entries (thr: {})\n'.format(len(commands), threshold))
+        info('Checking {} alignments for fragmentary entries (thr: {})\n'.format(len(commands), fragmentary_threshold))
         pool_error = False
         terminating = mp.Event()
         chunksize = math.floor(len(commands)/(nproc*2))
@@ -1529,23 +1520,23 @@ def remove_fragmentary_entries_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, thr, verbose = x
+            inp, out, frag_thr, min_num_entries, verbose = x
             info('Fragmentary "{}"\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
             out_aln = []
 
             for aln in inp_aln:
-                if gap_cost(aln.seq) < thr:
+                if gap_cost(aln.seq) < frag_thr:
                     out_aln.append(aln)
 
-            if len(out_aln) >= 4: # 4 is the minimun number of inputs to infer a phylogeny (gene tree reconstruction pipeline)
+            if len(out_aln) >= min_num_entries:
                 with open(out, 'w') as f:
                     AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
 
                 t1 = time.time()
                 info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
             elif verbose:
-                info('"{}" discarded, not enough inputs, len(out_aln): {}\n'.format(inp, len(out_aln)))
+                info('"{}" discarded, not enough inputs ({}/{})\n'.format(inp, len(out_aln), min_num_entries))
                 return inp
 
             return None
@@ -1830,16 +1821,12 @@ def build_gene_tree_rec(x):
         cmd = compose_command(params, sub_mod=model, input_file=inp,  output_path=abs_wf, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -1849,10 +1836,10 @@ def build_gene_tree_rec(x):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             raise
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -1908,16 +1895,12 @@ def refine_gene_tree_rec(x):
         cmd = compose_command(params, sub_mod=model, input_file=inp, database=st, output_path=abs_wf, output_file=out)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
             out_f = open(cmd['stdout'], 'w')
-            close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -1927,10 +1910,10 @@ def refine_gene_tree_rec(x):
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             raise
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -1974,16 +1957,12 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
     cmd = compose_command(configs[key], input_file=inputt, output_path=output_path, output_file=output_tree, nproc=nproc)
     inp_f = None
     out_f = sb.DEVNULL
-    close_inp_f = False
-    close_out_f = False
 
     if cmd['stdin']:
         inp_f = open(cmd['stdin'], 'r')
-        close_inp_f = True
 
     if cmd['stdout']:
         out_f = open(cmd['stdout'], 'w')
-        close_out_f = True
 
     try:
         sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -1991,10 +1970,10 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
         error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
         error('error while executing {}'.format(' '.join(cmd)), exit=True)
 
-    if close_inp_f:
+    if cmd['stdin']:
         inp_f.close()
 
-    if close_out_f:
+    if cmd['stdout']:
         out_f.close()
 
     t1 = time.time()
@@ -2008,16 +1987,12 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
         cmd = compose_command(configs[key], input_file=inputt, database=starting_tree, output_path=output_path, output_file=output_tree, nproc=nproc)
         inp_f = None
         out_f = sb.DEVNULL
-        close_inp_f = False
-        close_out_f = False
 
         if cmd['stdin']:
             inp_f = open(cmd['stdin'], 'r')
-            close_inp_f = True
 
         if cmd['stdout']:
              out_f = open(cmd['stdout'], 'w')
-             close_out_f = True
 
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
@@ -2025,10 +2000,10 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
             error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
             error('error while executing {}'.format(' '.join(cmd)), exit=True)
 
-        if close_inp_f:
+        if cmd['stdin']:
             inp_f.close()
 
-        if close_out_f:
+        if cmd['stdout']:
             out_f.close()
 
         t1 = time.time()
@@ -2079,7 +2054,7 @@ if __name__ == '__main__':
                     gene_markers_selection(args.data_folder+'map_aa/', best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                     gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
 
-        inputs2markers(args.data_folder+'markers_aa/', args.proteome_extension, args.data_folder+'markers/', verbose=args.verbose)
+        inputs2markers(args.data_folder+'markers_aa/', args.data_folder+'markers/', args.min_num_entries, args.proteome_extension, verbose=args.verbose)
         inp_f = args.data_folder+'markers/'
 
         if args.integrate:
@@ -2097,12 +2072,13 @@ if __name__ == '__main__':
 
             if (args.trim == 'not_variant') or (args.trim == 'greedy'):
                 out_f = args.data_folder+'trim_not_variant/'
-                trim_not_variant(inp_f, out_f, threshold=args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
+                trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
 
-        if args.remove_fragmentary_entries:
-            out_f = args.data_folder+'fragmentary/'
-            remove_fragmentary_entries(inp_f, args.data_folder, out_f, threshold=args.fragmentary_threshold, nproc=args.nproc, verbose=args.verbose)
+        if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
+            out_f = args.data_folder
+            out_f += 'fragmentary/' if args.remove_fragmentary_entries else 'only_gaps/'
+            remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold, args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if args.subsample:
@@ -2111,11 +2087,6 @@ if __name__ == '__main__':
             inp_f = out_f
 
         if 'gene_tree1' in configs:
-            if args.remove_only_gaps_entries:
-                out_f = args.data_folder+'only_gaps/'
-                remove_fragmentary_entries(inp_f, args.data_folder, out_f, threshold=1, nproc=args.nproc, verbose=args.verbose)
-                inp_f = out_f
-
             sub_mod = load_substitution_model(args.maas)
             out_f = args.data_folder+'gene_tree1/'
             build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
