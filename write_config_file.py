@@ -61,6 +61,7 @@ def check_params(args):
 # output: specify the option to use for the output file
 # version: specify the option to use to get the version of the sotware, used to verify the software installation
 # command_line: specify the command line to generate with the position of each argument, '<' and '>' can be used to specify input/output redirection, respectivily
+# environment: specify variables and their values to be defined in the environment, syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
 
 
 if __name__ == '__main__':
@@ -128,6 +129,7 @@ if __name__ == '__main__':
         progs['tree1'] = {'program_name': 'FastTreeMP-2.1.9-SSE3',
                           'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
+                          'environment': 'OMP_NUM_THREADS=3',
                           'command_line': '#program_name# #params# #output# #input#'}
 
     if args.gene_tree2:
