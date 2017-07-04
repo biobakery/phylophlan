@@ -34,7 +34,8 @@ from itertools import combinations
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
 CONFIG_OPTIONS_MANDATORY = [['program_name'], ['command_line']]
-CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'command_line']
+CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version', 'environment', 'command_line']
+CONFIG_OPTIONS_TO_EXCLUDE = ['version', 'environment']
 INPUT_FOLDER = 'input/'
 DATA_FOLDER = 'data/'
 DATABASES_FOLDER = 'databases/'
@@ -379,7 +380,7 @@ def check_configs(configs, verbose=False):
         for option in options:
             if option in ['command_line']:
                 actual_options = [a.strip() for a in configs[section][option].split('#') if a.strip()]
-            elif option not in ['version']:
+            elif option not in CONFIG_OPTIONS_TO_EXCLUDE:
                 mandatory_options.append(option)
 
         if mandatory_options and actual_options:
@@ -422,10 +423,10 @@ def check_dependencies(configs, nproc, verbose=False):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-            error('"{}" not installed or not present in system path'.format(' '.join(cmd['command_line'])), exit=True)
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('program not installed or not present in system path\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
         if cmd['stdin']:
             inp_f.close()
@@ -434,22 +435,23 @@ def check_dependencies(configs, nproc, verbose=False):
             out_f.close()
 
 
-def database_list(databases_folder, exit=False, exit_value=1):
-    info('Available databases in "{}":\n    {}\n'.format(databases_folder, '\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit, exit_value=1)
+def database_list(databases_folder, exit=False, exit_value=0):
+    info('Available databases in "{}":\n    {}\n'.format(databases_folder, '\n    '.join(set([a.replace('.faa', '').replace('.bz2', '').replace('.udb', '') for a in os.listdir(databases_folder)]))), exit=exit, exit_value=exit_value)
 
 
-def submat_list(submat_folder, exit=False, exit_value=1):
-    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit, exit_value=1)
+def submat_list(submat_folder, exit=False, exit_value=0):
+    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit, exit_value=exit_value)
 
 
-def config_list(config_folder, exit=False, exit_value=1):
-    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit, exit_value=1)
+def config_list(config_folder, exit=False, exit_value=0):
+    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit, exit_value=exit_value)
 
 
 def compose_command(params, check=False, sub_mod=None, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
     program_name = None
     stdin = None
     stdout = None
+    environment = None
     command_line = params['command_line']
 
     if 'program_name' in params.keys():
@@ -516,13 +518,18 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
             else:
                 command_line = command_line.replace('#output#', out)
 
+        if 'environment' in params:
+            new_environment = dict([(var.strip(), val.strip()) for var, val in [a.strip().split('=') for a in params['environment'].split(',')]])
+            environment = os.environ.copy()
+            environment.update(new_environment)
+
     # find if there are string params sourrunded with " and make them as one string
     quotes = [j for j, e in enumerate(command_line) if e == '"']
 
     for s, e in zip(quotes[0::2], quotes[1::2]):
         command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
 
-    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a], 'stdin': stdin, 'stdout': stdout}
+    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a], 'stdin': stdin, 'stdout': stdout, 'env': environment}
 
 
 def init_database(database, databases_folder, params, key_dna, key_aa, verbose=False):
@@ -578,10 +585,10 @@ def make_database(command, fasta, markers, db, label, verbose=False):
         out_f = open(cmd['stdout'], 'w')
 
     try:
-        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
     except Exception as e:
-        error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-        error('cannot execute command "{}"'.format(' '.join(cmd)), exit=True)
+        error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+        error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
     if cmd['stdin']:
         inp_f.close()
@@ -705,8 +712,8 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder
             try:
                 good_inputs = [a for a in pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1) if a]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('check_input_proteomes crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('check_input_proteomes crashed', init_new_line=True, exit=True)
 
         with open(data_folder+'checked_inputs.pkl', 'wb') as f:
             pickle.dump(good_inputs, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -729,8 +736,8 @@ def check_input_proteomes_rec(x):
             return None
         except Exception as e:
             terminating.set()
-            error('error while checking\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while checking\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -759,8 +766,8 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
             try:
                 [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('clean_input_proteomes crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('clean_input_proteomes crashed', init_new_line=True, exit=True)
     else:
         info('Inputs already cleaned\n')
 
@@ -781,8 +788,8 @@ def clean_input_proteomes_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
-            error('error while cleaning\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while cleaning\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -815,8 +822,8 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
             try:
                 [_ for _ in pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('gene_markers_identification crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('gene_markers_identification crashed', init_new_line=True, exit=True)
 
     else:
         info('"{}" markers already mapped (key: "{}")\n'.format(database_name, key))
@@ -838,11 +845,11 @@ def gene_markers_identification_rec(x):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
             terminating.set()
-            error('cannot execute command "{}"'.format(' '.join(cmd)))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
 
         if cmd['stdin']:
@@ -870,8 +877,8 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, ve
             try:
                 [_ for _ in pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('gene_markers_selection crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('gene_markers_selection crashed', init_new_line=True, exit=True)
     else:
         info('Markers already selected\n')
 
@@ -894,8 +901,8 @@ def gene_markers_selection_rec(x):
                 info('Not enough markers mapped ({}/{}) in "{}"\n'.format(len(matches), min_num_proteins, inp))
         except Exception as e:
             terminating.set()
-            error('cannot execute command "{}"'.format(' '.join(cmd)))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -986,8 +993,8 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
             try:
                 [_ for _ in pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=chunksize if chunksize else 1)]
             except:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('gene_markers_extraction crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('gene_markers_extraction crashed', init_new_line=True, exit=True)
     else:
         info('Markers already extracted\n')
 
@@ -1042,8 +1049,8 @@ def gene_markers_extraction_rec(x):
                 info('Not enough markers ({}/{}) found in "{}"\n'.format(len(out_file_seq), min_num_markers, b6o_file))
         except Exception as e:
             terminating.set()
-            error('error while extracting\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while extracting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1076,8 +1083,8 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
             try:
                 [_ for _ in pool.imap_unordered(fake_proteome_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('fake_proteomes crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('fake_proteomes crashed', init_new_line=True, exit=True)
     else:
         info('Fake proteomes already generated\n')
 
@@ -1114,8 +1121,8 @@ def fake_proteome_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
-            error('error while generating\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while generating\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1199,8 +1206,8 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
                 try:
                     ret_ids = set([a for sublist in pool.imap_unordered(integrate_rec, commands, chunksize=chunksize if chunksize else 1) for a in sublist])
                 except Exception as e:
-                    error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                    error('integrate crashed', exit=True)
+                    error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                    error('integrate crashed', init_new_line=True, exit=True)
 
             with open(data_folder+'integrate_ids.pkl', 'wb') as f:
                 pickle.dump(ret_ids, f, protocol=pickle.HIGHEST_PROTOCOL)
@@ -1237,8 +1244,8 @@ def integrate_rec(x):
                 print('\nNO ret_ids {}\n'.format(x))
         except Exception as e:
             terminating.set()
-            error('error while integrating\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while integrating\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1271,8 +1278,8 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
             try:
                 [_ for _ in pool.imap_unordered(msas_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('msas crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('msas crashed', init_new_line=True, exit=True)
 
     else:
         info('Markers already aligned (key: "{}")\n'.format(key))
@@ -1294,11 +1301,11 @@ def msas_rec(x):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
             terminating.set()
-            error('error while aligning\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while aligning\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
 
         if cmd['stdin']:
@@ -1348,8 +1355,8 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
             try:
                 [_ for _ in pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('trim_gappy crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('trim_gappy crashed', init_new_line=True, exit=True)
     else:
         info('Markers already trimmed (key: "{}")\n'.format(key))
 
@@ -1370,11 +1377,11 @@ def trim_gappy_rec(x):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
             terminating.set()
-            error('error while trimming\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while trimming\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
 
         if cmd['stdin']:
@@ -1424,8 +1431,8 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
             try:
                 [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('trim_not_variant crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('trim_not_variant crashed', init_new_line=True, exit=True)
     else:
         info('Markers already trimmed\n')
 
@@ -1458,8 +1465,8 @@ def trim_not_variant_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
-            error('error while trimming\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while trimming\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1504,8 +1511,8 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmen
             try:
                 frag_entries = [a for a in pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize if chunksize else 1) if a]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('remove_fragmentary_entries crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('remove_fragmentary_entries crashed', init_new_line=True, exit=True)
 
             if frag_entries:
                 with open(data_folder+'fragmentary_entries.pkl', 'wb') as f:
@@ -1542,8 +1549,8 @@ def remove_fragmentary_entries_rec(x):
             return None
         except Exception as e:
             terminating.set()
-            error('error while removing fragmentary\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while removing fragmentary\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1586,8 +1593,8 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
             try:
                 [_ for _ in pool.imap_unordered(subsample_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('subsample crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('subsample crashed', init_new_line=True, exit=True)
     else:
         info('Markers already subsampled\n')
 
@@ -1638,8 +1645,8 @@ def subsample_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
-            error('error while subsampling\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while subsampling\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1807,8 +1814,8 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
             try:
                 [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('build_gene_tree crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('build_gene_tree crashed', init_new_line=True, exit=True)
     else:
         info('Gene trees already built\n')
 
@@ -1829,11 +1836,11 @@ def build_gene_tree_rec(x):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
             terminating.set()
-            error('error while building gene tree\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while building gene tree\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
 
         if cmd['stdin']:
@@ -1881,8 +1888,8 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
             try:
                 [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
-                error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-                error('refine_gene_tree crashed', exit=True)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('refine_gene_tree crashed', init_new_line=True, exit=True)
     else:
         info('Gene trees already refined\n')
 
@@ -1903,11 +1910,11 @@ def refine_gene_tree_rec(x):
             out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
             terminating.set()
-            error('error while refining gene tree\n    {}\n'.format('\n    '.join([str(a) for a in x])))
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
             raise
 
         if cmd['stdin']:
@@ -1965,10 +1972,10 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
         out_f = open(cmd['stdout'], 'w')
 
     try:
-        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+        sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
     except Exception as e:
-        error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-        error('error while executing {}'.format(' '.join(cmd)), exit=True)
+        error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+        error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
     if cmd['stdin']:
         inp_f.close()
@@ -1995,10 +2002,10 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
              out_f = open(cmd['stdout'], 'w')
 
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL)
+            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
-            error('{}\n'.format('\n    '.join([str(a) for a in [e, type(e), e.args]])))
-            error('error while executing {}'.format(' '.join(cmd)), exit=True)
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
         if cmd['stdin']:
             inp_f.close()
@@ -2109,6 +2116,8 @@ if __name__ == '__main__':
             out_f = args.data_folder+'all.aln'
             concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
             inp_f = out_f
+
+            # should check again for "fragmentary" (or "only gaps"?) entries?
 
         out_f = project_name+'.tre'
         build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
