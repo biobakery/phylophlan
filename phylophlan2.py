@@ -2099,6 +2099,10 @@ if __name__ == '__main__':
             build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
             if 'gene_tree2' in configs:
+                # outt = args.data_folder+'gene_tree1_polytomies/'
+                # resolve_politomies(out_f, outt)
+                # out_f = outt
+
                 outt = args.data_folder+'gene_tree2/'
                 refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
                 out_f = outt
