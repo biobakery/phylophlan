@@ -29,6 +29,7 @@ import operator
 import functools
 import pickle
 from itertools import combinations
+import dendropy
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
@@ -1855,6 +1856,53 @@ def build_gene_tree_rec(x):
         terminating.set()
 
 
+def resolve_polytomies(input_folder, output_folder, nproc=1, verbose=False):
+    commands = []
+
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder "{}"\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder "{}" already exists\n'.format(output_folder))
+
+    for inp in glob.iglob(input_folder+'*.tre'):
+        out = inp[inp.rfind('/')+1:]
+
+        if (not os.path.isfile(output_folder+out)) and (not os.path.isfile(output_folder+"RAxML_bestTree."+out)):
+            commands.append((inp, output_folder+out))
+
+    if commands:
+        info('Resolving {} polytomies\n'.format(len(commands)))
+        pool_error = False
+        terminating = mp.Event()
+        chunksize = math.floor(len(commands)/(nproc*2))
+
+        with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(resolve_polytomies_rec, commands, chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('resolve_polytomies crashed', init_new_line=True, exit=True)
+    else:
+        info('Polytomies already resolved\n')
+
+
+def resolve_polytomies_rec(x):
+    if not terminating.is_set():
+        t0 = time.time()
+        inp_f, out_f = x
+        info('Resolving polytomies for "{}"\n'.format(inp_f))
+        tree = dendropy.Tree.get(path=inp_f, schema="newick")
+        tree.resolve_polytomies()
+        tree.write(path=out_f, schema="newick")
+        t1 = time.time()
+        info('"{}" generated in {}s\n'.format(out_f, int(t1-t0)))
+    else:
+        terminating.set()
+
+
 def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_folder, nproc=1, verbose=False):
     commands = []
 
@@ -2099,9 +2147,9 @@ if __name__ == '__main__':
             build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
             if 'gene_tree2' in configs:
-                # outt = args.data_folder+'gene_tree1_polytomies/'
-                # resolve_politomies(out_f, outt)
-                # out_f = outt
+                outt = args.data_folder+'gene_tree1_polytomies/'
+                resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
+                out_f = outt
 
                 outt = args.data_folder+'gene_tree2/'
                 refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
