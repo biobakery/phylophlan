@@ -1856,22 +1856,30 @@ def build_gene_tree_rec(x):
         terminating.set()
 
 
-def resolve_polytomies(input_folder, output_folder, nproc=1, verbose=False):
+def resolve_polytomies(inputt, output, nproc=1, verbose=False):
     commands = []
 
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
+    if os.path.isfile(inputt):
+        output_path = output[:output.rfind('/')+1]
+        output_file = output[output.rfind('/')+1:]
 
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        if (not os.path.isfile(output)) and (not os.path.isfile(output_path+"RAxML_bestTree."+output_file)):
+            commands.append((inp, output))
 
-    for inp in glob.iglob(input_folder+'*.tre'):
-        out = inp[inp.rfind('/')+1:]
+    elif os.path.isdir(inputt):
+        if not os.path.isdir(output):
+            if verbose:
+                info('Creating folder "{}"\n'.format(output))
 
-        if (not os.path.isfile(output_folder+out)) and (not os.path.isfile(output_folder+"RAxML_bestTree."+out)):
-            commands.append((inp, output_folder+out))
+            os.mkdir(output)
+        elif verbose:
+            info('Folder "{}" already exists\n'.format(output))
+
+        for inp in glob.iglob(inputt+'*.tre'):
+            out = inp[inp.rfind('/')+1:]
+
+            if (not os.path.isfile(output+out)) and (not os.path.isfile(output+"RAxML_bestTree."+out)):
+                commands.append((inp, output+out))
 
     if commands:
         info('Resolving {} polytomies\n'.format(len(commands)))
@@ -2175,6 +2183,10 @@ if __name__ == '__main__':
         build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
 
         if 'tree2' in configs:
+            outt = project_name+'_resolved.tre'
+            resolve_polytomies(out_f, args.output_folder+outt, nproc=args.nproc, verbose=args.verbose)
+            out_f = outt
+
             refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass

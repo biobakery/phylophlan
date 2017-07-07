@@ -39,6 +39,8 @@ def read_params():
     p.add_argument('--gene_tree1', action='store_true', default=False, help="Specify to add the gene_tree1 section")
     p.add_argument('--gene_tree2', action='store_true', default=False, help="Specify to add the gene_tree2 section")
     p.add_argument('--tree2', action='store_true', default=False, help="Specify to add the tree2 section")
+    p.add_argument('--overwrite', action='store_true', default=False, help="If output file exists it will be overwritten")
+    p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
 
     return p.parse_args()
 
@@ -47,7 +49,7 @@ def check_params(args):
     if (not args.map_dna) and (not args.map_aa):
         error('at least one of --map_dna and --map_aa must be specified', exit=True)
 
-    if os.path.isfile(args.output):
+    if (os.path.isfile(args.output)) and (not args.overwrite):
         error('cannot write ouptut file {} because it already exists'.format(args.output), exit=True)
 
 
@@ -136,7 +138,7 @@ if __name__ == '__main__':
         progs['gene_tree2'] = {'program_name': 'raxmlHPC',
                                'params': '-p 1989',
                                'model': '-m',
-                               'database': '-g', # starting tree
+                               'database': '-t', # starting tree
                                'input': '-s',
                                'output_path':'-w',
                                'output': '-n',
@@ -147,7 +149,7 @@ if __name__ == '__main__':
         progs['tree2'] = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
                           'params': '-m PROTCATLG -p 1989',
                           'threads': '-T',
-                          'database': '-g', # starting tree
+                          'database': '-t', # starting tree
                           'input': '-s',
                           'output_path':'-w',
                           'output': '-n',
@@ -159,6 +161,9 @@ if __name__ == '__main__':
 
         for option, value in options.items():
             config[prog][option] = value
+
+    if (os.path.isfile(args.output)) and args.overwrite and args.verbose:
+        info('Output file "{}" will be overwritten\n'.format(args.output))
 
     with open(args.output, 'w') as f:
         config.write(f)
