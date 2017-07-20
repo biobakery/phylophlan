@@ -7,6 +7,14 @@ import argparse as ap
 import configparser as cp
 
 
+MSA_CHOICES = ['muscle', 'mafft', 'opal', 'upp']
+TRIM_CHOICES = ['trimal']
+GENE_TREE1_CHOICES = ['fasttree', 'raxml']
+GENE_TREE2_CHOICES = ['raxml']
+TREE1_CHOICES = ['fasttree', 'raxml', 'astral']
+TREE2_CHOICES = ['raxml']
+
+
 def info(s, init_new_line=False, exit=False, exit_value=0):
     if init_new_line:
         sys.stdout.write('\n')
@@ -33,12 +41,16 @@ def read_params():
     p = ap.ArgumentParser(description="")
 
     p.add_argument('-o', '--output', type=str, required=True, help="Specify the output file where to write the configurations. If the file already exists the program won't overwrite the alredy existing file")
+
     p.add_argument('--map_dna', action='store_true', default=False, help="Specify to add the map_dna section. Note, at least one of map_dna and map_aa must be specified")
     p.add_argument('--map_aa', action='store_true', default=False, help="Specify to add the map_aa section. Note, at least one of map_dna and map_aa must be specified")
-    p.add_argument('--trim', action='store_true', default=False, help="Specify to add the trim section")
-    p.add_argument('--gene_tree1', action='store_true', default=False, help="Specify to add the gene_tree1 section")
-    p.add_argument('--gene_tree2', action='store_true', default=False, help="Specify to add the gene_tree2 section")
-    p.add_argument('--tree2', action='store_true', default=False, help="Specify to add the tree2 section")
+
+    p.add_argument('--msa', required=True, default=None, choices=MSA_CHOICES, help="")
+    p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify to add the trim section")
+    p.add_argument('--gene_tree1', default=None, choices=GENE_TREE1_CHOICES, help="Specify to add the gene_tree1 section")
+    p.add_argument('--gene_tree2', default=None, choices=GENE_TREE2_CHOICES, help="Specify to add the gene_tree2 section")
+    p.add_argument('--tree1', required=True, default=None, choices=TREE1_CHOICES, help="Specify to add the tree2 section")
+    p.add_argument('--tree2', default=None, choices=TREE2_CHOICES, help="Specify to add the tree2 section")
     p.add_argument('--overwrite', action='store_true', default=False, help="If output file exists it will be overwritten")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
 
@@ -78,16 +90,6 @@ if __name__ == '__main__':
                   'output': '-output',
                   'version': '-version',
                   'command_line': '#program_name# #params# #input# #output#'},
-        'msa': # {'program_name': 'muscle3.8.1551',
-               #  'params': '-quiet -maxiters 2',
-               #  'input': '-in',
-               #  'output': '-out',
-               #  'version': '-version',
-               #  'command_line': '#program_name# #params# #input# #output#'}
-               {'program_name': 'mafft',
-                'params': '--quiet',
-                'version': '--version',
-                'command_line': '#program_name# #params# #input# > #output#'}
     }
 
     if args.map_dna:
@@ -109,52 +111,124 @@ if __name__ == '__main__':
                            'version': '-version',
                            'command_line': '#program_name# #params# #threads# #input# #database# #output#'}
 
+    # setting the MSA software
+    if 'muscle' in args.msa:
+        msa = {'program_name': 'muscle3.8.1551',
+               'params': '-quiet -maxiters 2',
+               'input': '-in',
+               'output': '-out',
+               'version': '-version',
+               'command_line': '#program_name# #params# #input# #output#'}
+    elif 'mafft' in args.msa:
+        msa = {'program_name': 'mafft',
+               'params': '--quiet --auto',
+               'version': '--version',
+               'command_line': '#program_name# #params# #input# > #output#'}
+    elif 'opal' in args.msa:
+        msa = {'program_name': 'opal',
+               'input': '--in',
+               'output': '--out',
+               'params': '--quiet',
+               'command_line': '#program_name# #params# #input# #output#'}
+    elif 'upp' in args.msa:
+        msa = {'program_name': 'run-upp.sh',
+               'params': '-m amino -x 1 -M -1 -T 0.66 -B 999999999',
+               'input': '-s',
+               'output': '-o',
+               'output_path': '-d',
+               'version': '--version',
+               'command_line': '#program_name# #params# #input# #output_path# #output#'}
+
+    progs['msa'] = msa
+
+    # setting the trimming software
     if args.trim:
-        progs['trim'] = {'program_name': 'trimal',
-                         'params': '-gappyout',
-                         'input': '-in',
-                         'output': '-out',
-                         'version': '--version',
-                         'command_line': '#program_name# #params# #input# #output#'}
+        if 'trimal' in args.trim:
+            trim = {'program_name': 'trimal',
+                    'params': '-gappyout',
+                    'input': '-in',
+                    'output': '-out',
+                    'output_path': '-d',
+                    'version': '--version',
+                    'command_line': '#program_name# #params# #output_path# #input# #output#'}
 
+        progs['trim'] = trim
+
+    # setting gene_tree1
     if args.gene_tree1:
-        progs['tree1'] = {'program_name': 'java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar',
-                          'input': '-i',
-                          'output': '-o',
-                          'version': '--help',
-                          'command_line': '#program_name# #input# #output#'}
-        progs['gene_tree1'] = {'program_name': 'FastTree-2.1.9-SSE3',
-                               'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
-                               'output': '-out',
-                               'command_line': '#program_name# #params# #output# #input#'}
-    else:
-        progs['tree1'] = {'program_name': 'FastTreeMP-2.1.9-SSE3',
-                          'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+        if 'fasttree' in args.gene_tree1:
+            gene_tree1 = {'program_name': 'FastTree-2.1.9-SSE3',
+                          'params': '-quiet -lg -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
-                          'environment': 'OMP_NUM_THREADS=3',
                           'command_line': '#program_name# #params# #output# #input#'}
-
-    if args.gene_tree2:
-        progs['gene_tree2'] = {'program_name': 'raxmlHPC',
-                               'params': '-p 1989',
-                               'model': '-m',
-                               'database': '-t', # starting tree
-                               'input': '-s',
-                               'output_path':'-w',
-                               'output': '-n',
-                               'version': '-v',
-                               'command_line': '#program_name# #model# #params# #database# #output_path# #input# #output#'}
-
-    if args.tree2:
-        progs['tree2'] = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
-                          'params': '-m PROTCATLG -p 1989',
-                          'threads': '-T',
-                          'database': '-t', # starting tree
+        elif 'raxml' in args.gene_tree1:
+            gene_tree1 = {'program_name': 'raxmlHPC',
+                          'params': '-p 1989',
+                          'model': '-m',
                           'input': '-s',
-                          'output_path':'-w',
+                          'output_path': '-w',
                           'output': '-n',
                           'version': '-v',
-                          'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+                          'command_line': '#program_name# #model# #params# #output_path# #input# #output#'}
+
+        progs['gene_tree1'] = gene_tree1
+
+    # setting gene_tree2
+    if args.gene_tree2:
+        if 'raxml' in args.gene_tree2:
+            gene_tree2 = {'program_name': 'raxmlHPC',
+                          'params': '-p 1989',
+                          'model': '-m',
+                          'database': '-t', # starting tree
+                          'input': '-s',
+                          'output_path': '-w',
+                          'output': '-n',
+                          'version': '-v',
+                          'command_line': '#program_name# #model# #params# #database# #output_path# #input# #output#'}
+
+        progs['gene_tree2'] = gene_tree2
+
+    # setting tree1
+    if args.tree1:
+        if 'astral' in args.tree1:
+            tree1 = {'program_name': 'java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar',
+                     'input': '-i',
+                     'output': '-o',
+                     # 'version': '--help',
+                     'version': '-i /CM/tools/astral-4.11.1/test_data/song_mammals.424.gene.tre',
+                     'command_line': '#program_name# #input# #output#'}
+        elif 'fasttree' in args.tree1:
+            tree1 = {'program_name': 'FastTreeMP-2.1.9-SSE3',
+                     'params': '-quiet -lg -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+                     'output': '-out',
+                     'environment': 'OMP_NUM_THREADS=3',
+                     'command_line': '#program_name# #params# #output# #input#'}
+        elif 'raxml' in args.tree1:
+            tree1 = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
+                     'params': '-m PROTCATLG -p 1989',
+                     'threads': '-T',
+                     'input': '-s',
+                     'output_path': '-w',
+                     'output': '-n',
+                     'version': '-v',
+                     'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+
+        progs['tree1'] = tree1
+
+    # setting tree2
+    if args.tree2:
+        if 'raxml' in args.tree2:
+            tree2 = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
+                     'params': '-m PROTCATLG -p 1989',
+                     'threads': '-T',
+                     'database': '-t', # starting tree
+                     'input': '-s',
+                     'output_path': '-w',
+                     'output': '-n',
+                     'version': '-v',
+                     'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+
+        progs['tree2'] = tree2
 
     for prog, options in progs.items():
         config[prog] = {}
