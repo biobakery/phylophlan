@@ -2,8 +2,8 @@
 
 
 __author__ = 'Nicola Segata (nsegata@hsph.harvard.edu), Francesco Asnicar (f.asnicar@unitn.it)'
-__version__ = '0.06'
-__date__ = '26 Jun 2017'
+__version__ = '0.08'
+__date__ = '19 Jul 2017'
 
 
 import os
@@ -29,7 +29,7 @@ import operator
 import functools
 import pickle
 from itertools import combinations
-import dendropy
+import dendropy # DendroPy (v 4.2.0)
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
@@ -54,6 +54,7 @@ GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
 NOT_VARIANT_THRESHOLD = 0.95
 FRAGMENTARY_THRESHOLD = 0.85
+UNKNOWN_FRACTION = 0.3
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -102,11 +103,11 @@ def read_params():
     group.add_argument('--meta', action='store_true', default=False, help="")
 
     group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
-    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default input/")
-    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default data/")
-    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default databases/")
+    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default {}".format(INPUT_FOLDER))
+    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATA_FOLDER))
+    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATABASES_FOLDER))
     group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER, help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
-    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default output/")
+    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default {}".format(OUTPUT_FOLDER))
 
     p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database files that are automatically generated at the first run of the pipeline")
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
@@ -118,12 +119,13 @@ def read_params():
     p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
     p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD, help="The value used to consider a column not variant when '--trim not_variant' is specified, default {}".format(NOT_VARIANT_THRESHOLD))
     p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES, help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
+    p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION, help="Define the amount of unknowns ('X' and '-') allowed in each column of the MSA of the markers, default {}".format(UNKNOWN_FRACTION))
     p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES, help="Specify which scoring function to use to evaluate columns in the MSA results")
     p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=FRAGMENTARY_THRESHOLD, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default {}".format(FRAGMENTARY_THRESHOLD))
     p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES, help="The minimum number of entries to be present for each fo the markers in the database, default {}".format(MIN_NUM_ENTRIES))
-    p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the model of amino acid susbstitution to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
+    p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the susbstitution model of amino acid to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
     p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed. This is equivalent to specify '--remove_fragmentary_entries --fragmentary_threshold 1'")
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
@@ -153,11 +155,8 @@ def read_configs(config_file, verbose=False):
 
 
 def check_args(args, verbose):
-    if not args.databases_folder.endswith('/'):
-        args.databases_folder += '/'
-
-    if not args.submat_folder.endswith('/'):
-        args.submat_folder += '/'
+    args.databases_folder = os.path.join(args.databases_folder, '')
+    args.submat_folder = os.path.join(args.submat_folder, '')
 
     if args.clean_all:
         check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
@@ -173,7 +172,7 @@ def check_args(args, verbose):
     elif not args.database:
         error('-d (or --database) must be specified')
         database_list(args.databases_folder, exit=True)
-    elif (not os.path.isdir(args.databases_folder+args.database)) and (not os.path.isfile(args.databases_folder+args.database+'.faa')) and (not os.path.isfile(args.databases_folder+args.database+'.faa.bz2')):
+    elif (not os.path.isdir(os.path.join(args.databases_folder, args.database, ''))) and (not os.path.isfile(os.path.join(args.databases_folder, args.database+'.faa'))) and (not os.path.isfile(os.path.join(args.databases_folder, args.database+'.faa.bz2'))):
         error('database "{}" not found in "{}"'.format(args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
 
@@ -184,24 +183,15 @@ def check_args(args, verbose):
     elif args.clean:
         project_name = args.clean
 
-    args.data_folder += project_name+'_'+args.database
-    args.output_folder += project_name+'_'+args.database
-
-    if not args.data_folder.endswith('/'):
-        args.data_folder += '/'
-
-    if not args.output_folder.endswith('/'):
-        args.output_folder += '/'
+    args.data_folder = os.path.join(args.data_folder, project_name+'_'+args.database, '')
+    args.output_folder = os.path.join(args.output_folder, project_name+'_'+args.database, '')
 
     if args.clean:
         check_and_create_folder(args.data_folder, exit=True, verbose=verbose)
         check_and_create_folder(args.output_folder, exit=True, verbose=verbose)
         return None
 
-    args.input_folder += project_name
-
-    if not args.input_folder.endswith('/'):
-        args.input_folder += '/'
+    args.input_folder = os.path.join(args.input_folder, project_name, '')
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
@@ -290,14 +280,14 @@ def check_args(args, verbose):
         args.sort = True
 
         if verbose:
-            info('Setting "sort={}" because "database={}"'.format(args.sort, args.database))
+            info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
 
     if args.remove_only_gaps_entries:
         args.fragmentary_threshold = 1.0
 
         if args.remove_fragmentary_entries:
             args.fragmentary_threshold = min(FRAGMENTARY_THRESHOLD, args.fragmentary_threshold)
-            info('[w] both "--remove_only_gaps_entries" and "--remove_fragmentary_entries" have been specified, setting "fragmentary_threshold={}"'.format(args.fragmentary_threshold))
+            info('[w] both "--remove_only_gaps_entries" and "--remove_fragmentary_entries" have been specified, setting "fragmentary_threshold={}"\n'.format(args.fragmentary_threshold))
 
     # checking configuration file
     if not args.config_file:
@@ -311,7 +301,7 @@ def check_args(args, verbose):
     if not args.submat:
         error('-s (or --submat) must be specified')
         submat_list(args.submat_folder, exit=True, exit_value=1)
-    elif not os.path.isfile(args.submat_folder+args.submat+'.pkl'):
+    elif not os.path.isfile(os.path.join(args.submat_folder, args.submat+'.pkl')):
         error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
         submat_list(args.submat_folder, exit=True, exit_value=1)
 
@@ -441,11 +431,11 @@ def database_list(databases_folder, exit=False, exit_value=0):
 
 
 def submat_list(submat_folder, exit=False, exit_value=0):
-    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(submat_folder+'*.pkl')]))), exit=exit, exit_value=exit_value)
+    info('Available substitution matrices in "{}":\n    {}\n'.format(submat_folder, '\n    '.join(set([a.replace(submat_folder, '').replace('.pkl', '') for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))]))), exit=exit, exit_value=exit_value)
 
 
 def config_list(config_folder, exit=False, exit_value=0):
-    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(config_folder+'*.cfg'))), exit=exit, exit_value=exit_value)
+    info('Available configuration files in "{}":\n    {}\n'.format(config_folder, '\n    '.join(glob.iglob(os.path.join(config_folder, '*.cfg')))), exit=exit, exit_value=exit_value)
 
 
 def compose_command(params, check=False, sub_mod=None, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
@@ -453,6 +443,8 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
     stdin = None
     stdout = None
     environment = None
+    r_output_path = None
+    r_output_file = None
     command_line = params['command_line']
 
     if 'program_name' in params.keys():
@@ -474,13 +466,13 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
             command_line = command_line.replace('#threads#', '{} {}'.format(params['threads'], nproc))
 
         if output_path:
-            if not output_path.endswith('/'):
-                output_path += '/'
+            output_path = os.path.join(output_path, '')
+            r_output_path = output_path
 
             if 'output_path' in params:
                 command_line = command_line.replace('#output_path#', '{} {}'.format(params['output_path'], output_path))
             else:
-                output_file = output_path+output_file
+                output_file = os.path.join(output_path, output_file)
 
         if sub_mod:
             mod = sub_mod
@@ -508,6 +500,7 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
 
         if output_file:
             out = output_file
+            r_output_file = output_file
 
             if 'output' in params:
                 out = '{} {}'.format(params['output'], output_file)
@@ -530,28 +523,42 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
     for s, e in zip(quotes[0::2], quotes[1::2]):
         command_line = command_line.replace(command_line[s+1:e], command_line[s+1:e].replace(' ', '#'))
 
-    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a], 'stdin': stdin, 'stdout': stdout, 'env': environment}
+    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a], 'stdin': stdin, 'stdout': stdout, 'env': environment, 'output_path': r_output_path, 'output_file': r_output_file}
+
+
+def remove_file(filename, path=None, verbose=False):
+    to_remove = path if path else ''
+    to_remove += filename if filename else ''
+
+    if to_remove:
+        if os.path.exists(to_remove):
+            if verbose:
+                error('removing "{}"'.format(to_remove))
+
+            os.remove(to_remove)
+        elif verbose:
+            error('file "{}" not found'.format(to_remove))
 
 
 def init_database(database, databases_folder, params, key_dna, key_aa, verbose=False):
     db_fasta, db_dna, db_aa, markers = None, None, None, None
 
-    if os.path.isfile(databases_folder+database+'.faa'): # assumed to be a fasta file containing the markers
-        db_fasta = databases_folder+database+'.faa'
-        db_dna = databases_folder+database+'.faa'
-        db_aa = databases_folder+database+'.udb'
-    elif os.path.isfile(databases_folder+database+'.faa.bz2'):
-        db_fasta = databases_folder+database+'.faa'
-        db_dna = databases_folder+database+'.faa'
-        db_aa = databases_folder+database+'.udb'
-        markers = [databases_folder+database+'.faa.bz2']
-    elif os.path.isdir(databases_folder+database): # assumed to be a folder with a fasta file for each marker
-        db_fasta = databases_folder+database+'/'+database+'.faa'
-        db_dna = databases_folder+database+'/'+database+'.faa'
-        db_aa = databases_folder+database+'/'+database+'.udb'
-        markers = glob.iglob(databases_folder+database+'/*.faa*')
+    if os.path.isfile(os.path.join(databases_folder, database+'.faa')): # assumed to be a fasta file containing the markers
+        db_fasta = os.path.join(databases_folder, database+'.faa')
+        db_dna = os.path.join(databases_folder, database+'.faa')
+        db_aa = os.path.join(databases_folder, database+'.udb')
+    elif os.path.isfile(os.path.join(databases_folder, database+'.faa.bz2')):
+        db_fasta = os.path.join(databases_folder, database+'.faa')
+        db_dna = os.path.join(databases_folder, database+'.faa')
+        db_aa = os.path.join(databases_folder, database+'.udb')
+        markers = [os.path.join(databases_folder, database+'.faa.bz2')]
+    elif os.path.isdir(os.path.join(databases_folder, database, '')): # assumed to be a folder with a fasta file for each marker
+        db_fasta = os.path.join(databases_folder, database, database+'.faa')
+        db_dna = os.path.join(databases_folder, database, database+'.faa')
+        db_aa = os.path.join(databases_folder, database, database+'.udb')
+        markers = glob.iglob(os.path.join(databases_folder, database, '*.faa*'))
     else: # what's that??
-        error('custom set of markers ("{}", "{}", or "{}") not recognize'.format(databases_folder+database+'.faa', databases_folder+database+'.faa.bz2', databases_folder+database+'/'), exit=True)
+        error('custom set of markers ("{}", "{}", or "{}") not recognize'.format(os.path.join(databases_folder, database+'.faa'), os.path.join(databases_folder, database+'.faa.bz2'), os.path.join(databases_folder, database, '')), exit=True)
 
     if db_aa and (not os.path.isfile(db_aa)):
         if key_aa in params:
@@ -588,6 +595,7 @@ def make_database(command, fasta, markers, db, label, verbose=False):
     try:
         sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
     except Exception as e:
+        remove_file(cmd['output_file'], path=cmd['output_path'], verbose=verbose)
         error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
         error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
@@ -601,7 +609,7 @@ def make_database(command, fasta, markers, db, label, verbose=False):
 
 
 def clean_all(databases_folder, verbose=False):
-    for f in glob.iglob(databases_folder+'*.udb'):
+    for f in glob.iglob(os.path.join(databases_folder, '*.udb')):
         if verbose:
             info('Removing "{}"\n'.format(f))
 
@@ -615,13 +623,13 @@ def clean_all(databases_folder, verbose=False):
             os.remove(f_clean+'.faa')
 
     for database in os.listdir(databases_folder):
-        for f in glob.iglob(databases_folder+database+'/'+database+'.faa'):
+        for f in glob.iglob(os.path.join(databases_folder, database, database+'.faa')):
             if verbose:
                 info('Removing "{}"\n'.format(f))
 
             os.remove(f)
 
-        for f in glob.iglob(databases_folder+database+'/'+database+'.udb'):
+        for f in glob.iglob(os.path.join(databases_folder, database, database+'.udb')):
             if verbose:
                 info('Removing "{}"\n'.format(f))
 
@@ -652,7 +660,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
     if os.path.isdir(input_folder):
         info('Loading files from "{}"\n'.format(input_folder))
-        files = glob.iglob(input_folder+'*'+extension+'*')
+        files = glob.iglob(os.path.join(input_folder, '*'+extension+'*'))
 
         for f in files:
             if f.endswith('.bz2'):
@@ -665,12 +673,12 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
                 file_clean = f[f.rfind('/')+1:].replace(extension, '').replace('.bz2', '')+'_'+hashh+extension
 
-                if not os.path.isfile(tmp_folder+file_clean):
-                    with open(tmp_folder+file_clean, 'w') as g:
+                if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
+                    with open(os.path.join(tmp_folder, file_clean), 'w') as g:
                         with bz2.open(f, 'rt') as h:
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
                 elif verbose:
-                    info('File "{}" already decompressed\n'.format(tmp_folder+file_clean))
+                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith(extension):
@@ -695,13 +703,13 @@ def initt(terminating_):
 def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder, nproc=1, verbose=False):
     good_inputs = []
 
-    if os.path.isfile(data_folder+'checked_inputs.pkl'):
+    if os.path.isfile(os.path.join(data_folder, 'checked_inputs.pkl')):
         info('Inputs already checked\n')
 
         if verbose:
-            info('Loading checked inputs from "{}"\n'.format(data_folder+'checked_inputs.pkl'))
+            info('Loading checked inputs from "{}"\n'.format(os.path.join(data_folder, 'checked_inputs.pkl')))
 
-        with open(data_folder+'checked_inputs.pkl', 'rb') as f:
+        with open(os.path.join(data_folder, 'checked_inputs.pkl'), 'rb') as f:
             good_inputs = pickle.load(f)
     else:
         info('Checking {} inputs\n'.format(len(inputs)))
@@ -711,12 +719,12 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder
 
         with mp.Pool(initializer=initt, initargs=(terminating, ), processes=nproc) as pool:
             try:
-                good_inputs = [a for a in pool.imap_unordered(check_input_proteomes_rec, ((inp_fol+inp, min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1) if a]
+                good_inputs = [a for a in pool.imap_unordered(check_input_proteomes_rec, ((os.path.join(inp_fol, inp), min_len_protein, min_num_proteins, verbose) for inp, inp_fol in inputs.items()), chunksize=chunksize if chunksize else 1) if a]
             except Exception as e:
                 error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
                 error('check_input_proteomes crashed', init_new_line=True, exit=True)
 
-        with open(data_folder+'checked_inputs.pkl', 'wb') as f:
+        with open(os.path.join(data_folder, 'checked_inputs.pkl'), 'wb') as f:
             pickle.dump(good_inputs, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     return good_inputs
@@ -755,7 +763,7 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    commands = [(inp, output_folder+inp[inp.rfind('/')+1:]) for inp in inputs if not os.path.isfile(output_folder+inp[inp.rfind('/')+1:])]
+    commands = [(inp, os.path.join(output_folder, inp[inp.rfind('/')+1:])) for inp in inputs if not os.path.isfile(os.path.join(output_folder, inp[inp.rfind('/')+1:]))]
 
     if commands:
         info('Cleaning {} inputs\n'.format(len(commands)))
@@ -789,6 +797,7 @@ def clean_input_proteomes_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while cleaning\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
@@ -808,10 +817,10 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp, inp_fol in inputs.items():
-        out = output_folder+inp[:inp.rfind('.')]+'.b6o.bkp'
+        out = os.path.join(output_folder, inp[:inp.rfind('.')]+'.b6o.bkp')
 
         if not os.path.isfile(out):
-            commands.append((configs[key], inp_fol+inp, database, out, min_num_proteins))
+            commands.append((configs[key], os.path.join(inp_fol, inp), database, out, min_num_proteins))
 
     if commands:
         info('Mapping "{}" on {} inputs (key: "{}")\n'.format(database_name, len(commands), key))
@@ -832,41 +841,48 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
 
 def gene_markers_identification_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        params, inp, db, out, min_num_proteins = x
-        info('Mapping "{}"\n'.format(inp))
-        cmd = compose_command(params, input_file=inp, database=db, output_file=out)
-        inp_f = None
-        out_f = sb.DEVNULL
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
-        except Exception as e:
+            t0 = time.time()
+            params, inp, db, out, min_num_proteins = x
+            info('Mapping "{}"\n'.format(inp))
+            cmd = compose_command(params, input_file=inp, database=db, output_file=out)
+            inp_f = None
+            out_f = sb.DEVNULL
+
+            if cmd['stdin']:
+                inp_f = open(cmd['stdin'], 'r')
+
+            if cmd['stdout']:
+                out_f = open(cmd['stdout'], 'w')
+
+            try:
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            except Exception as e:
+                terminating.set()
+                remove_file(cmd['output_file'], path=cmd['output_path'], verbose=verbose)
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+                raise
+
+            if cmd['stdin']:
+                inp_f.close()
+
+            if cmd['stdout']:
+                out_f.close()
+
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
+        except:
             terminating.set()
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while mapping\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
-
-        if cmd['stdin']:
-            inp_f.close()
-
-        if cmd['stdout']:
-            out_f.close()
-
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
 
 def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, verbose=False):
-    commands = [(f, f[:-4], function, min_num_proteins) for f in  glob.iglob(input_folder+'*.b6o.bkp') if not os.path.isfile(f[:-4])]
+    commands = [(f, f[:-4], function, min_num_proteins) for f in  glob.iglob(os.path.join(input_folder, '*.b6o.bkp')) if not os.path.isfile(f[:-4])]
 
     if commands:
         info('Selecting {} markers from "{}"\n'.format(len(commands), input_folder))
@@ -902,8 +918,9 @@ def gene_markers_selection_rec(x):
                 info('Not enough markers mapped ({}/{}) in "{}"\n'.format(len(matches), min_num_proteins, inp))
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while selecting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -977,10 +994,10 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for f in glob.iglob(input_folder+'*.b6o'):
+    for f in glob.iglob(os.path.join(input_folder, '*.b6o')):
         f_clean = f[f.rfind('/')+1:].replace('.b6o', '')+extension
-        src_file = inputs[f_clean]+f_clean
-        out_file = output_folder+f_clean
+        src_file = os.path.join(inputs[f_clean], f_clean)
+        out_file = os.path.join(output_folder, f_clean)
 
         if os.path.isfile(src_file) and (not os.path.isfile(out_file)):
             commands.append((out_file, src_file, f, min_num_markers))
@@ -1050,6 +1067,7 @@ def gene_markers_extraction_rec(x):
                 info('Not enough markers ({}/{}) found in "{}"\n'.format(len(out_file_seq), min_num_markers, b6o_file))
         except Exception as e:
             terminating.set()
+            remove_file(out_file)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while extracting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
@@ -1068,8 +1086,8 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for f in glob.iglob(input_folder+'*'+in_extension):
-        out = output_folder+f[f.rfind('/')+1:f.rfind('.')]+out_extension
+    for f in glob.iglob(os.path.join(input_folder, '*'+in_extension)):
+        out = os.path.join(output_folder, f[f.rfind('/')+1:f.rfind('.')]+out_extension)
 
         if not os.path.isfile(out):
             commands.append((f, out))
@@ -1122,6 +1140,7 @@ def fake_proteome_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while generating\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
@@ -1141,11 +1160,11 @@ def inputs2markers(input_folder, output_folder, min_num_entries, proteome_extens
         if verbose:
             info('Folder "{}" already exists\n'.format(output_folder))
 
-        for f in glob.iglob(output_folder+'*'+proteome_extension):
+        for f in glob.iglob(os.path.join(output_folder, '*'+proteome_extension)):
             info('Inputs already translated into markers\n')
             return
 
-    for f in glob.iglob(input_folder+'*'+proteome_extension):
+    for f in glob.iglob(os.path.join(input_folder, '*'+proteome_extension)):
         inp = f[f.rfind('/')+1:f.rfind('.')]
 
         for seq_record in SeqIO.parse(f, "fasta"):
@@ -1158,7 +1177,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries, proteome_extens
 
     for marker, sequences in markers2inputs.items():
         if len(sequences) >= min_num_entries:
-            with open(output_folder+marker+proteome_extension, 'w') as f:
+            with open(os.path.join(output_folder, marker+proteome_extension), 'w') as f:
                 SeqIO.write(sequences, f, 'fasta')
         elif verbose:
             info('"{}" discarded, not enough inputs ({}/{})\n'.format(marker, len(sequences), min_num_entries))
@@ -1167,17 +1186,17 @@ def inputs2markers(input_folder, output_folder, min_num_entries, proteome_extens
 def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
     commands, ret_ids = [], []
 
-    if os.path.isfile(data_folder+'integrate_ids.pkl'):
+    if os.path.isfile(os.path.join(data_folder, 'integrate_ids.pkl')):
         info('Integration already performed\n')
 
         if verbose:
-            info('Loading integrated ids from "{}"\n'.format(data_folder+'integrate_ids.pkl'))
+            info('Loading integrated ids from "{}"\n'.format(os.path.join(data_folder, 'integrate_ids.pkl')))
 
-        with open(data_folder+'integrate_ids.pkl', 'rb') as f:
+        with open(os.path.join(data_folder, 'integrate_ids.pkl'), 'rb') as f:
             ret_ids = pickle.load(f)
     else:
         if os.path.isdir(database):
-            markers = glob.glob(database+'/*')
+            markers = glob.glob(os.path.join(database, '*'))
             folder = True
         elif os.path.isfile(database+'.faa'):
             mrk_db = database+'.faa'
@@ -1185,7 +1204,7 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
         else:
             error('integrate() what\'s this "{}"??'.format(database), exit=True)
 
-        for mrk in glob.iglob(inp_f+'*'):
+        for mrk in glob.iglob(os.path.join(inp_f, '*')):
             marker = mrk[mrk.rfind('/')+1:mrk.rfind('.')]
 
             if folder:
@@ -1210,7 +1229,7 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
                     error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
                     error('integrate crashed', init_new_line=True, exit=True)
 
-            with open(data_folder+'integrate_ids.pkl', 'wb') as f:
+            with open(os.path.join(data_folder, 'integrate_ids.pkl'), 'wb') as f:
                 pickle.dump(ret_ids, f, protocol=pickle.HIGHEST_PROTOCOL)
         else:
             info('No markers to integrate\n')
@@ -1263,8 +1282,8 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_folder+'*'+extension):
-        out = output_folder+inp[inp.rfind('/')+1:inp.rfind('.')]+'.aln'
+    for inp in glob.iglob(os.path.join(input_folder, '*'+extension)):
+        out = os.path.join(output_folder, inp[inp.rfind('/')+1:inp.rfind('.')]+'.aln')
 
         if not os.path.isfile(out):
             commands.append((configs[key], inp, out))
@@ -1288,35 +1307,42 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
 
 def msas_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        params, inp, out = x
-        info('Aligning "{}"\n'.format(inp))
-        cmd = compose_command(params, input_file=inp, output_file=out)
-        inp_f = None
-        out_f = sb.DEVNULL
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
-        except Exception as e:
+            t0 = time.time()
+            params, inp, out = x
+            info('Aligning "{}"\n'.format(inp))
+            cmd = compose_command(params, input_file=inp, output_file=out)
+            inp_f = None
+            out_f = sb.DEVNULL
+
+            if cmd['stdin']:
+                inp_f = open(cmd['stdin'], 'r')
+
+            if cmd['stdout']:
+                out_f = open(cmd['stdout'], 'w')
+
+            try:
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            except Exception as e:
+                terminating.set()
+                remove_file(cmd['output_file'], path=cmd['output_path'])
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('error while aligning\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+                raise
+
+            if cmd['stdin']:
+                inp_f.close()
+
+            if cmd['stdout']:
+                out_f.close()
+
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
+        except:
             terminating.set()
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('error while aligning\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while aligning\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
-
-        if cmd['stdin']:
-            inp_f.close()
-
-        if cmd['stdout']:
-            out_f.close()
-
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1333,13 +1359,13 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         info('Folder "{}" already exists\n'.format(output_folder))
 
     if os.path.isdir(inputt):
-        for inp in glob.iglob(inputt+'*.aln'):
-            out = output_folder+inp[inp.rfind('/')+1:]
+        for inp in glob.iglob(os.path.join(inputt, '*.aln')):
+            out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
 
             if not os.path.isfile(out):
                 commands.append((configs[key], inp, out))
     elif os.path.isfile(inputt):
-        out = inputt[:inputt.rfind('.')]+'.trim'+inputt[inputt.rfind('.'):]
+        out = inputt[:inputt.rfind('.')]+'.trim_gappy'+inputt[inputt.rfind('.'):]
 
         if not os.path.isfile(out):
             commands.append((configs[key], inputt, out))
@@ -1364,35 +1390,42 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
 
 def trim_gappy_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        params, inp, out = x
-        info('Trimming gappy "{}"\n'.format(inp))
-        cmd = compose_command(params, input_file=inp, output_file=out)
-        inp_f = None
-        out_f = sb.DEVNULL
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            t0 = time.time()
+            params, inp, out = x
+            info('Trimming gappy "{}"\n'.format(inp))
+            cmd = compose_command(params, input_file=inp, output_file=out)
+            inp_f = None
+            out_f = sb.DEVNULL
+
+            if cmd['stdin']:
+                inp_f = open(cmd['stdin'], 'r')
+
+            if cmd['stdout']:
+                out_f = open(cmd['stdout'], 'w')
+
+            try:
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            except Exception as e:
+                terminating.set()
+                remove_file(cmd['output_file'], path=cmd['output_path'])
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('error while trimming\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+                raise
+
+            if cmd['stdin']:
+                inp_f.close()
+
+            if cmd['stdout']:
+                out_f.close()
+
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('error while trimming\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while trimming gappy\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
-
-        if cmd['stdin']:
-            inp_f.close()
-
-        if cmd['stdout']:
-            out_f.close()
-
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1409,13 +1442,13 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
         info('Folder "{}" already exists\n'.format(output_folder))
 
     if os.path.isdir(inputt):
-        for inp in glob.iglob(inputt+'*.aln'):
-            out = output_folder+inp[inp.rfind('/')+1:]
+        for inp in glob.iglob(os.path.join(inputt, '*.aln')):
+            out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
 
             if not os.path.isfile(out):
                 commands.append((inp, out, not_variant_threshold))
     elif os.path.isfile(inputt):
-        out = inputt[:inputt.rfind('.')]+'.trim'+inputt[inputt.rfind('.'):]
+        out = inputt[:inputt.rfind('.')]+'.trim_not_variant'+inputt[inputt.rfind('.'):]
 
         if not os.path.isfile(out):
             commands.append((inputt, out, not_variant_threshold))
@@ -1466,8 +1499,9 @@ def trim_not_variant_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('error while trimming\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while trimming not variant\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1477,13 +1511,13 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmen
     commands = []
     frag_entries = []
 
-    if os.path.isfile(data_folder+'fragmentary_entries.pkl'):
+    if os.path.isfile(os.path.join(data_folder, 'fragmentary_entries.pkl')):
         info('Fragmentary entries already removed\n')
 
         if verbose:
-            info('Loading fragmentary entries from "{}"\n'.format(data_folder+'fragmentary_entries.pkl'))
+            info('Loading fragmentary entries from "{}"\n'.format(os.path.join(data_folder, 'fragmentary_entries.pkl')))
 
-        with open(data_folder+'fragmentary_entries.pkl', 'rb') as f:
+        with open(os.path.join(data_folder, 'fragmentary_entries.pkl'), 'rb') as f:
             frag_entries = pickle.load(f)
 
         return frag_entries
@@ -1496,8 +1530,8 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmen
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_folder+'*.aln'):
-        out = output_folder+inp[inp.rfind('/')+1:]
+    for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
+        out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
 
         if not os.path.isfile(out):
             commands.append((inp, out, fragmentary_threshold, min_num_entries, verbose))
@@ -1516,7 +1550,7 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmen
                 error('remove_fragmentary_entries crashed', init_new_line=True, exit=True)
 
             if frag_entries:
-                with open(data_folder+'fragmentary_entries.pkl', 'wb') as f:
+                with open(os.path.join(data_folder, 'fragmentary_entries.pkl'), 'wb') as f:
                     pickle.dump(frag_entries, f, protocol=pickle.HIGHEST_PROTOCOL)
     else:
         info('Fragmentary entries already removed\n')
@@ -1550,6 +1584,7 @@ def remove_fragmentary_entries_rec(x):
             return None
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while removing fragmentary\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
@@ -1557,7 +1592,7 @@ def remove_fragmentary_entries_rec(x):
         terminating.set()
 
 
-def subsample(input_folder, output_folder, positions_function, scoring_function, submat, nproc=1, verbose=False):
+def subsample(input_folder, output_folder, positions_function, scoring_function, submat, unknown_fraction=0.3, nproc=1, verbose=False):
     commands = []
     mat = None
 
@@ -1578,11 +1613,11 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_folder+'*.aln'):
-        out = output_folder+inp[inp.rfind('/')+1:]
+    for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
+        out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
 
         if not os.path.isfile(out):
-            commands.append((inp, out, positions_function, scoring_function, mat))
+            commands.append((inp, out, positions_function, scoring_function, unknown_fraction, mat))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
@@ -1604,24 +1639,21 @@ def subsample_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, npos_function, score_function, mat = x
+            inp, out, npos_function, score_function, unknown_fraction, mat = x
             info('Subsampling "{}"\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
             scores = []
             out_aln = []
 
             for i in range(len(inp_aln[0])):
-                col = set(inp_aln[:, i].upper())
+                col = Counter(inp_aln[:, i].upper())
 
                 if (len(col) == 1) or \
                    (len(col) == 2 and ("-" in col or "X" in col)) or \
                    (len(col) == 3 and "X" in col and "-" in col):
                     continue
 
-                unknowns = ''.join(col).count("-")
-                unknowns += ''.join(col).count("X")
-
-                if unknowns > (len(inp_aln[:, i])*0.1):
+                if col["-"]+col["X"] > (len(inp_aln[:, i])*unknown_fraction):
                     continue
 
                 scores.append((score_function(inp_aln[:, i], mat), i))
@@ -1646,6 +1678,7 @@ def subsample_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
+            remove_file(out)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while subsampling\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
@@ -1761,7 +1794,7 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
     info('Concatenating alignments\n')
     all_inputs = set(all_inputs)
     inputs2alingments = dict(((inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs))
-    markers = glob.iglob(input_folder+'*')
+    markers = glob.iglob(os.path.join(input_folder, '*'))
 
     if sort:
         markers = sorted(markers)
@@ -1797,12 +1830,12 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_folder+'*.aln'):
+    for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         marker = inp[inp.rfind('/')+1:inp.rfind('.')]
         out = marker+'.tre'
         model = sub_mod[marker]
 
-        if (not os.path.isfile(output_folder+out)) and (not os.path.isfile(output_folder+"RAxML_bestTree."+out)):
+        if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, "RAxML_bestTree."+out))):
             commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
 
     if commands:
@@ -1823,35 +1856,42 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
 
 def build_gene_tree_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        params, model, inp, abs_wf, out = x
-        info('Building gene tree "{}"\n'.format(inp))
-        cmd = compose_command(params, sub_mod=model, input_file=inp,  output_path=abs_wf, output_file=out)
-        inp_f = None
-        out_f = sb.DEVNULL
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            t0 = time.time()
+            params, model, inp, abs_wf, out = x
+            info('Building gene tree "{}"\n'.format(inp))
+            cmd = compose_command(params, sub_mod=model, input_file=inp,  output_path=abs_wf, output_file=out)
+            inp_f = None
+            out_f = sb.DEVNULL
+
+            if cmd['stdin']:
+                inp_f = open(cmd['stdin'], 'r')
+
+            if cmd['stdout']:
+                out_f = open(cmd['stdout'], 'w')
+
+            try:
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            except Exception as e:
+                terminating.set()
+                remove_file(cmd['output_file'], path=cmd['output_path'])
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('error while building gene tree\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+                raise
+
+            if cmd['stdin']:
+                inp_f.close()
+
+            if cmd['stdout']:
+                out_f.close()
+
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('error while building gene tree\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while building gene tree\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
-
-        if cmd['stdin']:
-            inp_f.close()
-
-        if cmd['stdout']:
-            out_f.close()
-
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1863,8 +1903,8 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
         output_path = output[:output.rfind('/')+1]
         output_file = output[output.rfind('/')+1:]
 
-        if (not os.path.isfile(output)) and (not os.path.isfile(output_path+"RAxML_bestTree."+output_file)):
-            commands.append((inp, output))
+        if (not os.path.isfile(output)) and (not os.path.isfile(os.path.join(output_path, "RAxML_bestTree."+output_file))):
+            commands.append((inputt, output))
 
     elif os.path.isdir(inputt):
         if not os.path.isdir(output):
@@ -1875,11 +1915,11 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
         elif verbose:
             info('Folder "{}" already exists\n'.format(output))
 
-        for inp in glob.iglob(inputt+'*.tre'):
+        for inp in glob.iglob(os.path.join(inputt, '*.tre')):
             out = inp[inp.rfind('/')+1:]
 
-            if (not os.path.isfile(output+out)) and (not os.path.isfile(output+"RAxML_bestTree."+out)):
-                commands.append((inp, output+out))
+            if (not os.path.isfile(os.path.join(output, out))) and (not os.path.isfile(os.path.join(output, "RAxML_bestTree."+out))):
+                commands.append((inp, os.path.join(output, out)))
 
     if commands:
         info('Resolving {} polytomies\n'.format(len(commands)))
@@ -1899,14 +1939,20 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
 
 def resolve_polytomies_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        inp_f, out_f = x
-        info('Resolving polytomies for "{}"\n'.format(inp_f))
-        tree = dendropy.Tree.get(path=inp_f, schema="newick")
-        tree.resolve_polytomies()
-        tree.write(path=out_f, schema="newick")
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out_f, int(t1-t0)))
+        try:
+            t0 = time.time()
+            inp_f, out_f = x
+            info('Resolving polytomies for "{}"\n'.format(inp_f))
+            tree = dendropy.Tree.get(path=inp_f, schema="newick")
+            tree.resolve_polytomies()
+            tree.write(path=out_f, schema="newick")
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out_f, int(t1-t0)))
+        except Exception as e:
+            terminating.set()
+            error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+            error('error while resolving polytomies\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
     else:
         terminating.set()
 
@@ -1922,14 +1968,14 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(input_alns+'*.aln'):
+    for inp in glob.iglob(os.path.join(input_alns, '*.aln')):
         marker = inp[inp.rfind('/')+1:inp.rfind('.')]
         starting_tree = input_trees+marker+'.tre'
         out = marker+'.tre'
         model = sub_mod[marker]
 
         if os.path.isfile(starting_tree):
-            if (not os.path.isfile(output_folder+out)) and (not os.path.isfile(output_folder+"RAxML_bestTree."+out)):
+            if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, "RAxML_bestTree."+out))):
                 commands.append((configs[key], model, inp, starting_tree, os.path.abspath(output_folder), out))
         else:
             error('starting tree "{}" not found in "{}", built from "{}"'.format(starting_tree, input_trees, inp))
@@ -1952,35 +1998,42 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
 
 def refine_gene_tree_rec(x):
     if not terminating.is_set():
-        t0 = time.time()
-        params, model, inp, st, abs_wf, out = x
-        info('Refining gene tree "{}"\n'.format(inp))
-        cmd = compose_command(params, sub_mod=model, input_file=inp, database=st, output_path=abs_wf, output_file=out)
-        inp_f = None
-        out_f = sb.DEVNULL
-
-        if cmd['stdin']:
-            inp_f = open(cmd['stdin'], 'r')
-
-        if cmd['stdout']:
-            out_f = open(cmd['stdout'], 'w')
-
         try:
-            sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            t0 = time.time()
+            params, model, inp, st, abs_wf, out = x
+            info('Refining gene tree "{}"\n'.format(inp))
+            cmd = compose_command(params, sub_mod=model, input_file=inp, database=st, output_path=abs_wf, output_file=out)
+            inp_f = None
+            out_f = sb.DEVNULL
+
+            if cmd['stdin']:
+                inp_f = open(cmd['stdin'], 'r')
+
+            if cmd['stdout']:
+                out_f = open(cmd['stdout'], 'w')
+
+            try:
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+            except Exception as e:
+                terminating.set()
+                remove_file(cmd['output_file'], path=cmd['output_path'])
+                error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
+                error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+                raise
+
+            if cmd['stdin']:
+                inp_f.close()
+
+            if cmd['stdout']:
+                out_f.close()
+
+            t1 = time.time()
+            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
         except Exception as e:
             terminating.set()
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-            error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True)
+            error('error while refining gene tree\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
-
-        if cmd['stdin']:
-            inp_f.close()
-
-        if cmd['stdout']:
-            out_f.close()
-
-        t1 = time.time()
-        info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
     else:
         terminating.set()
 
@@ -1995,14 +2048,14 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
     info('Merging gene trees\n')
 
     with open(output_file, 'w') as f:
-        for gtree in glob.iglob(trees_folder+"*bestTree*.tre"): # RAxML files
+        for gtree in glob.iglob(os.path.join(trees_folder, "*bestTree*.tre")): # RAxML files
             raxml = True
 
             with open(gtree) as g:
                 f.write(g.read())
 
         if not raxml:
-            for gtree in glob.iglob(trees_folder+"*.tre"):
+            for gtree in glob.iglob(os.path.join(trees_folder, "*.tre")):
                 with open(gtree) as g:
                     f.write(g.read())
 
@@ -2011,8 +2064,8 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
 
 
 def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, verbose=False):
-    if os.path.isfile(output_tree):
-        info('Phylogeny "{}" already built\n'.format(output_tree))
+    if os.path.isfile(os.path.join(output_path, output_tree)):
+        info('Phylogeny "{}" already built\n'.format(os.path.join(output_path, output_tree)))
         return
 
     t0 = time.time()
@@ -2030,6 +2083,7 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1, ver
     try:
         sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
     except Exception as e:
+        remove_file(cmd['output_file'], path=cmd['output_path'], verbose=verbose)
         error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
         error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
@@ -2060,6 +2114,7 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
         try:
             sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
         except Exception as e:
+            remove_file(cmd['output_file'], path=cmd['output_path'], verbose=verbose)
             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
             error('error while executing\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
@@ -2075,8 +2130,7 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
         info('Phylogeny "{}" already refined\n'.format(output_tree))
 
 
-if __name__ == '__main__':
-    t0 = time.time()
+def phylophlan2():
     args = read_params()
     project_name = check_args(args, verbose=args.verbose)
 
@@ -2093,78 +2147,81 @@ if __name__ == '__main__':
     db_dna, db_aa = init_database(args.database, args.databases_folder, configs, '', 'db_aa', verbose=args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
-        input_fna = load_input_files(args.input_folder, args.data_folder+'bz2/', args.genome_extension, verbose=args.verbose)
+        input_fna = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.genome_extension, verbose=args.verbose)
 
         if input_fna:
-            gene_markers_identification(configs, 'map_dna', input_fna, args.data_folder+'map_dna/', args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-            gene_markers_selection(args.data_folder+'map_dna/', largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-            gene_markers_extraction(input_fna, args.data_folder+'map_dna/', args.data_folder+'markers_dna/', args.genome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
-            fake_proteome(args.data_folder+'markers_dna/', args.data_folder+'fake_proteomes/', args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_identification(configs, 'map_dna', input_fna, os.path.join(args.data_folder, 'map_dna', ''), args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_selection(os.path.join(args.data_folder, 'map_dna', ''), largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+            gene_markers_extraction(input_fna, os.path.join(args.data_folder, 'map_dna', ''), os.path.join(args.data_folder, 'markers_dna', ''), args.genome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
+            fake_proteome(os.path.join(args.data_folder, 'markers_dna', ''), os.path.join(args.data_folder, 'fake_proteomes', ''), args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
 
-        faa = load_input_files(args.input_folder, args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
-        input_faa = load_input_files(args.data_folder+'fake_proteomes/', args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
+        faa = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
+        input_faa = load_input_files(os.path.join(args.data_folder, 'fake_proteomes', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
         input_faa.update(faa) # if duplicates input keep the ones from 'faa'
 
         if input_faa:
             input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
             if input_faa_checked:
-                clean_input_proteomes(input_faa_checked, args.data_folder+'clean_aa/', nproc=args.nproc, verbose=args.verbose)
-                input_faa_clean = load_input_files(args.data_folder+'clean_aa/', args.data_folder+'bz2/', args.proteome_extension, verbose=args.verbose)
+                clean_input_proteomes(input_faa_checked, os.path.join(args.data_folder, 'clean_aa', ''), nproc=args.nproc, verbose=args.verbose)
+                input_faa_clean = load_input_files(os.path.join(args.data_folder, 'clean_aa', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
 
                 if input_faa_clean:
-                    gene_markers_identification(configs, 'map_aa', input_faa_clean, args.data_folder+'map_aa/', args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_selection(args.data_folder+'map_aa/', best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_extraction(input_faa_clean, args.data_folder+'map_aa/', args.data_folder+'markers_aa/', args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_identification(configs, 'map_aa', input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_selection(os.path.join(args.data_folder, 'map_aa', ''), best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                    gene_markers_extraction(input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), os.path.join(args.data_folder, 'markers_aa', ''), args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
 
-        inputs2markers(args.data_folder+'markers_aa/', args.data_folder+'markers/', args.min_num_entries, args.proteome_extension, verbose=args.verbose)
-        inp_f = args.data_folder+'markers/'
+        inputs2markers(os.path.join(args.data_folder, 'markers_aa', ''), os.path.join(args.data_folder, 'markers', ''), args.min_num_entries, args.proteome_extension, verbose=args.verbose)
+        inp_f = os.path.join(args.data_folder, 'markers', '')
 
         if args.integrate:
-            input_integrate = integrate(inp_f, args.databases_folder+args.database, args.data_folder, nproc=args.nproc, verbose=args.verbose)
+            input_integrate = integrate(inp_f, os.path.join(args.databases_folder, args.database), args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
-        out_f = args.data_folder+'msas/'
+        out_f = os.path.join(args.data_folder, 'msas', '')
         msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
         if args.trim:
             if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
-                out_f = args.data_folder+'trim_gappy/'
+                out_f = os.path.join(args.data_folder, 'trim_gappy', '')
                 trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
 
             if (args.trim == 'not_variant') or (args.trim == 'greedy'):
-                out_f = args.data_folder+'trim_not_variant/'
+                out_f = os.path.join(args.data_folder, 'trim_not_variant', '')
                 trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
 
         if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
-            out_f = args.data_folder
-            out_f += 'fragmentary/' if args.remove_fragmentary_entries else 'only_gaps/'
+            out_f = os.path.join(args.data_folder, 'only_gaps', '')
+
+            if args.remove_fragmentary_entries:
+                out_f = os.path.join(args.data_folder, 'fragmentary', '')
+
             remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold, args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if args.subsample:
-            out_f = args.data_folder+'sub/'
-            subsample(inp_f, out_f, args.subsample, args.scoring_function, args.submat_folder+args.submat+'.pkl', nproc=args.nproc, verbose=args.verbose)
+            out_f = os.path.join(args.data_folder, 'sub', '')
+            subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat+'.pkl'), unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if 'gene_tree1' in configs:
             sub_mod = load_substitution_model(args.maas)
-            out_f = args.data_folder+'gene_tree1/'
+            out_f = os.path.join(args.data_folder, 'gene_tree1', '')
             build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
             if 'gene_tree2' in configs:
-                outt = args.data_folder+'gene_tree1_polytomies/'
+                outt = os.path.join(args.data_folder, 'gene_tree1_polytomies', '')
                 resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
                 out_f = outt
 
-                outt = args.data_folder+'gene_tree2/'
+                outt = os.path.join(args.data_folder, 'gene_tree2', '')
                 refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
                 out_f = outt
 
             inp_f = out_f
-            out_f = args.data_folder+'gene_trees.tre'
+            out_f = os.path.join(args.data_folder, 'gene_trees.tre')
             merging_gene_trees(inp_f, out_f, verbose=args.verbose)
             inp_f = out_f
         else:
@@ -2173,7 +2230,7 @@ if __name__ == '__main__':
             if args.integrate:
                 all_inputs = (a for a in list(all_inputs)+list(input_integrate))
 
-            out_f = args.data_folder+'all.aln'
+            out_f = os.path.join(args.data_folder, 'all.aln')
             concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
             inp_f = out_f
 
@@ -2184,13 +2241,17 @@ if __name__ == '__main__':
 
         if 'tree2' in configs:
             outt = project_name+'_resolved.tre'
-            resolve_polytomies(out_f, args.output_folder+outt, nproc=args.nproc, verbose=args.verbose)
-            out_f = outt
+            resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt), nproc=args.nproc, verbose=args.verbose)
+            out_f = os.path.join(args.output_folder, outt)
 
             refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
     else: # metagenomic application
         pass
 
+
+if __name__ == '__main__':
+    t0 = time.time()
+    phylophlan2()
     t1 = time.time()
-    info('\nTotal elapsed time {}s\n'.format(int(t1-t0)))
+    info('Total elapsed time {}s\n'.format(int(t1-t0)))
     sys.exit(0)
