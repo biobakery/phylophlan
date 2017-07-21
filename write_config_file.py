@@ -11,7 +11,7 @@ MSA_CHOICES = ['muscle', 'mafft', 'opal', 'upp']
 TRIM_CHOICES = ['trimal']
 GENE_TREE1_CHOICES = ['fasttree', 'raxml']
 GENE_TREE2_CHOICES = ['raxml']
-TREE1_CHOICES = ['fasttree', 'raxml', 'astral']
+TREE1_CHOICES = ['fasttree', 'raxml', 'astral', 'astrid']
 TREE2_CHOICES = ['raxml']
 
 
@@ -197,6 +197,13 @@ if __name__ == '__main__':
                      # 'version': '--help',
                      'version': '-i /CM/tools/astral-4.11.1/test_data/song_mammals.424.gene.tre',
                      'command_line': '#program_name# #input# #output#'}
+        if 'astrid' in args.tree1:
+            tree1 = {'program_name': 'ASTRID',
+                     'input': '-i',
+                     'params': '-m auto',
+                     'output': '-o',
+                     'version': '--help',
+                     'command_line': '#program_name# #input# #params# #output#'}
         elif 'fasttree' in args.tree1:
             tree1 = {'program_name': 'FastTreeMP-2.1.9-SSE3',
                      'params': '-quiet -lg -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
