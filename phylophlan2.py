@@ -47,7 +47,7 @@ MIN_NUM_PROTEINS = 100
 MIN_LEN_PROTEIN = 50
 MIN_NUM_MARKERS = 0
 TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
-SUBSAMPLE_CHOICES = ['phylophlan', 'onehundred', 'fifty']
+SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'onehundred', 'fifty']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
 MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
@@ -88,6 +88,7 @@ def read_params():
     group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None, help="Clean the final and partial data produced for the specified project")
 
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database to use")
+    p.add_argument('-t', '--db_type', default=None, choices=['n', 'a'], help="Specify the type of the database, where 'n' stands for nucleotides and 'a' for amino acids")
     p.add_argument('-f', '--config_file', type=str, default=None, help="The configuration file to load")
     p.add_argument('-s', '--submat', type=str, default=None, help="Specify the substitution matrix to use")
 
@@ -101,13 +102,6 @@ def read_params():
     group.add_argument('--phylum', action='store_true', default=False, help="")
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
-
-    group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
-    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default {}".format(INPUT_FOLDER))
-    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATA_FOLDER))
-    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATABASES_FOLDER))
-    group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER, help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
-    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default {}".format(OUTPUT_FOLDER))
 
     p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database files that are automatically generated at the first run of the pipeline")
     p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
@@ -127,6 +121,14 @@ def read_params():
     p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES, help="The minimum number of entries to be present for each fo the markers in the database, default {}".format(MIN_NUM_ENTRIES))
     p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the susbstitution model of amino acid to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
     p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed. This is equivalent to specify '--remove_fragmentary_entries --fragmentary_threshold 1'")
+
+    group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
+    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default {}".format(INPUT_FOLDER))
+    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATA_FOLDER))
+    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATABASES_FOLDER))
+    group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER, help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
+    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default {}".format(OUTPUT_FOLDER))
+
     group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
     group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Set the extension for the proteomes in your inputs, default .faa")
@@ -614,7 +616,7 @@ def clean_all(databases_folder, verbose=False):
             info('Removing "{}"\n'.format(f))
 
         os.remove(f)
-        f_clean = f[:f.rfind('.')]
+        f_clean, _ = os.path.splitext(f)
 
         if os.path.isfile(f_clean+'.faa') and os.path.isfile(f_clean+'.faa.bz2'):
             if verbose:
@@ -671,7 +673,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                     os.mkdir(tmp_folder)
 
                 hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
-                file_clean = f[f.rfind('/')+1:].replace(extension, '').replace('.bz2', '')+'_'+hashh+extension
+                file_clean = os.path.basename(f).replace(extension, '').replace('.bz2', '')+'_'+hashh+extension
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g:
@@ -682,7 +684,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith(extension):
-                inputs[f[f.rfind('/')+1:]] = input_folder
+                inputs[os.path.basename(f)] = input_folder
             else:
                 info('Input file "{}" not recognized\n'.format(f))
 
@@ -763,7 +765,7 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    commands = [(inp, os.path.join(output_folder, inp[inp.rfind('/')+1:])) for inp in inputs if not os.path.isfile(os.path.join(output_folder, inp[inp.rfind('/')+1:]))]
+    commands = [(inp, os.path.join(output_folder, os.path.basename(inp))) for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
 
     if commands:
         info('Cleaning {} inputs\n'.format(len(commands)))
@@ -786,7 +788,7 @@ def clean_input_proteomes_rec(x):
         try:
             t0 = time.time()
             inp, out = x
-            inp_clean = inp[inp.rfind('/')+1:inp.rfind('.')]
+            inp_clean, _ = os.path.splitext(os.path.basename(inp))
             info('Cleaning "{}"\n'.format(inp))
             output = (SeqRecord(seq_record.seq, id='{}_{}'.format(inp_clean, counter), description='') for counter, seq_record in enumerate(SeqIO.parse(inp, "fasta")))
 
@@ -817,7 +819,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp, inp_fol in inputs.items():
-        out = os.path.join(output_folder, inp[:inp.rfind('.')]+'.b6o.bkp')
+        out = os.path.join(output_folder, os.path.splitext(inp)[0]+'.b6o.bkp')
 
         if not os.path.isfile(out):
             commands.append((configs[key], os.path.join(inp_fol, inp), database, out, min_num_proteins))
@@ -995,7 +997,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for f in glob.iglob(os.path.join(input_folder, '*.b6o')):
-        f_clean = f[f.rfind('/')+1:].replace('.b6o', '')+extension
+        f_clean = os.path.basename(f).replace('.b6o', '')+extension
         src_file = os.path.join(inputs[f_clean], f_clean)
         out_file = os.path.join(output_folder, f_clean)
 
@@ -1087,7 +1089,7 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, npro
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for f in glob.iglob(os.path.join(input_folder, '*'+in_extension)):
-        out = os.path.join(output_folder, f[f.rfind('/')+1:f.rfind('.')]+out_extension)
+        out = os.path.join(output_folder, os.path.splitext(os.path.basename(f))[0]+out_extension)
 
         if not os.path.isfile(out):
             commands.append((f, out))
@@ -1165,7 +1167,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries, proteome_extens
             return
 
     for f in glob.iglob(os.path.join(input_folder, '*'+proteome_extension)):
-        inp = f[f.rfind('/')+1:f.rfind('.')]
+        inp = os.path.splitext(os.path.basename(f))
 
         for seq_record in SeqIO.parse(f, "fasta"):
             marker = seq_record.id.split(':')[0].split('_')[-1]
@@ -1205,7 +1207,7 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
             error('integrate() what\'s this "{}"??'.format(database), exit=True)
 
         for mrk in glob.iglob(os.path.join(inp_f, '*')):
-            marker = mrk[mrk.rfind('/')+1:mrk.rfind('.')]
+            marker = os.path.splitext(os.path.basename(mrk))
 
             if folder:
                 mrks = [m for m in markers if marker in m]
@@ -1283,7 +1285,7 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*'+extension)):
-        out = os.path.join(output_folder, inp[inp.rfind('/')+1:inp.rfind('.')]+'.aln')
+        out = os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0]+'.aln')
 
         if not os.path.isfile(out):
             commands.append((configs[key], inp, out))
@@ -1359,13 +1361,22 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         info('Folder "{}" already exists\n'.format(output_folder))
 
     if os.path.isdir(inputt):
-        for inp in glob.iglob(os.path.join(inputt, '*.aln')):
-            out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
+        for inp in glob.iglob(os.path.join(inputt, '*.aln')): # load all .aln files
+            out = os.path.join(output_folder, os.path.basename(inp))
 
             if not os.path.isfile(out):
                 commands.append((configs[key], inp, out))
+
+        if not commands: # try to see if the alignments were computed using UPP
+            for inp in glob.iglob(os.path.join(inputt, '*_alignment_masked.fasta')):
+                out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', '')+'.aln')
+
+                if not os.path.isfile(out):
+                    commands.append((configs[key], inp, out))
+
     elif os.path.isfile(inputt):
-        out = inputt[:inputt.rfind('.')]+'.trim_gappy'+inputt[inputt.rfind('.'):]
+        base, ext = os.path.splitext(inputt)
+        out = base+'.trim_gappy'+ext
 
         if not os.path.isfile(out):
             commands.append((configs[key], inputt, out))
@@ -1443,12 +1454,20 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
 
     if os.path.isdir(inputt):
         for inp in glob.iglob(os.path.join(inputt, '*.aln')):
-            out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
+            out = os.path.join(output_folder, os.path.basename(inp))
 
             if not os.path.isfile(out):
                 commands.append((inp, out, not_variant_threshold))
+
+        if not commands: # try to see if the alignments were computed using UPP
+            for inp in glob.iglob(os.path.join(inputt, '*_alignment_masked.fasta')):
+                out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', '')+'.aln')
+
+                if not os.path.isfile(out):
+                    commands.append((configs[key], inp, out))
     elif os.path.isfile(inputt):
-        out = inputt[:inputt.rfind('.')]+'.trim_not_variant'+inputt[inputt.rfind('.'):]
+        base, ext = os.path.splitext(inputt)
+        out = base+'.trim_not_variant'+ext
 
         if not os.path.isfile(out):
             commands.append((inputt, out, not_variant_threshold))
@@ -1531,10 +1550,17 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder, fragmen
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
-        out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
+        out = os.path.join(output_folder, os.path.basename(inp))
 
         if not os.path.isfile(out):
             commands.append((inp, out, fragmentary_threshold, min_num_entries, verbose))
+
+        if not commands: # try to see if the alignments were computed using UPP
+            for inp in glob.iglob(os.path.join(input_folder, '*_alignment_masked.fasta')):
+                out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', '')+'.aln')
+
+                if not os.path.isfile(out):
+                    commands.append((configs[key], inp, out))
 
     if commands:
         info('Checking {} alignments for fragmentary entries (thr: {})\n'.format(len(commands), fragmentary_threshold))
@@ -1614,10 +1640,17 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
-        out = os.path.join(output_folder, inp[inp.rfind('/')+1:])
+        out = os.path.join(output_folder, os.path.basename(inp))
 
         if not os.path.isfile(out):
             commands.append((inp, out, positions_function, scoring_function, unknown_fraction, mat))
+
+        if not commands: # try to see if the alignments were computed using UPP
+            for inp in glob.iglob(os.path.join(input_folder, '*_alignment_masked.fasta')):
+                out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', '')+'.aln')
+
+                if not os.path.isfile(out):
+                    commands.append((configs[key], inp, out))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
@@ -1659,7 +1692,7 @@ def subsample_rec(x):
                 scores.append((score_function(inp_aln[:, i], mat), i))
 
             try:
-                marker = inp[inp.rfind('/')+1:inp.rfind('.')][1:]
+                marker = os.path.splitext(os.path.basename(inp))[0][1:]
                 marker = int(marker)
             except:
                 marker = None
@@ -1689,6 +1722,10 @@ def subsample_rec(x):
 def phylophlan(marker):
     # return max(int(max(int((400-marker)*30/400.0), 1)**2/30.0), 3) # ~4k AAs (original PhyloPhlAn formulae)
     return max(int(math.ceil(max(int(math.ceil((400-marker)*30/400.0)), 1)**2/30.0)), 3) # ~4.6k AAs
+
+
+def onethousand(_):
+    return 1000
 
 
 def onehundred(_):
@@ -1775,15 +1812,7 @@ def load_substitution_model(input_file):
     elif not os.path.isfile(input_file):
         error('file "{}" not found'.format(input_file), exit=True)
 
-    sub_mod = {}
-
-    with open(input_file) as f:
-        for line in f:
-            if not line.startswith('#'):
-                line_clean = line.strip()
-                sub_mod[line_clean.split('\t')[0]] = line_clean.split('\t')[1]
-
-    return sub_mod
+    return dict(((line.strip().split('\t')[0], line.strip().split('\t')[1]) for line in open(input_file) if not line.startswith('#')))
 
 
 def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False):
@@ -1794,7 +1823,10 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
     info('Concatenating alignments\n')
     all_inputs = set(all_inputs)
     inputs2alingments = dict(((inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs))
-    markers = glob.iglob(os.path.join(input_folder, '*'))
+    markers = glob.iglob(os.path.join(input_folder, '*.aln'))
+
+    if not list(markers): # try to see if the alignments were computed using UPP
+        markers = glob.iglob(os.path.join(input_folder, '*_alignment_masked.fasta'))
 
     if sort:
         markers = sorted(markers)
@@ -1831,9 +1863,18 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
-        marker = inp[inp.rfind('/')+1:inp.rfind('.')]
+        marker, _ = os.path.splitext(os.path.basename(inp))
         out = marker+'.tre'
         model = sub_mod[marker]
+
+        if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, "RAxML_bestTree."+out))):
+            commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
+
+    if not commands: # try to see if the alignments were computed using UPP
+        for inp in glob.iglob(os.path.join(input_folder, '*_alignment_masked.fasta')):
+            marker, _ = os.path.basename(inp).replace('_alignment_masked.fasta', '')
+            out = marker+'.tre'
+            model = sub_mod[marker]
 
         if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, "RAxML_bestTree."+out))):
             commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
@@ -1900,8 +1941,8 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
     commands = []
 
     if os.path.isfile(inputt):
-        output_path = output[:output.rfind('/')+1]
-        output_file = output[output.rfind('/')+1:]
+        output_path = os.path.dirname(output)
+        output_file = os.path.basename(output)
 
         if (not os.path.isfile(output)) and (not os.path.isfile(os.path.join(output_path, "RAxML_bestTree."+output_file))):
             commands.append((inputt, output))
@@ -1916,7 +1957,7 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
             info('Folder "{}" already exists\n'.format(output))
 
         for inp in glob.iglob(os.path.join(inputt, '*.tre')):
-            out = inp[inp.rfind('/')+1:]
+            out = os.path.basename(inp)
 
             if (not os.path.isfile(os.path.join(output, out))) and (not os.path.isfile(os.path.join(output, "RAxML_bestTree."+out))):
                 commands.append((inp, os.path.join(output, out)))
@@ -1969,7 +2010,7 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
         info('Folder "{}" already exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_alns, '*.aln')):
-        marker = inp[inp.rfind('/')+1:inp.rfind('.')]
+        marker, _ = os.path.splitext(os.path.basename(inp))
         starting_tree = input_trees+marker+'.tre'
         out = marker+'.tre'
         model = sub_mod[marker]
@@ -2130,6 +2171,107 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
         info('Phylogeny "{}" already refined\n'.format(output_tree))
 
 
+def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
+    input_fna = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.genome_extension, verbose=args.verbose)
+
+    if input_fna:
+        gene_markers_identification(configs, 'map_dna', input_fna, os.path.join(args.data_folder, 'map_dna', ''), args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+        gene_markers_selection(os.path.join(args.data_folder, 'map_dna', ''), largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+        gene_markers_extraction(input_fna, os.path.join(args.data_folder, 'map_dna', ''), os.path.join(args.data_folder, 'markers_dna', ''), args.genome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
+        fake_proteome(os.path.join(args.data_folder, 'markers_dna', ''), os.path.join(args.data_folder, 'fake_proteomes', ''), args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
+
+    faa = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
+    input_faa = load_input_files(os.path.join(args.data_folder, 'fake_proteomes', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
+    input_faa.update(faa) # if duplicates input keep the ones from 'faa'
+
+    if input_faa:
+        input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.data_folder, nproc=args.nproc, verbose=args.verbose)
+
+        if input_faa_checked:
+            clean_input_proteomes(input_faa_checked, os.path.join(args.data_folder, 'clean_aa', ''), nproc=args.nproc, verbose=args.verbose)
+            input_faa_clean = load_input_files(os.path.join(args.data_folder, 'clean_aa', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
+
+            if input_faa_clean:
+                gene_markers_identification(configs, 'map_aa', input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_selection(os.path.join(args.data_folder, 'map_aa', ''), best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_extraction(input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), os.path.join(args.data_folder, 'markers_aa', ''), args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
+
+    inputs2markers(os.path.join(args.data_folder, 'markers_aa', ''), os.path.join(args.data_folder, 'markers', ''), args.min_num_entries, args.proteome_extension, verbose=args.verbose)
+    inp_f = os.path.join(args.data_folder, 'markers', '')
+
+    if args.integrate:
+        input_integrate = integrate(inp_f, os.path.join(args.databases_folder, args.database), args.data_folder, nproc=args.nproc, verbose=args.verbose)
+
+    out_f = os.path.join(args.data_folder, 'msas', '')
+    msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
+    inp_f = out_f
+
+    if args.trim:
+        if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
+            out_f = os.path.join(args.data_folder, 'trim_gappy', '')
+            trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+            inp_f = out_f
+
+        if (args.trim == 'not_variant') or (args.trim == 'greedy'):
+            out_f = os.path.join(args.data_folder, 'trim_not_variant', '')
+            trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
+            inp_f = out_f
+
+    if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
+        out_f = os.path.join(args.data_folder, 'only_gaps', '')
+
+        if args.remove_fragmentary_entries:
+            out_f = os.path.join(args.data_folder, 'fragmentary', '')
+
+        remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold, args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
+
+    if args.subsample:
+        out_f = os.path.join(args.data_folder, 'sub', '')
+        subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat+'.pkl'), unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
+
+    if 'gene_tree1' in configs:
+        sub_mod = load_substitution_model(args.maas)
+        out_f = os.path.join(args.data_folder, 'gene_tree1', '')
+        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+
+        if 'gene_tree2' in configs:
+            outt = os.path.join(args.data_folder, 'gene_tree1_polytomies', '')
+            resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
+            out_f = outt
+
+            outt = os.path.join(args.data_folder, 'gene_tree2', '')
+            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
+            out_f = outt
+
+        inp_f = out_f
+        out_f = os.path.join(args.data_folder, 'gene_trees.tre')
+        merging_gene_trees(inp_f, out_f, verbose=args.verbose)
+        inp_f = out_f
+    else:
+        all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
+
+        if args.integrate:
+            all_inputs = (a for a in list(all_inputs)+list(input_integrate))
+
+        out_f = os.path.join(args.data_folder, 'all.aln')
+        concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
+        inp_f = out_f
+
+        # should check again for "fragmentary" (or "only gaps"?) entries?
+
+    out_f = project_name+'.tre'
+    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
+
+    if 'tree2' in configs:
+        outt = project_name+'_resolved.tre'
+        resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt), nproc=args.nproc, verbose=args.verbose)
+        out_f = os.path.join(args.output_folder, outt)
+
+        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
+
+
 def phylophlan2():
     args = read_params()
     project_name = check_args(args, verbose=args.verbose)
@@ -2147,104 +2289,7 @@ def phylophlan2():
     db_dna, db_aa = init_database(args.database, args.databases_folder, configs, '', 'db_aa', verbose=args.verbose)
 
     if not args.meta: # standard phylogeny reconstruction
-        input_fna = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.genome_extension, verbose=args.verbose)
-
-        if input_fna:
-            gene_markers_identification(configs, 'map_dna', input_fna, os.path.join(args.data_folder, 'map_dna', ''), args.database, db_dna, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-            gene_markers_selection(os.path.join(args.data_folder, 'map_dna', ''), largest_cluster, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-            gene_markers_extraction(input_fna, os.path.join(args.data_folder, 'map_dna', ''), os.path.join(args.data_folder, 'markers_dna', ''), args.genome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
-            fake_proteome(os.path.join(args.data_folder, 'markers_dna', ''), os.path.join(args.data_folder, 'fake_proteomes', ''), args.genome_extension, args.proteome_extension, nproc=args.nproc, verbose=args.verbose)
-
-        faa = load_input_files(args.input_folder, os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
-        input_faa = load_input_files(os.path.join(args.data_folder, 'fake_proteomes', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
-        input_faa.update(faa) # if duplicates input keep the ones from 'faa'
-
-        if input_faa:
-            input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein, args.data_folder, nproc=args.nproc, verbose=args.verbose)
-
-            if input_faa_checked:
-                clean_input_proteomes(input_faa_checked, os.path.join(args.data_folder, 'clean_aa', ''), nproc=args.nproc, verbose=args.verbose)
-                input_faa_clean = load_input_files(os.path.join(args.data_folder, 'clean_aa', ''), os.path.join(args.data_folder, 'bz2', ''), args.proteome_extension, verbose=args.verbose)
-
-                if input_faa_clean:
-                    gene_markers_identification(configs, 'map_aa', input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), args.database, db_aa, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_selection(os.path.join(args.data_folder, 'map_aa', ''), best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                    gene_markers_extraction(input_faa_clean, os.path.join(args.data_folder, 'map_aa', ''), os.path.join(args.data_folder, 'markers_aa', ''), args.proteome_extension, args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
-
-        inputs2markers(os.path.join(args.data_folder, 'markers_aa', ''), os.path.join(args.data_folder, 'markers', ''), args.min_num_entries, args.proteome_extension, verbose=args.verbose)
-        inp_f = os.path.join(args.data_folder, 'markers', '')
-
-        if args.integrate:
-            input_integrate = integrate(inp_f, os.path.join(args.databases_folder, args.database), args.data_folder, nproc=args.nproc, verbose=args.verbose)
-
-        out_f = os.path.join(args.data_folder, 'msas', '')
-        msas(configs, 'msa', inp_f, args.proteome_extension, out_f, nproc=args.nproc, verbose=args.verbose)
-        inp_f = out_f
-
-        if args.trim:
-            if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
-                out_f = os.path.join(args.data_folder, 'trim_gappy', '')
-                trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
-                inp_f = out_f
-
-            if (args.trim == 'not_variant') or (args.trim == 'greedy'):
-                out_f = os.path.join(args.data_folder, 'trim_not_variant', '')
-                trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
-                inp_f = out_f
-
-        if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
-            out_f = os.path.join(args.data_folder, 'only_gaps', '')
-
-            if args.remove_fragmentary_entries:
-                out_f = os.path.join(args.data_folder, 'fragmentary', '')
-
-            remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold, args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
-            inp_f = out_f
-
-        if args.subsample:
-            out_f = os.path.join(args.data_folder, 'sub', '')
-            subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat+'.pkl'), unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
-            inp_f = out_f
-
-        if 'gene_tree1' in configs:
-            sub_mod = load_substitution_model(args.maas)
-            out_f = os.path.join(args.data_folder, 'gene_tree1', '')
-            build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
-
-            if 'gene_tree2' in configs:
-                outt = os.path.join(args.data_folder, 'gene_tree1_polytomies', '')
-                resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
-                out_f = outt
-
-                outt = os.path.join(args.data_folder, 'gene_tree2', '')
-                refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
-                out_f = outt
-
-            inp_f = out_f
-            out_f = os.path.join(args.data_folder, 'gene_trees.tre')
-            merging_gene_trees(inp_f, out_f, verbose=args.verbose)
-            inp_f = out_f
-        else:
-            all_inputs = (i[i.rfind('/')+1:i.rfind('.')] for i in input_faa_clean)
-
-            if args.integrate:
-                all_inputs = (a for a in list(all_inputs)+list(input_integrate))
-
-            out_f = os.path.join(args.data_folder, 'all.aln')
-            concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
-            inp_f = out_f
-
-            # should check again for "fragmentary" (or "only gaps"?) entries?
-
-        out_f = project_name+'.tre'
-        build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
-
-        if 'tree2' in configs:
-            outt = project_name+'_resolved.tre'
-            resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt), nproc=args.nproc, verbose=args.verbose)
-            out_f = os.path.join(args.output_folder, outt)
-
-            refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
+        standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
     else: # metagenomic application
         pass
 
