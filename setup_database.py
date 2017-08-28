@@ -38,3 +38,18 @@ from Bio.SeqRecord import SeqRecord
 
 # with open('databases/cparvum/cparvum.fna', 'w') as f:
 #     SeqIO.write(seqs, f, "fasta")
+
+#############
+# C. parvum #
+#############
+database_name = 'erectale'
+seqs = []
+seq_counter = 0
+
+for seq_record in SeqIO.parse('databases/erectale/core_genes_extracted.fa', "fasta"):
+    seqs.append(SeqRecord(seq_record.seq, id='{}_{}_{}'.format(database_name, seq_record.id.replace('_', '-'), seq_counter), description=''))
+    seq_counter += 1
+
+with open('databases/erectale/erectale.fna', 'w') as f:
+    SeqIO.write(seqs, f, "fasta")
+
