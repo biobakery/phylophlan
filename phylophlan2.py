@@ -1048,12 +1048,13 @@ def best_hit(f):
         s = entry[6]
         e = entry[7]
         b = entry[-1]
+        rev = 'False' if int(s) < int(e) else 'True'
 
         if m in best_matches:
             if float(b) > float(best_matches[m][-1]):
-                best_matches[m] = [c, m, s, e, b]
+                best_matches[m] = [c, m, s, e, rev, b]
         else:
-            best_matches[m] = [c, m, s, e, b]
+            best_matches[m] = [c, m, s, e, rev, b]
 
     return [v for _, v in best_matches.items()]
 
