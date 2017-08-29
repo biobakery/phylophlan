@@ -775,7 +775,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                     os.mkdir(tmp_folder)
 
                 hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
-                file_clean = os.path.basename(f).replace(extension, '').replace('.bz2', '')+'_'+hashh+extension
+                file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0]+'_'+hashh+extension
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g:
