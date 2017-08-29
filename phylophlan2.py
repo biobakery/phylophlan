@@ -1583,20 +1583,20 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
             out = os.path.join(output_folder, os.path.basename(inp))
 
             if not os.path.isfile(out):
-                commands.append((inp, out, not_variant_threshold))
+                commands.append((inp, out, not_variant_threshold, verbose))
 
         if not commands: # try to see if the alignments were computed using UPP
             for inp in glob.iglob(os.path.join(inputt, '*.aln_alignment_masked.fasta')):
                 out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', ''))
 
                 if not os.path.isfile(out):
-                    commands.append((inp, out, not_variant_threshold))
+                    commands.append((inp, out, not_variant_threshold, verbose))
     elif os.path.isfile(inputt):
         base, ext = os.path.splitext(inputt)
         out = base+'.trim_not_variant'+ext
 
         if not os.path.isfile(out):
-            commands.append((inputt, out, not_variant_threshold))
+            commands.append((inputt, out, not_variant_threshold, verbosee))
     else:
         error('unrecognized input "{}" is not a folder nor a file'.format(inputt), exit=True)
 
@@ -1620,7 +1620,7 @@ def trim_not_variant_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, thr = x
+            inp, out, thr, verbose = x
             info('Trimming not variant "{}"\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
             nrows = len(inp_aln)
@@ -1637,11 +1637,14 @@ def trim_not_variant_rec(x):
                 seq = ''.join([c for i, c in enumerate(aln.seq) if i not in cols_to_remove])
                 sub_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
 
-            with open(out, 'w') as f:
-                AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
+            if sub_aln:
+                with open(out, 'w') as f:
+                    AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
 
-            t1 = time.time()
-            info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
+                t1 = time.time()
+                info('"{}" generated in {}s\n'.format(out, int(t1-t0)))
+            elif verbose:
+                    info('"{}" discarded because no cloumns retained while removing not variant sites (thr: {})'.format(inp, thr))
         except Exception as e:
             terminating.set()
             remove_file(out)
@@ -1974,7 +1977,10 @@ def gap_cost(seq, norm=True):
     gaps = seq.count('-')
 
     if norm:
-        gaps /= len(seq)
+        if len(seq) != 0:
+            gaps /= len(seq)
+        else:
+            gaps = 1 # in the range [0, 1], 1 plays the role of inifinity (instead of dividing by 0)
 
     return gaps
 
