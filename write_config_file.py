@@ -167,7 +167,7 @@ if __name__ == '__main__':
                       'command_line': '#program_name# #params# #threads# #input# #database# #output#'}
         elif 'diamond' in args.map_aa:
             map_aa = {'program_name': 'diamond',
-                      'params': 'blastp --quiet --threads 1 --outfmt 6 --more-sensitive --id 50',
+                      'params': 'blastp --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35',
                       'input': '--query',
                       'database': '--db',
                       'output': '--out',

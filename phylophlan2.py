@@ -1048,7 +1048,7 @@ def best_hit(f):
         s = entry[6]
         e = entry[7]
         b = entry[-1]
-        rev = 'False' if int(s) < int(e) else 'True'
+        rev = '0' if int(s) < int(e) else '1'
 
         if m in best_matches:
             if float(b) > float(best_matches[m][-1]):
@@ -1081,17 +1081,17 @@ def largest_cluster(f):
         ms = (int(s) for _, _, _, _, _, _, _, _, s, _, _, _ in entries)
         me = (int(e) for _, _, _, _, _, _, _, _, _, e, _, _ in entries)
         b = max((float(b) for _, _, _, _, _, _, _, _, _, _, _, b in entries))
-        rev = False
+        rev = 0
 
         for s, e in zip(cs, ce):
             if s > e: # check if the contig positions are reverse
-                rev = True
+                rev = 1
                 break
 
         if not rev: # if contig position are forward
             for s, e in zip(ms, me):
                 if s > e: # check if the marker positions are forward or reverse
-                    rev = True
+                    rev = 1
                     break
 
         largest_clusters.append([c, m, str(min(cs+ce)), str(max(cs+ce)), str(rev), str(b)])
@@ -2473,7 +2473,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt), nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.output_folder, outt)
 
-        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refine.tre', nproc=args.nproc, verbose=args.verbose)
+        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder), project_name+'_refined.tre', nproc=args.nproc, verbose=args.verbose)
 
 
 def phylophlan2():
