@@ -1149,7 +1149,7 @@ def gene_markers_extraction_rec(x):
                 marker = row[1]
                 start = int(row[2])
                 end = int(row[3])
-                rev = bool(row[4])
+                rev = bool(int(row[4]))
 
                 if (contig in contig2marker2b6o) and (marker in contig2marker2b6o[contig]):
                         error('contig: {} and marker: {} already present into contig2marker2b6o'.format(contig, marker))
@@ -1168,15 +1168,15 @@ def gene_markers_extraction_rec(x):
                         if rev:
                             idd += 'c'
 
-                        out_file_seq.append(SeqRecord(seq_record.seq[s:e], id=idd+'{}-{}'.format(s, e), description=''))
+                        out_file_seq.append(SeqRecord(seq_record.seq[s-1:e], id=idd+'{}-{}'.format(s-1, e), description=''))
 
                         if frameshifts:
                             if not rev:
+                                out_file_seq.append(SeqRecord(seq_record.seq[s:e], id=idd+'{}-{}'.format(s, e), description=''))
                                 out_file_seq.append(SeqRecord(seq_record.seq[s+1:e], id=idd+'{}-{}'.format(s+1, e), description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s+2:e], id=idd+'{}-{}'.format(s+2, e), description=''))
                             else:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s:e-1], id=idd+'{}-{}'.format(s, e-1), description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s:e-2], id=idd+'{}-{}'.format(s, e-2), description=''))
+                                out_file_seq.append(SeqRecord(seq_record.seq[s-1:e-1], id=idd+'{}-{}'.format(s-1, e-1), description=''))
+                                out_file_seq.append(SeqRecord(seq_record.seq[s-1:e-2], id=idd+'{}-{}'.format(s-1, e-2), description=''))
 
             len_out_file_seq = int(len(out_file_seq)/3) if frameshifts else len(out_file_seq)
 
