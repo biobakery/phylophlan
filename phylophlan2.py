@@ -24,7 +24,7 @@ from collections import Counter
 import bz2
 import math
 import re
-import hashlib
+# import hashlib
 import time
 import pickle
 from itertools import combinations
@@ -86,14 +86,25 @@ def read_params():
     p = ap.ArgumentParser(description="")
 
     group = p.add_mutually_exclusive_group()
-    group.add_argument('-i', '--integrate', metavar='PROJECT_NAME', type=str, default=None, help="Integrate user genomes into the PhyloPhlAn tree")
-    group.add_argument('-u', '--user_tree', metavar='PROJECT_NAME', type=str, default=None, help="Build a phylogenetic tree using only genomes provided by the user")
-    group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None, help="Clean the final and partial data produced for the specified project")
+    group.add_argument('-i', '--integrate', metavar='PROJECT_NAME', type=str,
+                       default=None, help="Integrate user genomes into the "
+                                          "PhyloPhlAn tree")
+    group.add_argument('-u', '--user_tree', metavar='PROJECT_NAME', type=str,
+                       default=None, help="Build a phylogenetic tree using "
+                                          "only genomes provided by the user")
+    group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str,
+                       default=None, help="Clean the final and partial data "
+                                          "produced for the specified project")
 
-    p.add_argument('-d', '--database', type=str, default=None, help="The name of the database to use")
-    p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES, help="Specify the type of the database, where 'n' stands for nucleotides and 'a' for amino acids")
-    p.add_argument('-f', '--config_file', type=str, default=None, help="The configuration file to load")
-    p.add_argument('-s', '--submat', type=str, default=None, help="Specify the substitution matrix to use")
+    p.add_argument('-d', '--database', type=str, default=None,
+                   help="The name of the database to use")
+    p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
+                   help="Specify the type of the database, where 'n' stands "
+                        "for nucleotides and 'a' for amino acids")
+    p.add_argument('-f', '--config_file', type=str, default=None,
+                   help="The configuration file to load")
+    p.add_argument('-s', '--submat', type=str, default=None,
+                   help="Specify the substitution matrix to use")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--strain', action='store_true', default=False, help="")
@@ -106,38 +117,134 @@ def read_params():
     group.add_argument('--tol', action='store_true', default=False, help="")
     group.add_argument('--meta', action='store_true', default=False, help="")
 
-    p.add_argument('--clean_all', action='store_true', default=False, help="Remove all instalation and database files that are automatically generated at the first run of the pipeline")
-    p.add_argument('--database_list', action='store_true', default=False, help="If specified lists the available databases that can be specified with the -d (or --database) option")
-    p.add_argument('--submat_list', action='store_true', default=False, help="If specified lists the available substitution matrices that can be specified with the -s (or --submat) option")
-    p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use, default 1")
-    p.add_argument('--min_num_proteins', type=int, default=MIN_NUM_PROTEINS, help="Proteomes (.faa) with less than this number of proteins will be discarded, default is {}".format(MIN_NUM_PROTEINS))
-    p.add_argument('--min_len_protein', type=int, default=MIN_LEN_PROTEIN, help="Proteins in proteomes (.faa) shorter than this value will be discarded, default is {}".format(MIN_LEN_PROTEIN))
-    p.add_argument('--min_num_markers', type=int, default=MIN_NUM_MARKERS, help="Inputs that map less than this number of markers will be discarded, default is {}".format(MIN_NUM_MARKERS))
-    p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify which type of trimming to perform, default None. 'gappy' will use what specified in the 'trim' section of the configuration file (suggested, trimal --gappyout) to remove gappy colums; 'not_variant' will remove columns that have at least one amino acid appearing above a certain threshold (see --not_variant_threshold); 'greedy' performs both 'gappy' and 'not_variant'")
-    p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD, help="The value used to consider a column not variant when '--trim not_variant' is specified, default {}".format(NOT_VARIANT_THRESHOLD))
-    p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES, help="Specify which function to use to compute the number of positions to retain from single marker MSAs for the concatenated MSA, default None. 'phylophlan' compute the number of position for each marker as in PhyloPhlAn (almost!) (works only when --database phylophlan); 'onethousand' return the top 1000 positions; 'onehundred' return the top 100 posisitons; 'fifty' return the top 50 positions; default None, the complete alignment will be used")
-    p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION, help="Define the amount of unknowns ('X' and '-') allowed in each column of the MSA of the markers, default {}".format(UNKNOWN_FRACTION))
-    p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES, help="Specify which scoring function to use to evaluate columns in the MSA results")
-    p.add_argument('--sort', action='store_true', default=False, help="If specified the markers will be ordered")
-    p.add_argument('--remove_fragmentary_entries', action='store_true', default=False, help="If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold for the threshold values above which an entry will be considered fragmentary")
-    p.add_argument('--fragmentary_threshold', type=float, default=FRAGMENTARY_THRESHOLD, help="The fraction of gaps in a MSA to be considered fragmentery and hence discarded, default {}".format(FRAGMENTARY_THRESHOLD))
-    p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES, help="The minimum number of entries to be present for each fo the markers in the database, default {}".format(MIN_NUM_ENTRIES))
-    p.add_argument('--maas', type=str, default=None, help="Specify a mapping file that specify the susbstitution model of amino acid to use for each of the markers for the gene tree reconstruction. File must be tab-separated")
-    p.add_argument('--remove_only_gaps_entries', action='store_true', default=False, help="If specified entries in MSAs composed only of gaps ('-') will be removed. This is equivalent to specify '--remove_fragmentary_entries --fragmentary_threshold 1'")
+    p.add_argument('--clean_all', action='store_true', default=False,
+                   help=("Remove all instalation and database files that are "
+                         "automatically generated at the first run of the "
+                         "pipeline"))
+    p.add_argument('--database_list', action='store_true', default=False,
+                   help=("If specified lists the available databases that can "
+                         "be specified with the -d (or --database) option"))
+    p.add_argument('--submat_list', action='store_true', default=False,
+                   help=("If specified lists the available substitution "
+                         "matrices that can be specified with the -s (or "
+                         "--submat) option"))
+    p.add_argument('--nproc', type=int, default=1, help=("The number of CPUs "
+                                                         "to use, default 1"))
+    p.add_argument('--min_num_proteins', type=int, default=MIN_NUM_PROTEINS,
+                   help=("Proteomes (.faa) with less than this number of "
+                         "proteins will be discarded, default is {}"
+                         .format(MIN_NUM_PROTEINS)))
+    p.add_argument('--min_len_protein', type=int, default=MIN_LEN_PROTEIN,
+                   help=("Proteins in proteomes (.faa) shorter than this "
+                         "value will be discarded, default is {}"
+                         .format(MIN_LEN_PROTEIN)))
+    p.add_argument('--min_num_markers', type=int, default=MIN_NUM_MARKERS,
+                   help=("Inputs that map less than this number of markers "
+                         "will be discarded, default is {}"
+                         .format(MIN_NUM_MARKERS)))
+    p.add_argument('--trim', default=None, choices=TRIM_CHOICES,
+                   help=("Specify which type of trimming to perform, default "
+                         "None. 'gappy' will use what specified in the 'trim' "
+                         "section of the configuration file (suggested, "
+                         "trimal --gappyout) to remove gappy colums; "
+                         "'not_variant' will remove columns that have at "
+                         "least one amino acid appearing above a certain "
+                         "threshold (see --not_variant_threshold); 'greedy' "
+                         "performs both 'gappy' and 'not_variant'"))
+    p.add_argument('--not_variant_threshold', type=float,
+                   default=NOT_VARIANT_THRESHOLD,
+                   help=("The value used to consider a column not variant "
+                         "when '--trim not_variant' is specified, default {}"
+                         .format(NOT_VARIANT_THRESHOLD)))
+    p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES,
+                   help=("Specify which function to use to compute the number "
+                         "of positions to retain from single marker MSAs for "
+                         "the concatenated MSA, default None. 'phylophlan' "
+                         "compute the number of position for each marker as "
+                         "in PhyloPhlAn (almost!) (works only when --database "
+                         "phylophlan); 'onethousand' return the top 1000 "
+                         "positions; 'onehundred' return the top 100 "
+                         "posisitons; 'fifty' return the top 50 positions; "
+                         "default None, the complete alignment will be used"))
+    p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION,
+                   help=("Define the amount of unknowns ('X' and '-') allowed "
+                         "in each column of the MSA of the markers, default {}"
+                         .format(UNKNOWN_FRACTION)))
+    p.add_argument('--scoring_function', default=None,
+                   choices=SCORING_FUNCTION_CHOICES,
+                   help=("Specify which scoring function to use to evaluate "
+                         "columns in the MSA results"))
+    p.add_argument('--sort', action='store_true', default=False,
+                   help="If specified the markers will be ordered")
+    p.add_argument('--remove_fragmentary_entries', action='store_true',
+                   default=False,
+                   help=("If specified the MSAs will be checked and cleaned "
+                         "from fragmentary entries. See "
+                         "--fragmentary_threshold for the threshold values "
+                         "above which an entry will be considered "
+                         "fragmentary"))
+    p.add_argument('--fragmentary_threshold', type=float,
+                   default=FRAGMENTARY_THRESHOLD,
+                   help=("The fraction of gaps in a MSA to be considered "
+                         "fragmentery and hence discarded, default {}"
+                         .format(FRAGMENTARY_THRESHOLD)))
+    p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES,
+                   help=("The minimum number of entries to be present for "
+                         "each of the markers in the database, default {}"
+                         .format(MIN_NUM_ENTRIES)))
+    p.add_argument('--maas', type=str, default=None,
+                   help=("Specify a mapping file that specify the "
+                         "susbstitution model of amino acid to use for each "
+                         "of the markers for the gene tree reconstruction. "
+                         "File must be tab-separated"))
+    p.add_argument('--remove_only_gaps_entries', action='store_true',
+                   default=False,
+                   help=("If specified entries in MSAs composed only of gaps "
+                         "('-') will be removed. This is equivalent to "
+                         "specify '--remove_fragmentary_entries "
+                         "--fragmentary_threshold 1'"))
 
-    group = p.add_argument_group(title="Folders", description="Parameters for setting the folders location")
-    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the folder with the input data, default {}".format(INPUT_FOLDER))
-    group.add_argument('--data_folder', type=str, default=DATA_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATA_FOLDER))
-    group.add_argument('--databases_folder', type=str, default=DATABASES_FOLDER, help="Path to the folder where to store the intermediate files, default {}".format(DATABASES_FOLDER))
-    group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER, help="Path to the folder containing the substition matrices to use to compute the column score for the subsampling step, default substition_matrices/")
-    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER, help="Path to the output folder where to save the results, default {}".format(OUTPUT_FOLDER))
+    group = p.add_argument_group(title="Folders",
+                                 description=("Parameters for setting the "
+                                              "folders location"))
+    group.add_argument('--input_folder', type=str, default=INPUT_FOLDER,
+                       help=("Path to the folder containing the folder with "
+                             "the input data, default {}"
+                             .format(INPUT_FOLDER)))
+    group.add_argument('--data_folder', type=str, default=DATA_FOLDER,
+                       help=("Path to the folder where to store the "
+                             "intermediate files, default {}"
+                             .format(DATA_FOLDER)))
+    group.add_argument('--databases_folder', type=str,
+                       default=DATABASES_FOLDER,
+                       help=("Path to the folder where to store the "
+                             "intermediate files, default {}"
+                             .format(DATABASES_FOLDER)))
+    group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER,
+                       help=("Path to the folder containing the substition "
+                             "matrices to use to compute the column score for "
+                             "the subsampling step, default "
+                             "substition_matrices/"))
+    group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER,
+                       help=("Path to the output folder where to save the "
+                             "results, default {}".format(OUTPUT_FOLDER)))
 
-    group = p.add_argument_group(title="Filename extensions", description="Parameters for setting the extensions of the input files")
-    group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Set the extension for the genomes in your inputs, default .fna")
-    group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Set the extension for the proteomes in your inputs, default .faa")
+    group = p.add_argument_group(title="Filename extensions",
+                                 description=("Parameters for setting the "
+                                              "extensions of the input files"))
+    group.add_argument('--genome_extension', type=str,
+                       default=GENOME_EXTENSION,
+                       help=("Set the extension for the genomes in your "
+                             "inputs, default .fna"))
+    group.add_argument('--proteome_extension', type=str,
+                       default=PROTEOME_EXTENSION,
+                       help=("Set the extension for the proteomes in your "
+                             "inputs, default .faa"))
 
-    p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn2 verbose")
-    p.add_argument('-v', '--version', action='store_true', default=False, help="Prints the current PhyloPhlAn2 version")
+    p.add_argument('--verbose', action='store_true', default=False,
+                   help="Makes PhyloPhlAn2 verbose")
+    p.add_argument('-v', '--version', action='store_true', default=False,
+                   help="Prints the current PhyloPhlAn2 version")
 
     return p.parse_args()
 
@@ -180,7 +287,12 @@ def check_args(args, verbose):
     elif not args.database:
         error('-d (or --database) must be specified')
         database_list(args.databases_folder, exit=True)
-    elif (not os.path.isdir(os.path.join(args.databases_folder, args.database))) and (not os.path.isfile(os.path.join(args.databases_folder, args.database+'.faa'))) and (not os.path.isfile(os.path.join(args.databases_folder, args.database+'.faa.bz2'))):
+    elif (not os.path.isdir(os.path.join(args.databases_folder,
+                                         args.database))) and \
+         (not os.path.isfile(os.path.join(args.databases_folder,
+                                          args.database + '.faa'))) and \
+         (not os.path.isfile(os.path.join(args.databases_folder,
+                                          args.database + '.faa.bz2'))):
         error('database "{}" not found in "{}"'.format(
               args.database, args.databases_folder))
         database_list(args.databases_folder, exit=True)
@@ -323,7 +435,9 @@ def check_args(args, verbose):
     if args.subsample and (not args.submat):
         error('-s (or --submat) must be specified')
         submat_list(args.submat_folder, exit=True, exit_value=1)
-    elif args.submat and (not os.path.isfile(os.path.join(args.submat_folder, args.submat + '.pkl'))):
+    elif args.submat and \
+         (not os.path.isfile(os.path.join(args.submat_folder,
+                                          args.submat + '.pkl'))):
         error('substitution matrix "{}" not found in "{}"'.format(
               args.submat, args.submat_folder))
         submat_list(args.submat_folder, exit=True, exit_value=1)
@@ -392,7 +506,7 @@ def check_configs(configs, verbose=False):
         if not mandatory_sections:
             error('could not find "{}" section'.format(section), exit=True)
 
-    # checking that all the options (but 'version') are defined in the 'command_line' value
+    # all the options (but 'version') must be defined in 'command_line'
     for section, options in configs.items():
         actual_options = []
         mandatory_options = []
@@ -469,19 +583,25 @@ def check_dependencies(configs, nproc, verbose=False):
 
 def database_list(databases_folder, exit=False, exit_value=0):
     info('Available databases in "{}":\n    {}\n'
-         .format(databases_folder, '\n    '.join(os.listdir(databases_folder))),
+         .format(databases_folder,
+                 '\n    '.join(os.listdir(databases_folder))),
          exit=exit, exit_value=exit_value)
 
 
 def submat_list(submat_folder, exit=False, exit_value=0):
     info('Available substitution matrices in "{}":\n    {}\n'
-         .format(submat_folder, '\n    '.join([os.path.splitext(os.path.basename(a)) for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))])),
+         .format(submat_folder,
+                 '\n    '.join([os.path.splitext(os.path.basename(a))
+                                for a in glob.iglob(os.path.join(submat_folder,
+                                                                 '*.pkl'))])),
          exit=exit, exit_value=exit_value)
 
 
 def config_list(config_folder, exit=False, exit_value=0):
     info('Available configuration files in "{}":\n    {}\n'
-         .format(config_folder, '\n    '.join(glob.iglob(os.path.join(config_folder, '*.cfg')))),
+         .format(config_folder,
+                 '\n    '.join(glob.iglob(os.path.join(config_folder,
+                                                       '*.cfg')))),
          exit=exit, exit_value=exit_value)
 
 
@@ -566,7 +686,10 @@ def compose_command(params, check=False, sub_mod=None, input_file=None,
                 command_line = command_line.replace('#output#', out)
 
         if 'environment' in params:
-            new_environment = dict([(var.strip(), val.strip()) for var, val in [a.strip().split('=') for a in params['environment'].split(',')]])
+            new_environment = dict([(var.strip(), val.strip())
+                                    for var, val in [a.strip().split('=')
+                                                     for a in
+                                                     params['environment'].split(',')]])
             environment = os.environ.copy()
             environment.update(new_environment)
 
@@ -574,10 +697,13 @@ def compose_command(params, check=False, sub_mod=None, input_file=None,
     quotes = [j for j, e in enumerate(command_line) if e == '"']
 
     for s, e in zip(quotes[0::2], quotes[1::2]):
-        command_line = command_line.replace(command_line[s+1:e],
-                                            command_line[s+1:e].replace(' ', '#'))
+        command_line = command_line.replace(command_line[s + 1:e],
+                                            command_line[s + 1:e].replace(' ', '#'))
 
-    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a],
+    return {'command_line': [str(a).replace('#', ' ') for a in
+                             re.sub(' +', ' ',
+                                    command_line.replace('"', '')).split(' ')
+                             if a],
             'stdin': stdin, 'stdout': stdout, 'env': environment,
             'output_path': r_output_path, 'output_file': r_output_file}
 
@@ -597,7 +723,8 @@ def remove_file(filename, path=None, verbose=False):
 
 
 def remove_files(file_list, path=None, verbose=False):
-    [remove_file(f, path=path, verbose=verbose) for f in file_list]
+    for f in file_list:
+        remove_file(f, path=path, verbose=verbose)
 
 
 def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
@@ -612,8 +739,11 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
                                          key_dna, key_aa, verbose)
     else:
         error('\n    '.join(['{}: {}'.format(lbl, val) for lbl, val in
-                zip(['init_database', 'database', 'databases_folder', 'db_type', 'params', 'key_dna', 'key_aa', 'verbose'],
-                    [init_database, database, databases_folder, db_type, params, key_dna, key_aa, verbose])]),
+                             zip(['init_database', 'database',
+                                  'databases_folder', 'db_type', 'params',
+                                  'key_dna', 'key_aa', 'verbose'],
+                                 [init_database, database, databases_folder,
+                                  db_type, params, key_dna, key_aa, verbose])]),
               exit=True)
 
     if (not db_dna) and (not db_aa):
@@ -624,7 +754,7 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
 
 def init_database_aa(database, databases_folder, params, key_dna, key_aa,
                      verbose=False):
-    db_fasta = os.path.join(databases_folder, database, database+'.faa')
+    db_fasta = os.path.join(databases_folder, database, database + '.faa')
     db_folder = os.path.join(databases_folder, database)
     db_dna = None
     db_aa = None
@@ -632,14 +762,14 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa,
     # assumed to be a fasta file containing the markers
     if os.path.isfile(db_fasta):
         markers = None
-    elif os.path.isfile(os.path.join(db_folder, database+'.faa.bz2')):
-        markers = [os.path.join(db_folder, database+'.faa.bz2')]
+    elif os.path.isfile(os.path.join(db_folder, database + '.faa.bz2')):
+        markers = [os.path.join(db_folder, database + '.faa.bz2')]
     # assumed to be a folder with a fasta file for each marker
     elif os.path.isdir(db_folder):
         markers = glob.iglob(os.path.join(db_folder, '*.faa*'))
     else:  # what's that??
         error('database format ("{}", "{}", or "{}") not recognize'
-              .format(db_fasta, os.path.join(db_folder, database+'.faa.bz2'),
+              .format(db_fasta, os.path.join(db_folder, database + '.faa.bz2'),
                       db_folder), exit=True)
 
     if key_dna in params:
@@ -668,11 +798,11 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa,
 
     if key_aa in params:
         if 'usearch' in params[key_aa]['program_name']:
-            db_aa = os.path.join(db_folder, database+'.udb')
+            db_aa = os.path.join(db_folder, database + '.udb')
 
             if not os.path.isfile(db_aa):
                 make_database(params[key_aa], db_fasta, markers, db_folder,
-                              database+'.udb', key_aa, output_exts=[''],
+                              database + '.udb', key_aa, output_exts=[''],
                               verbose=verbose)
 
                 if not os.path.isfile(db_aa):
@@ -684,7 +814,7 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa,
             else:
                 db_aa = None
         elif 'diamond' in params[key_aa]['program_name']:
-            db_aa = os.path.join(db_folder, database+'.dmnd')
+            db_aa = os.path.join(db_folder, database + '.dmnd')
 
             if not os.path.isfile(db_aa):
                 make_database(params[key_aa], db_fasta, markers, db_folder,
@@ -714,7 +844,7 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa,
 
 def init_database_nt(database, databases_folder, params, key_dna, key_aa,
                      verbose=False):
-    db_fasta = os.path.join(databases_folder, database, database+'.fna')
+    db_fasta = os.path.join(databases_folder, database, database + '.fna')
     db_folder = os.path.join(databases_folder, database)
     db_aa = None
     makeblastdb_exts = ['.nhr', '.nin', '.nog', '.nsd', '.nsi', '.nsq']
@@ -722,14 +852,14 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa,
     # assumed to be a fasta file containing the markers
     if os.path.isfile(db_fasta):
         markers = None
-    elif os.path.isfile(os.path.join(db_folder, database+'.fna.bz2')):
-        markers = [os.path.join(db_folder, database+'.fna.bz2')]
+    elif os.path.isfile(os.path.join(db_folder, database + '.fna.bz2')):
+        markers = [os.path.join(db_folder, database + '.fna.bz2')]
     # assumed to be a folder with a fasta file for each marker
     elif os.path.isdir(db_folder):
         markers = glob.iglob(os.path.join(db_folder, '*.fna*'))
     else:  # what's that??
         error('database format ("{}", "{}", or "{}") not recognize'
-              .format(db_fasta, os.path.join(db_folder, database+'.fna.bz2'),
+              .format(db_fasta, os.path.join(db_folder, database + '.fna.bz2'),
                       db_folder),
               exit=True)
 
@@ -737,10 +867,10 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa,
         if 'makeblastdb' in params[key_dna]['program_name']:
             db_dna = os.path.join(databases_folder, database, database)
 
-            if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database+ext))]:
+            if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database + ext))]:
                 make_database(params[key_dna], db_fasta, markers, db_folder, database, key_dna, output_exts=makeblastdb_exts, verbose=verbose)
 
-                if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database+ext))]:
+                if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database + ext))]:
                     error('database "{}" ({}) has not been created... something went wrong!'.format(key_dna, os.path.join(databases_folder, database), ', '.join(makeblastdb_exts)), exit=True)
             elif verbose:
                 info('"{}" database "{}" ({}) already present\n'.format(key_dna, os.path.join(databases_folder, database), ', '.join(makeblastdb_exts)))
@@ -781,8 +911,8 @@ def make_database(command, fasta, markers, db_folder, db, label,
         sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f,
                       stderr=sb.DEVNULL, env=cmd['env'])
     except Exception as e:
-        remove_files([os.path.join(db_folder, database + ext) for ext in
-                      output_exts], path=cmd['output_path'], verbose=verbose)
+        remove_files([os.path.join(db_folder, db + ext) for ext in output_exts],
+                     path=cmd['output_path'], verbose=verbose)
         error(str(e), init_new_line=True)
         error('cannot execute command\n    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])), init_new_line=True, exit=True)
 
@@ -803,20 +933,23 @@ def clean_all(databases_folder, verbose=False):
         os.remove(f)
         f_clean, _ = os.path.splitext(f)
 
-        if os.path.isfile(f_clean+'.faa') and os.path.isfile(f_clean+'.faa.bz2'):
+        if os.path.isfile(f_clean + '.faa') and \
+           os.path.isfile(f_clean + '.faa.bz2'):
             if verbose:
-                info('Removing "{}"\n'.format(f_clean+'.faa'))
+                info('Removing "{}"\n'.format(f_clean + '.faa'))
 
-            os.remove(f_clean+'.faa')
+            os.remove(f_clean + '.faa')
 
     for database in os.listdir(databases_folder):
-        for f in glob.iglob(os.path.join(databases_folder, database, database+'.faa')):
+        for f in glob.iglob(os.path.join(databases_folder, database,
+                                         database + '.faa')):
             if verbose:
                 info('Removing "{}"\n'.format(f))
 
             os.remove(f)
 
-        for f in glob.iglob(os.path.join(databases_folder, database, database+'.udb')):
+        for f in glob.iglob(os.path.join(databases_folder, database,
+                                         database + '.udb')):
             if verbose:
                 info('Removing "{}"\n'.format(f))
 
@@ -847,7 +980,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
     if os.path.isdir(input_folder):
         info('Loading files from "{}"\n'.format(input_folder))
-        files = glob.iglob(os.path.join(input_folder, '*'+extension+'*'))
+        files = glob.iglob(os.path.join(input_folder, '*' + extension + '*'))
 
         for f in files:
             if f.endswith('.bz2'):
@@ -857,15 +990,17 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
                     os.mkdir(tmp_folder)
 
-                hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
-                file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0]+'_'+hashh+extension
+                # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
+                # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
+                file_clean = os.path.splitext(os.path.basename(f))[0]
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g:
                         with bz2.open(f, 'rt') as h:
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
                 elif verbose:
-                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
+                    info('File "{}" already decompressed\n'
+                         .format(os.path.join(tmp_folder, file_clean)))
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith(extension):
@@ -903,7 +1038,7 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein,
     else:
         info('Checking {} inputs\n'.format(len(inputs)))
         terminating = mp.Event()
-        chunksize = math.floor(len(inputs) / (nproc*2))
+        chunksize = math.floor(len(inputs) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
@@ -933,13 +1068,15 @@ def check_input_proteomes_rec(x):
             elif verbose:
                 info('"{}" discarded, not enough proteins ({}/{}) of at least '
                      '{} AAs\n'.format(inp, num_proteins, min_num_proteins,
-                     min_len_protein))
+                                       min_len_protein))
 
             return None
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while checking\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while checking\n    {}'
+                  .format('\n    '.join([str(a) for a in x])),
+                  init_new_line=True)
             raise
     else:
         terminating.set()
@@ -956,17 +1093,22 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    commands = [(inp, os.path.join(output_folder, os.path.basename(inp))) for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
+    commands = [(inp, os.path.join(output_folder, os.path.basename(inp)))
+                for inp in inputs
+                if not os.path.isfile(os.path.join(output_folder,
+                                                   os.path.basename(inp)))]
 
     if commands:
         info('Cleaning {} inputs\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec,
+                                                commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('clean_input_proteomes crashed', init_new_line=True,
@@ -993,7 +1135,11 @@ def clean_input_proteomes_rec(x):
             output = (SeqRecord(Seq(str(seq_record.seq).replace('B', 'X')
                                     .replace('Z', 'X').replace('J', 'X')
                                     .replace('U', 'X').replace('O', 'X')),
-                                id='{}_{}'.format(inp_clean, counter), description='') for counter, seq_record in enumerate(SeqIO.parse(inp, "fasta")) if seq_record.seq)
+                                id='{}_{}'.format(inp_clean, counter),
+                                description='')
+                      for counter, seq_record in enumerate(SeqIO.parse(inp,
+                                                                       "fasta"))
+                      if seq_record.seq)
 
             with open(out, 'w') as f:
                 SeqIO.write(output, f, "fasta")
@@ -1035,12 +1181,14 @@ def gene_markers_identification(configs, key, inputs, output_folder,
         info('Mapping "{}" on {} inputs (key: "{}")\n'
              .format(database_name, len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in
+                 pool.imap_unordered(gene_markers_identification_rec, commands,
+                                     chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('gene_markers_identification crashed',
@@ -1105,8 +1253,8 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1,
                 if not os.path.isfile(f[:-4])]
 
     if commands:
-        info('Selecting {} markers from "{}"\n'.format(len(commands),
-             input_folder))
+        info('Selecting {} markers from "{}"\n'
+             .format(len(commands), input_folder))
         terminating = mp.Event()
         chunksize = math.floor(len(commands) / (nproc * 2))
 
@@ -1136,7 +1284,7 @@ def gene_markers_selection_rec(x):
             if len(matches) >= min_num_proteins:
                 with open(out, 'w') as f:
                     f.write('{}\n'.format('\n'.join(['\t'.join(m) for m in
-                            matches])))
+                                                     matches])))
 
                 t1 = time.time()
                 info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
@@ -1147,8 +1295,9 @@ def gene_markers_selection_rec(x):
             terminating.set()
             remove_file(out)
             error(str(e), init_new_line=True)
-            error('error while selecting\n    {}'.format('\n    '.join([str(a)
-                  for a in x])), init_new_line=True)
+            error('error while selecting\n    {}'
+                  .format('\n    '.join([str(a) for a in x])),
+                  init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1243,7 +1392,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension,
     if commands:
         info('Extracting markers from {} inputs\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
@@ -1276,7 +1425,8 @@ def gene_markers_extraction_rec(x):
                 end = int(row[3])
                 rev = bool(int(row[4]))
 
-                if (contig in contig2marker2b6o) and (marker in contig2marker2b6o[contig]):
+                if (contig in contig2marker2b6o) and \
+                   (marker in contig2marker2b6o[contig]):
                     error('contig: {} and marker: {} already present into '
                           'contig2marker2b6o'.format(contig, marker))
 
@@ -1290,31 +1440,40 @@ def gene_markers_extraction_rec(x):
                     for marker in contig2marker2b6o[seq_record.id]:
                         s, e, rev = contig2marker2b6o[seq_record.id][marker]
                         idd = '{}_{}:'.format(seq_record.id, marker)
-                        seq = seq_record.seq[s-1:e]
+                        seq = seq_record.seq[s - 1:e]
 
                         if rev:
                             idd += 'c'
                             seq = seq.reverse_complement()
 
-                        out_file_seq.append(SeqRecord(seq,
-                                                      id=idd+'{}-{}'.format(s, e),
-                                                      description=''))
+                        out_file_seq.append(
+                            SeqRecord(seq, id=idd + '{}-{}'.format(s, e),
+                                      description='')
+                        )
 
                         if frameshifts:
                             if not rev:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s:e],
-                                                              id=idd+'{}-{}'.format(s+1, e),
-                                                              description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s+1:e],
-                                                              id=idd+'{}-{}'.format(s+2, e),
-                                                              description=''))
+                                out_file_seq.append(
+                                    SeqRecord(seq_record.seq[s:e],
+                                              id=idd + '{}-{}'.format(s + 1, e),
+                                              description='')
+                                )
+                                out_file_seq.append(
+                                    SeqRecord(seq_record.seq[s + 1:e],
+                                              id=idd + '{}-{}'.format(s + 2, e),
+                                              description='')
+                                )
                             else:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s-1:e-1].reverse_complement(),
-                                                              id=idd+'{}-{}'.format(s, e-1),
-                                                              description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s-1:e-2].reverse_complement(),
-                                                              id=idd+'{}-{}'.format(s, e-2),
-                                                              description=''))
+                                out_file_seq.append(
+                                    SeqRecord(seq_record.seq[s - 1:e - 1].reverse_complement(),
+                                              id=idd + '{}-{}'.format(s, e - 1),
+                                              description='')
+                                )
+                                out_file_seq.append(
+                                    SeqRecord(seq_record.seq[s - 1:e - 2].reverse_complement(),
+                                              id=idd + '{}-{}'.format(s, e - 2),
+                                              description='')
+                                )
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
@@ -1350,8 +1509,9 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension,
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for f in glob.iglob(os.path.join(input_folder, '*'+in_extension)):
-        out = os.path.join(output_folder, os.path.splitext(os.path.basename(f))[0] + out_extension)
+    for f in glob.iglob(os.path.join(input_folder, '*' + in_extension)):
+        out = os.path.join(output_folder,
+                           os.path.splitext(os.path.basename(f))[0] + out_extension)
 
         if not os.path.isfile(out):
             commands.append((f, out, min_len_protein))
@@ -1359,7 +1519,7 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension,
     if commands:
         info('Generate proteomes from {} genomes\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
@@ -1428,11 +1588,11 @@ def inputs2markers(input_folder, output_folder, min_num_entries,
         if verbose:
             info('Folder "{}" already exists\n'.format(output_folder))
 
-        for f in glob.iglob(os.path.join(output_folder, '*'+extension)):
+        for f in glob.iglob(os.path.join(output_folder, '*' + extension)):
             info('Inputs already translated into markers\n')
             return
 
-    for f in glob.iglob(os.path.join(input_folder, '*'+extension)):
+    for f in glob.iglob(os.path.join(input_folder, '*' + extension)):
         inp, _ = os.path.splitext(os.path.basename(f))
 
         for seq_record in SeqIO.parse(f, "fasta"):
@@ -1448,7 +1608,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries,
 
     for marker, sequences in markers2inputs.items():
         if len(sequences) >= min_num_entries:
-            with open(os.path.join(output_folder, marker+extension), 'w') as f:
+            with open(os.path.join(output_folder, marker + extension), 'w') as f:
                 SeqIO.write(sequences, f, 'fasta')
         elif verbose:
             info('"{}" discarded, not enough inputs ({}/{})\n'.format(
@@ -1496,11 +1656,15 @@ def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
         if commands:
             info('Integrating {} markers\n'.format(len(commands)))
             terminating = mp.Event()
+            chunksize = math.floor(len(commands) / (nproc * 2))
 
             with mp.Pool(initializer=initt, initargs=(terminating,),
                          processes=nproc) as pool:
                 try:
-                    ret_ids = set([a for sublist in pool.imap_unordered(integrate_rec, commands, chunksize=chunksize if chunksize else 1) for a in sublist])
+                    ret_ids = set([a for sublist in
+                                   pool.imap_unordered(integrate_rec, commands,
+                                                       chunksize=chunksize if chunksize else 1)
+                                   for a in sublist])
                 except Exception as e:
                     error(str(e), init_new_line=True)
                     error('integrate crashed', init_new_line=True, exit=True)
@@ -1529,7 +1693,8 @@ def integrate_rec(x):
                     with open(mrk_db) as g:
                         f.write(g.read())
 
-                    ret_ids = [record.id for record in SeqIO.parse(mrk_db, "fasta")]
+                    ret_ids = [record.id for record in
+                               SeqIO.parse(mrk_db, "fasta")]
 
             t1 = time.time()
             info('"{}" finished in {}s\n'.format(mrk_in, int(t1 - t0)))
@@ -1562,21 +1727,27 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1,
     elif verbose:
         info('Folder "{}" already exists\n'.format(output_folder))
 
-    for inp in glob.iglob(os.path.join(input_folder, '*'+extension)):
-        out = os.path.splitext(os.path.basename(inp))[0]+'.aln'
+    for inp in glob.iglob(os.path.join(input_folder, '*' + extension)):
+        out = os.path.splitext(os.path.basename(inp))[0] + '.aln'
 
-        if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, out+'_alignment_masked.fasta'))) and (not os.path.isfile(os.path.join(output_folder, out+'_insertion_columns.txt'))) and (not os.path.isfile(os.path.join(output_folder, out+'_alignment.fasta'))) and (not os.path.isfile(os.path.join(output_folder, out+'_pasta.fasta'))) and (not os.path.isfile(os.path.join(output_folder, out+'_pasta.fasttree'))):
+        if (not os.path.isfile(os.path.join(output_folder, out))) and \
+           (not os.path.isfile(os.path.join(output_folder, out+'_alignment_masked.fasta'))) and \
+           (not os.path.isfile(os.path.join(output_folder, out+'_insertion_columns.txt'))) and \
+           (not os.path.isfile(os.path.join(output_folder, out+'_alignment.fasta'))) and \
+           (not os.path.isfile(os.path.join(output_folder, out+'_pasta.fasta'))) and \
+           (not os.path.isfile(os.path.join(output_folder, out+'_pasta.fasttree'))):
             commands.append((configs[key], inp, os.path.abspath(output_folder), out))
 
     if commands:
         info('Aligning {} markers (key: "{}")\n'.format(len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(msas_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(msas_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('msas crashed', init_new_line=True, exit=True)
@@ -1670,12 +1841,13 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         info('Trimming gappy form {} markers (key: "{}")\n'
              .format(len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(trim_gappy_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(trim_gappy_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('trim_gappy crashed', init_new_line=True, exit=True)
@@ -1759,7 +1931,7 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1,
         out = base + '.trim_not_variant' + ext
 
         if not os.path.isfile(out):
-            commands.append((inputt, out, not_variant_threshold, verbosee))
+            commands.append((inputt, out, not_variant_threshold, verbose))
     else:
         error('unrecognized input "{}" is not a folder nor a file'
               .format(inputt), exit=True)
@@ -1767,15 +1939,17 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1,
     if commands:
         info('Trimming not variant from {} markers\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('trim_not_variant crashed', init_new_line=True, exit=True)
+                error('trim_not_variant crashed', init_new_line=True,
+                      exit=True)
     else:
         info('Markers already trimmed\n')
 
@@ -1861,18 +2035,23 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder,
                 out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', ''))
 
                 if not os.path.isfile(out):
-                    commands.append((configs[key], inp, out))
+                    commands.append((inp, out, fragmentary_threshold,
+                                     min_num_entries, verbose))
 
     if commands:
         info('Checking {} alignments for fragmentary entries (thr: {})\n'
              .format(len(commands), fragmentary_threshold))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                frag_entries = [a for a in pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=chunksize if chunksize else 1) if a]
+                frag_entries = [a for a in
+                                pool.imap_unordered(remove_fragmentary_entries_rec,
+                                                    commands,
+                                                    chunksize=chunksize if chunksize else 1)
+                                if a]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('remove_fragmentary_entries crashed', init_new_line=True,
@@ -1904,7 +2083,7 @@ def remove_fragmentary_entries_rec(x):
 
             if len(out_aln) >= min_num_entries:
                 with open(out, 'w') as f:
-                    AlignIO.write(MultipleSeqAlignment(out_aln), out, 'fasta')
+                    AlignIO.write(MultipleSeqAlignment(out_aln), f, 'fasta')
 
                 t1 = time.time()
                 info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
@@ -1933,17 +2112,21 @@ def inputs_list(input_folder, extension, output_file, nproc=1, verbose=False):
         with open(output_file, 'rb') as f:
             file_input_list = pickle.load(f)
     else:
-        commands = glob.glob(os.path.join(input_folder, '*'+extension))
+        commands = glob.glob(os.path.join(input_folder, '*' + extension))
 
         if commands:
             tmp_input_list = None
             terminating = mp.Event()
-            chunksize = math.floor(len(commands) / (nproc*2))
+            chunksize = math.floor(len(commands) / (nproc * 2))
 
             with mp.Pool(initializer=initt, initargs=(terminating,),
                          processes=nproc) as pool:
                 try:
-                    tmp_input_list = [a for a in pool.imap_unordered(inputs_list_rec, commands, chunksize=chunksize if chunksize else 1) if a]
+                    tmp_input_list = [a for a in
+                                      pool.imap_unordered(inputs_list_rec,
+                                                          commands,
+                                                          chunksize=chunksize if chunksize else 1)
+                                      if a]
                 except Exception as e:
                     error(str(e), init_new_line=True)
                     error('inputs_list crashed', init_new_line=True, exit=True)
@@ -2011,17 +2194,19 @@ def subsample(input_folder, output_folder, positions_function,
                 out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', ''))
 
                 if not os.path.isfile(out):
-                    commands.append((configs[key], inp, out))
+                    commands.append((inp, out, positions_function,
+                                     scoring_function, unknown_fraction, mat))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(subsample_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(subsample_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('subsample crashed', init_new_line=True, exit=True)
@@ -2062,7 +2247,8 @@ def subsample_rec(x):
             best_npos = [p for _, p in sorted(scores)[-npos:]]
 
             for aln in inp_aln:
-                seq = ''.join([c for i, c in enumerate(aln.seq) if i in best_npos])
+                seq = ''.join([c for i, c in enumerate(aln.seq) if i in
+                               best_npos])
                 out_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
 
             with open(out, 'w') as f:
@@ -2107,7 +2293,8 @@ def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
 
 def muscle(seq, submat):
     combos = [submat[a, b] for a, b in
-              combinations(seq.upper().replace('-', ''), 2) if (a, b) in submat]
+              combinations(seq.upper().replace('-', ''), 2) if (a, b) in
+              submat]
     retval = 0.0
 
     if len(combos):
@@ -2141,7 +2328,8 @@ def stereochemical_diversity(seq, submat):
     set_seq = set(seq.upper())
     aa_avg = sum([normalized_submat_scores(aa, submat) for aa in set_seq])
     aa_avg /= len(set_seq)
-    r = sum([abs(aa_avg - normalized_submat_scores(aa, submat)) for aa in set_seq])
+    r = sum([abs(aa_avg - normalized_submat_scores(aa, submat)) for aa in
+             set_seq])
     r /= len(set_seq)
     r /= math.sqrt(20 * (max(submat.values()) - min(submat.values()))**2)
     return r
@@ -2161,7 +2349,8 @@ def normalized_submat_scores(aa, submat):
     if (aa != '-') and (aa != 'X'):
         for bb in aas:
             try:
-                m += submat[(aa, bb)] / math.sqrt(submat[(aa, aa)] * submat[(bb, bb)])
+                m += submat[(aa, bb)] / math.sqrt(submat[(aa, aa)] *
+                                                  submat[(bb, bb)])
             except Exception as e:
                 print('aa: {}, bb: {}, submat: {}'.format(aa, bb, submat))
                 print('\n{}\n'.format(sys.exc_info()))
@@ -2188,7 +2377,8 @@ def load_substitution_model(input_file):
     elif not os.path.isfile(input_file):
         error('file "{}" not found'.format(input_file), exit=True)
 
-    return dict(((line.strip().split('\t')[0], line.strip().split('\t')[1]) for line in open(input_file) if not line.startswith('#')))
+    return dict(((line.strip().split('\t')[0], line.strip().split('\t')[1])
+                 for line in open(input_file) if not line.startswith('#')))
 
 
 def concatenate(all_inputs, input_folder, output_file, sort=False,
@@ -2201,11 +2391,13 @@ def concatenate(all_inputs, input_folder, output_file, sort=False,
 
     info('Concatenating alignments\n')
     all_inputs = set(all_inputs)
-    inputs2alingments = dict(((inp, SeqRecord(Seq(''), id='{}'.format(inp), description='')) for inp in all_inputs))
+    inputs2alignments = dict(((inp, SeqRecord(Seq(''), id=inp, description=''))
+                              for inp in all_inputs))
     markers = glob.glob(os.path.join(input_folder, '*.aln'))
 
     if not len(markers):  # aligned with UPP?
-        markers = glob.glob(os.path.join(input_folder, '*.aln_alignment_masked.fasta'))
+        markers = glob.glob(os.path.join(input_folder,
+                                         '*.aln_alignment_masked.fasta'))
 
     if sort:
         markers = sorted(markers)
@@ -2217,21 +2409,25 @@ def concatenate(all_inputs, input_folder, output_file, sort=False,
 
             for seq_record in SeqIO.parse(a, "fasta"):
                 current_inputs.append(seq_record.id)
-                inputs2alingments[seq_record.id].seq += seq_record.seq
+                inputs2alignments[seq_record.id].seq += seq_record.seq
 
                 if not alignment_length:
                     alignment_length = len(seq_record.seq)
+
                 elif alignment_length != len(seq_record.seq):
                     error('wrong alignment length ({} != {})... Something is '
-                          'wrong'.format(alignment_length, len(seq_record.seq)))
+                          'wrong'.format(alignment_length,
+                                         len(seq_record.seq)))
 
             current_inputs = set(current_inputs)
 
             for inp in all_inputs - current_inputs:
-                inputs2alingments[inp].seq += Seq('-' * alignment_length)
+                inputs2alignments[inp].seq += Seq('-' * alignment_length)
 
         with open(output_file, 'w') as f:
-            SeqIO.write([v for _, v in inputs2alingments.items() if gap_cost(v.seq, norm=True) < 1], f, "fasta")  # remove such inputs that have only gaps in their alignment (RAxML gives error)
+            # discard inputs with only gaps in alignment (RAxML gives error)
+            SeqIO.write([v for _, v in inputs2alignments.items()
+                         if gap_cost(v.seq, norm=True) < 1], f, "fasta")
 
         t1 = time.time()
         info('Alignments concatenated "{}" in {}s\n'
@@ -2258,28 +2454,38 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder,
         out = marker + '.tre'
         model = sub_mod[marker]
 
-        if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.'+out))):
-            commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
+        if (not os.path.isfile(os.path.join(output_folder, out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.' + out))):
+            commands.append((configs[key], model, inp,
+                             os.path.abspath(output_folder), out))
 
     if not commands:  # aligned with UPP?
         for inp in glob.iglob(os.path.join(input_folder, '*.aln_alignment_masked.fasta')):
             marker, _ = os.path.basename(inp).replace('.aln_alignment_masked.fasta', '')
-            out = marker+'.tre'
+            out = marker + '.tre'
             model = sub_mod[marker]
 
-        if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.'+out))):
+        if (not os.path.isfile(os.path.join(output_folder, out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.' + out))) and \
+           (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.' + out))):
             commands.append((configs[key], model, inp,
                              os.path.abspath(output_folder), out))
 
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('build_gene_tree crashed', init_new_line=True, exit=True)
@@ -2340,7 +2546,9 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
         output_path = os.path.dirname(output)
         output_file = os.path.basename(output)
 
-        if (not os.path.isfile(output)) and (not os.path.isfile(os.path.join(output_path, "RAxML_bestTree."+output_file))):
+        if (not os.path.isfile(output)) and \
+           (not os.path.isfile(os.path.join(output_path,
+                                            "RAxML_bestTree." + output_file))):
             commands.append((inputt, output))
 
     elif os.path.isdir(inputt):
@@ -2355,18 +2563,21 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
         for inp in glob.iglob(os.path.join(inputt, '*.tre')):
             out = os.path.basename(inp)
 
-            if (not os.path.isfile(os.path.join(output, out))) and (not os.path.isfile(os.path.join(output, "RAxML_bestTree."+out))):
+            if (not os.path.isfile(os.path.join(output, out))) and \
+               (not os.path.isfile(os.path.join(output, "RAxML_bestTree."+out))):
                 commands.append((inp, os.path.join(output, out)))
 
     if commands:
         info('Resolving {} polytomies\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(resolve_polytomies_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(resolve_polytomies_rec,
+                                                commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('resolve_polytomies crashed', init_new_line=True,
@@ -2417,7 +2628,11 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees,
         model = sub_mod[marker]
 
         if os.path.isfile(starting_tree):
-            if (not os.path.isfile(os.path.join(output_folder, out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.'+out))) and (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.'+out))):
+            if (not os.path.isfile(os.path.join(output_folder, out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.'+out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.'+out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.'+out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.'+out))):
                 commands.append((configs[key], model, inp, starting_tree,
                                  os.path.abspath(output_folder), out))
         else:
@@ -2427,15 +2642,17 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees,
     if commands:
         info('Refining {} gene trees\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc*2))
+        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,),
                      processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('refine_gene_tree crashed', init_new_line=True, exit=True)
+                error('refine_gene_tree crashed', init_new_line=True,
+                      exit=True)
     else:
         info('Gene trees already refined\n')
 
@@ -2508,12 +2725,17 @@ def merging_gene_trees(trees_folder, output_file, verbose=False):
                     f.write(g.read())
 
     t1 = time.time()
-    info('Gene trees merged into "{}" in {}s\n'.format(output_file, int(t1 - t0)))
+    info('Gene trees merged into "{}" in {}s\n'
+         .format(output_file, int(t1 - t0)))
 
 
 def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1,
                     verbose=False):
-    if os.path.isfile(os.path.join(output_path, output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_bestTree.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_info.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_log.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_result.'+output_tree)):
+    if os.path.isfile(os.path.join(output_path, output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_bestTree.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_info.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_log.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_result.' + output_tree)):
         info('Phylogeny "{}" (or "RAxML_*.{}") already built\n'.format(os.path.join(output_path, output_tree), output_tree))
         return
 
@@ -2551,7 +2773,11 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1,
 
 def refine_phylogeny(configs, key, inputt, starting_tree, output_path,
                      output_tree, nproc=1, verbose=False):
-    if os.path.isfile(os.path.join(output_path, output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_bestTree.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_info.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_log.'+output_tree)) or os.path.isfile(os.path.join(output_path, 'RAxML_result.'+output_tree)):
+    if os.path.isfile(os.path.join(output_path, output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_bestTree.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_info.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_log.' + output_tree)) or \
+       os.path.isfile(os.path.join(output_path, 'RAxML_result.' + output_tree)):
         info('Phylogeny "{}" already refined\n'.format(output_tree))
         return
 
@@ -2590,6 +2816,7 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path,
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
                                       db_aa):
     all_inputs = None
+    input_faa = None
     inp_bz2 = os.path.join(args.data_folder, 'bz2')
     input_fna = load_input_files(args.input_folder, inp_bz2,
                                  args.genome_extension, verbose=args.verbose)
@@ -2616,13 +2843,20 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
                           args.proteome_extension, args.min_len_protein,
                           nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
+            input_faa = load_input_files(inp_f, inp_bz2,
+                                         args.proteome_extension,
+                                         verbose=args.verbose)
+            inp_f = out_f
 
     if args.db_type == 'a':
         faa = load_input_files(args.input_folder, inp_bz2,
                                args.proteome_extension, verbose=args.verbose)
-        input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension,
-                                     verbose=args.verbose)
-        input_faa.update(faa)  # if duplicates input keep the ones from 'faa'
+
+        if input_faa:  # if duplicates input keep the ones from 'faa'
+            input_faa.update(faa)
+        else:  # otherwise use only the ones from 'faa'
+            input_faa = faa
+
         input_faa_checked = check_input_proteomes(input_faa,
                                                   args.min_num_proteins,
                                                   args.min_len_protein,
@@ -2662,8 +2896,9 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
 
     if args.integrate:
         input_integrate = integrate(inp_f, os.path.join(args.databases_folder,
-                                    args.database), args.data_folder,
-                                    nproc=args.nproc, verbose=args.verbose)
+                                                        args.database),
+                                    args.data_folder, nproc=args.nproc,
+                                    verbose=args.verbose)
 
     out_f = os.path.join(args.data_folder, 'msas')
     msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a'
@@ -2672,7 +2907,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
     inp_f = out_f
 
     if args.trim:
-        if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
+        if 'trim' in configs and \
+           ((args.trim == 'gappy') or (args.trim == 'greedy')):
             out_f = os.path.join(args.data_folder, 'trim_gappy')
             trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc,
                        verbose=args.verbose)
@@ -2690,12 +2926,10 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
         if args.remove_fragmentary_entries:
             out_f = os.path.join(args.data_folder, 'fragmentary')
 
-        frag_entries = remove_fragmentary_entries(inp_f, args.data_folder,
-                                                  out_f,
-                                                  args.fragmentary_threshold,
-                                                  args.min_num_entries,
-                                                  nproc=args.nproc,
-                                                  verbose=args.verbose)
+        remove_fragmentary_entries(inp_f, args.data_folder, out_f,
+                                   args.fragmentary_threshold,
+                                   args.min_num_entries, nproc=args.nproc,
+                                   verbose=args.verbose)
         inp_f = out_f
 
     # compute inputs list

@@ -45,8 +45,13 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 def read_params():
     p = ap.ArgumentParser(description="")
 
-    p.add_argument('-o', '--output', type=str, required=True, help="Specify the output file where to write the configurations. If the file already exists the program won't overwrite the alredy existing file")
-    p.add_argument('-d', '--db_type', required=True, choices=DB_TYPE_CHOICES, help="Specify the type of the database, where 'n' stands for nucleotides and 'a' for amino acids")
+    p.add_argument('-o', '--output', type=str, required=True,
+                   help=("Specify the output file where to write the "
+                         "configurations. If the file already exists the "
+                         "program won't overwrite the alredy existing file"))
+    p.add_argument('-d', '--db_type', required=True, choices=DB_TYPE_CHOICES,
+                   help=("Specify the type of the database, where 'n' stands "
+                         "for nucleotides and 'a' for amino acids"))
 
     p_db = p.add_mutually_exclusive_group(required=True)
     p_db.add_argument('--db_dna', default=None, choices=DB_DNA_CHOICES, help="")
@@ -54,24 +59,34 @@ def read_params():
 
     p.add_argument('--map_dna', default=None, choices=MAP_DNA_CHOICES, help="")
     p.add_argument('--map_aa', default=None, choices=MAP_AA_CHOICES, help="")
-    p.add_argument('--msa', required=True, default=None, choices=MSA_CHOICES, help="")
-    p.add_argument('--trim', default=None, choices=TRIM_CHOICES, help="Specify to add the trim section")
-    p.add_argument('--gene_tree1', default=None, choices=GENE_TREE1_CHOICES, help="Specify to add the gene_tree1 section")
-    p.add_argument('--gene_tree2', default=None, choices=GENE_TREE2_CHOICES, help="Specify to add the gene_tree2 section")
-    p.add_argument('--tree1', required=True, default=None, choices=TREE1_CHOICES, help="Specify to add the tree2 section")
-    p.add_argument('--tree2', default=None, choices=TREE2_CHOICES, help="Specify to add the tree2 section")
-    p.add_argument('--overwrite', action='store_true', default=False, help="If output file exists it will be overwritten")
-    p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
+    p.add_argument('--msa', required=True, default=None, choices=MSA_CHOICES,
+                   help="")
+    p.add_argument('--trim', default=None, choices=TRIM_CHOICES,
+                   help="Specify to add the trim section")
+    p.add_argument('--gene_tree1', default=None, choices=GENE_TREE1_CHOICES,
+                   help="Specify to add the gene_tree1 section")
+    p.add_argument('--gene_tree2', default=None, choices=GENE_TREE2_CHOICES,
+                   help="Specify to add the gene_tree2 section")
+    p.add_argument('--tree1', required=True, default=None, choices=TREE1_CHOICES,
+                   help="Specify to add the tree2 section")
+    p.add_argument('--tree2', default=None, choices=TREE2_CHOICES,
+                   help="Specify to add the tree2 section")
+    p.add_argument('--overwrite', action='store_true', default=False,
+                   help="If output file exists it will be overwritten")
+    p.add_argument('--verbose', action='store_true', default=False,
+                   help="Prints more stuff")
 
     return p.parse_args()
 
 
 def check_params(args):
     if (not args.map_dna) and (not args.map_aa):
-        error('at least one of --map_dna and --map_aa must be specified', exit=True)
+        error('at least one of --map_dna and --map_aa must be specified',
+              exit=True)
 
     if (os.path.isfile(args.output)) and (not args.overwrite):
-        error('cannot write ouptut file {} because it already exists'.format(args.output), exit=True)
+        error('cannot write ouptut file {} because it already exists'
+              .format(args.output), exit=True)
 
 
 # AVAILABLE OPTIONS:
@@ -97,11 +112,12 @@ if __name__ == '__main__':
     if args.db_dna:
         if 'makeblastdb' in args.db_dna:
             db_dna = {'program_name': 'makeblastdb',
-                     'params': '-parse_seqids -dbtype nucl',
-                     'input': '-in',
-                     'output': '-out',
-                     'version': '-version',
-                     'command_line': '#program_name# #params# #input# #output#'}
+                      'params': '-parse_seqids -dbtype nucl',
+                      'input': '-in',
+                      'output': '-out',
+                      'version': '-version',
+                      'command_line': ('#program_name# #params# #input# '
+                                       '#output#')}
 
         progs['db_dna'] = db_dna
 
@@ -113,7 +129,8 @@ if __name__ == '__main__':
                      'input': '-makeudb_ublast',
                      'output': '-output',
                      'version': '-version',
-                     'command_line': '#program_name# #params# #input# #output#'}
+                     'command_line': ('#program_name# #params# #input# '
+                                      '#output#')}
         elif 'diamond' in args.db_aa:
             db_aa = {'program_name': 'diamond',
                      'params': 'makedb',
@@ -121,7 +138,8 @@ if __name__ == '__main__':
                      'input': '--in',
                      'output': '--db',
                      'version': 'version',
-                     'command_line': '#program_name# #params# #threads# #input# #output#'}
+                     'command_line': ('#program_name# #params# #threads# '
+                                      '#input# #output#')}
 
         progs['db_aa'] = db_aa
 
@@ -129,28 +147,35 @@ if __name__ == '__main__':
     if args.map_dna:
         if 'blastn' in args.map_dna:
             map_dna = {'program_name': 'blastn',
-                       'params': '-outfmt 6',
+                       'params': '-outfmt 6 -max_target_seqs 1000000',
                        'input': '-query',
                        'database': '-db',
                        'output': '-out',
                        'version': '-version',
-                       'command_line': '#program_name# #params# #input# #database# #output#'}
+                       'command_line': ('#program_name# #params# #input# '
+                                        '#database# #output#')}
         elif 'tblastn' in args.map_dna:
             map_dna = {'program_name': 'tblastn',
-                       'params': '-outfmt "6 saccver qaccver pident length mismatch gapopen sstart send qstart qend evalue bitscore" -evalue 1e-50',
+                       'params': ('-outfmt "6 saccver qaccver pident length '
+                                  'mismatch gapopen sstart send qstart qend '
+                                  'evalue bitscore" -evalue 1e-50 '
+                                  '-max_target_seqs 1000000'),
                        'input': '-subject',
                        'database': '-query',
                        'output': '-out',
                        'version': '-version',
-                       'command_line': '#program_name# #params# #input# #database# #output#'}
+                       'command_line': ('#program_name# #params# #input# '
+                                        '#database# #output#')}
         elif 'diamond' in args.map_dna:
             map_dna = {'program_name': 'diamond',
-                       'params': 'blastx --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35 --top 90',
+                       'params': ('blastx --quiet --threads 1 --outfmt 6 '
+                                  '--more-sensitive --id 50 --max-hsps 35 -k 0'),
                        'input': '--query',
                        'database': '--db',
                        'output': '--out',
                        'version': 'version',
-                       'command_line': '#program_name# #params# #input# #database# #output#'}
+                       'command_line': ('#program_name# #params# #input# '
+                                        '#database# #output#')}
 
         progs['map_dna'] = map_dna
 
@@ -158,21 +183,25 @@ if __name__ == '__main__':
     if args.map_aa:
         if 'usearch' in args.map_aa:
             map_aa = {'program_name': 'usearch9.2.64_i86linux32',
-                      'params': '-quiet -evalue 1e-10 -maxaccepts 8 -maxrejects 32',
+                      'params': ('-quiet -evalue 1e-10 -maxaccepts 8 '
+                                 '-maxrejects 32'),
                       'threads': '-threads',
                       'input': '-ublast',
                       'database': '-db',
                       'output': '-blast6out',
                       'version': '-version',
-                      'command_line': '#program_name# #params# #threads# #input# #database# #output#'}
+                      'command_line': ('#program_name# #params# #threads# '
+                                       '#input# #database# #output#')}
         elif 'diamond' in args.map_aa:
             map_aa = {'program_name': 'diamond',
-                      'params': 'blastp --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35',
+                      'params': ('blastp --quiet --threads 1 --outfmt 6 '
+                                 '--more-sensitive --id 50 --max-hsps 35 -k 0'),
                       'input': '--query',
                       'database': '--db',
                       'output': '--out',
                       'version': 'version',
-                      'command_line': '#program_name# #params# #input# #database# #output#'}
+                      'command_line': ('#program_name# #params# #input# '
+                                       '#database# #output#')}
 
         progs['map_aa'] = map_aa
 
@@ -187,6 +216,7 @@ if __name__ == '__main__':
     elif 'mafft' in args.msa:
         msa = {'program_name': 'mafft',
                'params': '--quiet --anysymbol --auto',
+               'environment': 'TMPDIR=/local-storage',
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
     elif 'opal' in args.msa:
@@ -197,7 +227,7 @@ if __name__ == '__main__':
                'command_line': '#program_name# #params# #input# #output#'}
 
         if args.db_type == 'a':
-            gene_tree1['params'] += ' --protein'
+            msa['params'] += ' --protein'
     elif 'upp' in args.msa:
         msa = {'program_name': 'run-upp.sh',
                'params': '-x 1 -M -1 -T 0.66 -B 999999999',
@@ -205,12 +235,13 @@ if __name__ == '__main__':
                'output': '-o',
                'output_path': '-d',
                'version': '--version',
-               'command_line': '#program_name# #params# #input# #output_path# #output#'}
+               'command_line': ('#program_name# #params# #input# '
+                                '#output_path# #output#')}
 
         if args.db_type == 'n':
-            gene_tree1['params'] += ' -m dna',
+            msa['params'] += ' -m dna',
         elif args.db_type == 'a':
-            gene_tree1['model'] += ' -m amino'
+            msa['model'] += ' -m amino'
 
     progs['msa'] = msa
 
@@ -230,9 +261,11 @@ if __name__ == '__main__':
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
             gene_tree1 = {'program_name': 'FastTree-2.1.9-SSE3',
-                          'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+                          'params': ('-quiet -mlacc 2 -slownni -spr 4 '
+                                     '-fastest -mlnni 4 -no2nd'),
                           'output': '-out',
-                          'command_line': '#program_name# #params# #output# #input#'}
+                          'command_line': ('#program_name# #params# #output# '
+                                           '#input#')}
 
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -gtr -nt'
@@ -246,10 +279,14 @@ if __name__ == '__main__':
 
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -m GTRCAT',
-                gene_tree1['command_line'] = '#program_name# #model# #params# #output_path# #input# #output#'
+                gene_tree1['command_line'] = ('#program_name# #params# '
+                                              '#output_path# #input# '
+                                              '#output#')
             elif args.db_type == 'a':
                 gene_tree1['model'] = '-m'
-                gene_tree1['command_line'] = '#program_name# #model# #params# #output_path# #input# #output#'
+                gene_tree1['command_line'] = ('#program_name# #model# '
+                                              '#params# #output_path# #input# '
+                                              '#output#')
 
         progs['gene_tree1'] = gene_tree1
 
@@ -258,7 +295,7 @@ if __name__ == '__main__':
         if 'raxml' in args.gene_tree2:
             gene_tree2 = {'program_name': 'raxmlHPC',
                           'params': '-p 1989',
-                          'database': '-t', # starting tree
+                          'database': '-t',  # starting tree
                           'input': '-s',
                           'output_path': '-w',
                           'output': '-n',
@@ -266,10 +303,14 @@ if __name__ == '__main__':
 
             if args.db_type == 'n':
                 gene_tree2['params'] += '-p 1989 -m GTRCAT'
-                gene_tree2['command_line'] = '#program_name# #params# #database# #output_path# #input# #output#'
+                gene_tree2['command_line'] = ('#program_name# #params# '
+                                              '#database# #output_path# '
+                                              '#input# #output#')
             elif args.db_type == 'a':
-                gene_tree2['model'] = '-m',
-                gene_tree2['command_line'] = '#program_name# #model# #params# #database# #output_path# #input# #output#'
+                gene_tree2['model'] = '-m'
+                gene_tree2['command_line'] = ('#program_name# #model# '
+                                              '#params# #database# '
+                                              '#output_path# #input# #output#')
 
         progs['gene_tree2'] = gene_tree2
 
@@ -290,7 +331,8 @@ if __name__ == '__main__':
                  'command_line': '#program_name# #input# #params# #output#'}
     elif 'fasttree' in args.tree1:
         tree1 = {'program_name': 'FastTreeMP-2.1.9-SSE3',
-                 'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+                 'params': ('-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni '
+                            '4 -no2nd'),
                  'output': '-out',
                  'environment': 'OMP_NUM_THREADS=3',
                  'command_line': '#program_name# #params# #output# #input#'}
@@ -306,7 +348,8 @@ if __name__ == '__main__':
                  'output_path': '-w',
                  'output': '-n',
                  'version': '-v',
-                 'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+                 'command_line': ('#program_name# #params# #threads# '
+                                  '#database# #output_path# #input# #output#')}
 
         if args.db_type == 'n':
             tree1['params'] += ' -m GTRCAT'
@@ -321,12 +364,14 @@ if __name__ == '__main__':
             tree2 = {'program_name': 'raxmlHPC-PTHREADS-SSE3',
                      'params': '-p 1989',
                      'threads': '-T',
-                     'database': '-t', # starting tree
+                     'database': '-t',  # starting tree
                      'input': '-s',
                      'output_path': '-w',
                      'output': '-n',
                      'version': '-v',
-                     'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+                     'command_line': ('#program_name# #params# #threads# '
+                                      '#database# #output_path# #input# '
+                                      '#output#')}
 
             if args.db_type == 'n':
                 tree2['params'] += ' -m GTRCAT'
