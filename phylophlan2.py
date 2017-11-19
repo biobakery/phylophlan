@@ -2230,14 +2230,14 @@ def subsample(input_folder, output_folder, positions_function,
             commands.append((inp, out, positions_function, scoring_function,
                              unknown_fraction, mat))
 
-        if not commands:  # aligned with UPP?
-            for inp in glob.iglob(os.path.join(input_folder, '*.aln_alignment_masked.fasta')):
-                out = os.path.join(output_folder,
-                                   os.path.basename(inp).replace('_alignment_masked.fasta', ''))
+    if not commands:  # aligned with UPP?
+        for inp in glob.iglob(os.path.join(input_folder, '*_alignment_masked.fasta')):
+            out = os.path.join(output_folder,
+                               os.path.basename(inp).replace('_alignment_masked.fasta', '.aln'))
 
-                if not os.path.isfile(out):
-                    commands.append((inp, out, positions_function,
-                                     scoring_function, unknown_fraction, mat))
+            if not os.path.isfile(out):
+                commands.append((inp, out, positions_function,
+                                 scoring_function, unknown_fraction, mat))
 
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
