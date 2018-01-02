@@ -1837,6 +1837,22 @@ def msas_rec(x):
         terminating.set()
 
 
+def is_msa_empty(msa, path=None):
+    msa_path = os.path.join(path, msa) if path else msa
+
+    if os.path.isfile(msa_path):
+        for aln in AlignIO.read(msa_path, "fasta"):
+            if not len(aln.seq):
+                return True  # found an empty sequence that shouldn't be there
+
+        return False  # all entries checked and are not empty
+    else:
+        error('file "{}" not found'.format(msa_path))
+        return False
+
+    return True
+
+
 def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
     commands = []
 
@@ -1925,8 +1941,17 @@ def trim_gappy_rec(x):
             if cmd['stdout']:
                 out_f.close()
 
-            t1 = time.time()
-            info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
+            outt = cmd['output_file']
+
+            if cmd['output_path'] and (not outt.startswith(cmd['output_path'])):
+                outt = os.path.join(cmd['output_path'], cmd['output_file'])
+
+            if is_msa_empty(outt):  # sanity check
+                info('Removing generated empty MSAs "{}"\n'.format(outt))
+                os.remove(outt)
+            else:
+                t1 = time.time()
+                info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -2013,14 +2038,20 @@ def trim_not_variant_rec(x):
             for aln in inp_aln:
                 seq = ''.join([c for i, c in enumerate(aln.seq)
                                if i not in cols_to_remove])
-                sub_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
+
+                if seq:
+                    sub_aln.append(SeqRecord(Seq(seq), id=aln.id, description=''))
 
             if sub_aln:
                 with open(out, 'w') as f:
                     AlignIO.write(MultipleSeqAlignment(sub_aln), f, "fasta")
 
-                t1 = time.time()
-                info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
+                if is_msa_empty(out):  # sanity check
+                    info('Removing generated empty MSAs "{}"\n'.format(out))
+                    os.remove(out)
+                else:
+                    t1 = time.time()
+                    info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
             elif verbose:
                     info('"{}" discarded because no cloumns retained while '
                          'removing not variant sites (thr: {})'
