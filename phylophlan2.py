@@ -3,8 +3,8 @@
 
 __author__ = ('Nicola Segata (nsegata@hsph.harvard.edu), '
               'Francesco Asnicar (f.asnicar@unitn.it)')
-__version__ = '0.09'
-__date__ = '28 Aug 2017'
+__version__ = '0.10'
+__date__ = '10 Jan 2018'
 
 
 import os
@@ -24,11 +24,13 @@ from collections import Counter
 import bz2
 import math
 import re
-# import hashlib
 import time
 import pickle
 from itertools import combinations
 import dendropy  # DendroPy (v 4.2.0)
+from urllib.request import urlretrieve
+import tarfile
+import hashlib
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
@@ -58,6 +60,7 @@ PROTEOME_EXTENSION = '.faa'
 NOT_VARIANT_THRESHOLD = 0.95
 FRAGMENTARY_THRESHOLD = 0.85
 UNKNOWN_FRACTION = 0.3
+DATABASE_DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -287,17 +290,8 @@ def check_args(args, verbose=True):
     elif not args.database:
         error('-d (or --database) must be specified')
         database_list(args.databases_folder, exit=True)
-    elif (not os.path.isdir(os.path.join(args.databases_folder,
-                                         args.database))) and \
-         (not os.path.isfile(os.path.join(args.databases_folder,
-                                          args.database + '.faa'))) and \
-         (not os.path.isfile(os.path.join(args.databases_folder,
-                                          args.database + '.faa.bz2'))):
-        error('database "{}" not found in "{}"'.format(
-              args.database, args.databases_folder))
-        database_list(args.databases_folder, exit=True)
     elif not args.db_type:
-        error('--db_type must be specified', exit=True)
+        error('-t (or --db_type) must be specified', exit=True)
 
     if args.integrate:
         project_name = args.integrate
@@ -306,10 +300,8 @@ def check_args(args, verbose=True):
     elif args.clean:
         project_name = args.clean
 
-    args.data_folder = os.path.join(args.data_folder,
-                                    project_name + '_' + args.database)
-    args.output_folder = os.path.join(args.output_folder,
-                                      project_name + '_' + args.database)
+    args.data_folder = os.path.join(args.data_folder, project_name + '_' + args.database)
+    args.output_folder = os.path.join(args.output_folder, project_name + '_' + args.database)
 
     if args.clean:
         check_and_create_folder(args.data_folder, exit=True, verbose=verbose)
@@ -319,11 +311,9 @@ def check_args(args, verbose=True):
     args.input_folder = os.path.join(args.input_folder, project_name)
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    check_and_create_folder(args.data_folder, create=True, exit=True,
-                            verbose=verbose)
+    check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
-    check_and_create_folder(args.output_folder, create=True, exit=True,
-                            verbose=verbose)
+    check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
 
     if not args.genome_extension.startswith('.'):
         args.genome_extension = '.' + args.genome_extension
@@ -409,19 +399,16 @@ def check_args(args, verbose=True):
         args.sort = True
 
         if verbose:
-            info('Setting "sort={}" because "database={}"\n'.format(
-                 args.sort, args.database))
+            info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
 
     if args.remove_only_gaps_entries:
         args.fragmentary_threshold = 1.0
 
         if args.remove_fragmentary_entries:
-            args.fragmentary_threshold = min(FRAGMENTARY_THRESHOLD,
-                                             args.fragmentary_threshold)
+            args.fragmentary_threshold = min(FRAGMENTARY_THRESHOLD, args.fragmentary_threshold)
             info('[w] both "--remove_only_gaps_entries" and '
                  '"--remove_fragmentary_entries" have been specified, setting '
-                 '"fragmentary_threshold={}"\n'
-                 .format(args.fragmentary_threshold))
+                 '"fragmentary_threshold={}"\n'.format(args.fragmentary_threshold))
 
     # checking configuration file
     if not args.config_file:
@@ -435,11 +422,9 @@ def check_args(args, verbose=True):
     if args.subsample and (not args.submat):
         error('-s (or --submat) must be specified')
         submat_list(args.submat_folder, exit=True, exit_value=1)
-    elif args.submat and \
-         (not os.path.isfile(os.path.join(args.submat_folder,
-                                          args.submat + '.pkl'))):
-        error('substitution matrix "{}" not found in "{}"'.format(
-              args.submat, args.submat_folder))
+    elif (args.submat and
+          (not os.path.isfile(os.path.join(args.submat_folder, args.submat + '.pkl')))):
+        error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
         submat_list(args.submat_folder, exit=True, exit_value=1)
 
     # get scoring function
@@ -451,8 +436,7 @@ def check_args(args, verbose=True):
         elif (not score_function) and (args.scoring_function in locals()):
             score_function = locals().get(args.scoring_function)
         else:
-            error('cannot find scoring function "{}"'.format(
-                  args.scoring_function), exit=True)
+            error('cannot find scoring function "{}"'.format(args.scoring_function), exit=True)
 
         args.scoring_function = score_function
 
@@ -513,9 +497,7 @@ def check_configs(configs, verbose=False):
 
         for option in options:
             if option in ['command_line']:
-                actual_options = [a.strip() for a in
-                                  configs[section][option].split('#')
-                                  if a.strip()]
+                actual_options = [a.strip() for a in configs[section][option].split('#') if a.strip()]
             elif option not in CONFIG_OPTIONS_TO_EXCLUDE:
                 mandatory_options.append(option)
 
@@ -523,8 +505,7 @@ def check_configs(configs, verbose=False):
             for option in mandatory_options:
                 if option not in actual_options:
                     error('option "{}" not defined in section "{}" in your '
-                          'configuration file'.format(option, section),
-                          exit=True)
+                          'configuration file'.format(option, section),exit=True)
         else:
             error('wrongly formatted configuration file?', exit=True)
 
@@ -581,27 +562,42 @@ def check_dependencies(configs, nproc, verbose=False):
                 out_f.close()
 
 
+def check_database(db_name, databases_folder, verbose=False):
+    is_dir = os.path.isdir(os.path.join(databases_folder, db_name))
+    is_faa = os.path.isfile(os.path.join(databases_folder, db_name + '.faa'))
+    is_faa_bz2 = os.path.isfile(os.path.join(databases_folder, db_name + '.faa.bz2'))
+    is_tar = os.path.isfile(os.path.join(databases_folder, db_name + '.tar')) and \
+             os.path.isfile(os.path.join(databases_folder, db_name + '.md5'))
+
+    if not (is_dir or is_faa or is_faa_bz2 or is_tar):
+        error('database "{}" not found in "{}"'.format(db_name, databases_folder))
+        database_list(databases_folder, exit=True)
+
+
 def database_list(databases_folder, exit=False, exit_value=0):
+    if not os.path.isdir(databases_folder):
+        error('folder "{}" does not exists'.format(databases_folder),
+              exit=True, exit_value=exit_value)
+
     info('Available databases in "{}":\n    {}\n'
          .format(databases_folder,
-                 '\n    '.join(os.listdir(databases_folder))),
+                 '\n    '.join([a for a in sorted(os.listdir(databases_folder))
+                                if os.path.isdir(os.path.join(databases_folder, a))])),
          exit=exit, exit_value=exit_value)
 
 
 def submat_list(submat_folder, exit=False, exit_value=0):
     info('Available substitution matrices in "{}":\n    {}\n'
          .format(submat_folder,
-                 '\n    '.join([os.path.splitext(os.path.basename(a))
-                                for a in glob.iglob(os.path.join(submat_folder,
-                                                                 '*.pkl'))])),
+                 '\n    '.join(sorted([os.path.splitext(os.path.basename(a))
+                                       for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))]))),
          exit=exit, exit_value=exit_value)
 
 
 def config_list(config_folder, exit=False, exit_value=0):
     info('Available configuration files in "{}":\n    {}\n'
          .format(config_folder,
-                 '\n    '.join(glob.iglob(os.path.join(config_folder,
-                                                       '*.cfg')))),
+                 '\n    '.join(sorted(glob.iglob(os.path.join(config_folder, '*.cfg'))))),
          exit=exit, exit_value=exit_value)
 
 
@@ -3086,6 +3082,140 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
                          verbose=args.verbose)
 
 
+def byte_to_megabyte(byte):
+    """
+    Convert byte value to megabyte
+    """
+
+    return (byte / 1048576)
+
+
+class ReportHook():
+
+    def __init__(self):
+        self.start_time = time.time()
+
+    def report(self, blocknum, block_size, total_size):
+        """
+        Print download progress message
+        """
+
+        if blocknum == 0:
+            self.start_time = time.time()
+
+            if total_size > 0:
+                info("Downloading file of size: {:.2f} MB\n"
+                                 .format(byte_to_megabyte(total_size)))
+        else:
+            total_downloaded = blocknum * block_size
+            status = "{:3.2f} MB ".format(byte_to_megabyte(total_downloaded))
+
+            if total_size > 0:
+                percent_downloaded = total_downloaded * 100.0 / total_size
+                # use carriage return plus sys.stderr to overwrite stderr
+                download_rate = total_downloaded / (time.time() - self.start_time)
+                estimated_time = (total_size - total_downloaded) / download_rate
+                estimated_minutes = int(estimated_time / 60.0)
+                estimated_seconds = estimated_time - estimated_minutes * 60.0
+                status += ("{:3.2f} %  {:5.2f} MB/sec {:2.0f} min {:2.0f} sec "
+                           .format(percent_downloaded,
+                                   byte_to_megabyte(download_rate),
+                                   estimated_minutes, estimated_seconds))
+
+            status += "        \r"
+            info(status)
+
+
+def download(url, download_file, verbose=False):
+    """
+    Download a file from a url
+    """
+
+    if not os.path.isfile(download_file):
+        try:
+            if verbose:
+                info('Downloading "{}"\n'.format(url))
+
+            urlretrieve(url, download_file, reporthook=ReportHook().report)
+        except EnvironmentError:
+            error('unable to download "{}"'.format(url))
+    elif verbose:
+        info('File "{}" already present!\n'.format(download_file))
+
+
+def download_and_unpack_db(url, db_name, folder, verbose=False):
+    """
+    Download the url to the file and decompress into the folder
+    """
+
+    if not os.path.isdir(folder):  # create the folder if it does not exist
+        try:
+            if verbose:
+                info('Creating "{}" folder\n'.format(folder))
+
+            os.makedirs(folder)
+        except EnvironmentError:
+            error('unable to create database folder "{}"'.format(folder),
+                  exit=True)
+
+    # Check the directory permissions
+    if not os.access(folder, os.W_OK):
+        error('database directory "{}" is not writeable, please modify the '
+              'permissions'.format(folder), exit=True)
+
+    # download database
+    tar_file = os.path.join(folder, db_name + ".tar")
+    url_tar_file = os.path.join(url, db_name + ".tar")
+    download(url_tar_file, tar_file, verbose=verbose)
+
+    # download MD5 checksum
+    md5_file = os.path.join(folder, db_name + ".md5")
+    url_md5_file = os.path.join(url, db_name + ".md5")
+    download(url_md5_file, md5_file, verbose=verbose)
+
+    md5_md5 = None
+    md5_tar = None
+
+    if os.path.isfile(md5_file):
+        with open(md5_file) as f:
+            for row in f:
+                md5_md5 = row.strip().split(' ')[0]
+    else:
+        error('file "{}" not found!'.format(md5_file))
+
+    # compute MD5 of .tar.bz2
+    if os.path.isfile(tar_file):
+        hash_md5 = hashlib.md5()
+
+        with open(tar_file, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+
+        md5_tar = hash_md5.hexdigest()[:32]
+    else:
+        error('file "{}" not found!'.format(tar_file), exit=True)
+
+    if (md5_tar is None) or (md5_md5 is None):
+        error("MD5 checksums not found, something went wrong!", exit=True)
+
+    # compare checksums
+    if md5_tar != md5_md5:
+        error('MD5 checksums do not correspond, if this happens again, please '
+              'remove the database files in "{}" and re-run PhyloPhlAn2 so '
+              'they will be re-downloaded'.format(folder), exit=True)
+
+    # untar
+    if verbose:
+        info('Extracting "{}" into "{}"\n'.format(tar_file, folder))
+
+    try:
+        tarfile_handle = tarfile.open(tar_file)
+        tarfile_handle.extractall(path=folder)
+        tarfile_handle.close()
+    except EnvironmentError:
+        error('unable to extract "{}"'.format(tar_file))
+
+
 def phylophlan2():
     args = read_params()
 
@@ -3104,13 +3234,15 @@ def phylophlan2():
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
+    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database,
+                           args.databases_folder, verbose=args.verbose)
+    check_database(args.database, args.databases_folder, verbose=args.verbose)
     db_dna, db_aa = init_database(args.database, args.databases_folder,
                                   args.db_type, configs, 'db_dna', 'db_aa',
                                   verbose=args.verbose)
 
     if not args.meta:  # standard phylogeny reconstruction
-        standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
-                                          db_aa)
+        standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
     else:  # metagenomic application
         pass
 
