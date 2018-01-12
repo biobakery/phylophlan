@@ -34,12 +34,10 @@ import hashlib
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
-CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1',
-                       'gene_tree2', 'tree1', 'tree2']
+CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
 CONFIG_OPTIONS_MANDATORY = [['program_name'], ['command_line']]
-CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database',
-                      'output_path', 'output', 'version', 'environment',
-                      'command_line']
+CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database', 'output_path', 'output', 'version',
+                      'environment', 'command_line']
 CONFIG_OPTIONS_TO_EXCLUDE = ['version', 'environment']
 INPUT_FOLDER = 'input/'
 DATA_FOLDER = 'data/'
@@ -52,7 +50,8 @@ MIN_LEN_PROTEIN = 50
 MIN_NUM_MARKERS = 0
 DB_TYPE_CHOICES = ['n', 'a']
 TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
-SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'onehundred', 'fifty']
+SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred', 'threehundred', 'onehundred', 'fifty',
+                     'twentyfive']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
 MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
@@ -737,9 +736,8 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
                                          key_dna, key_aa, verbose)
     else:
         error('\n    '.join(['{}: {}'.format(lbl, val) for lbl, val in
-                             zip(['init_database', 'database',
-                                  'databases_folder', 'db_type', 'params',
-                                  'key_dna', 'key_aa', 'verbose'],
+                             zip(['init_database', 'database', 'databases_folder',
+                                  'db_type', 'params', 'key_dna', 'key_aa', 'verbose'],
                                  [init_database, database, databases_folder,
                                   db_type, params, key_dna, key_aa, verbose])]),
               exit=True)
@@ -776,16 +774,14 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa,
 
             if not os.path.isfile(os.path.join(db_folder, db_dna)):
                 make_database(params[key_aa], db_fasta, markers, db_folder,
-                              database, key_dna, output_exts=[''],
-                              verbose=verbose)
+                              database, key_dna, output_exts=[''], verbose=verbose)
 
                 if not os.path.isfile(os.path.join(db_folder, db_dna)):
                     error('database "{}" has not been created... something '
                           'went wrong!'.format(os.path.join(db_folder, db_dna)),
                           exit=True)
             elif verbose:
-                info('"{}" database "{}" already present\n'
-                     .format(key_aa, db_dna))
+                info('"{}" database "{}" already present\n'.format(key_aa, db_dna))
             else:
                 db_dna = None
 
@@ -857,8 +853,7 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa,
         markers = glob.iglob(os.path.join(db_folder, '*.fna*'))
     else:  # what's that??
         error('database format ("{}", "{}", or "{}") not recognize'
-              .format(db_fasta, os.path.join(db_folder, database + '.fna.bz2'),
-                      db_folder),
+              .format(db_fasta, os.path.join(db_folder, database + '.fna.bz2'), db_folder),
               exit=True)
 
     if key_dna in params:
@@ -868,9 +863,8 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa,
             if [None for ext in makeblastdb_exts
                 if not os.path.isfile(os.path.join(db_folder,
                                                    database + ext))]:
-                make_database(params[key_dna], db_fasta, markers, db_folder,
-                              database, key_dna, output_exts=makeblastdb_exts,
-                              verbose=verbose)
+                make_database(params[key_dna], db_fasta, markers, db_folder, database, key_dna,
+                              output_exts=makeblastdb_exts, verbose=verbose)
 
                 if [None for ext in makeblastdb_exts
                     if not os.path.isfile(os.path.join(db_folder,
@@ -909,8 +903,7 @@ def make_database(command, fasta, markers, db_folder, db, label,
         info('File "{}" already present\n'.format(fasta))
 
     info('Generating "{}" indexed database "{}"\n'.format(label, db))
-    cmd = compose_command(command, input_file=fasta, output_path=db_folder,
-                          output_file=db)
+    cmd = compose_command(command, input_file=fasta, output_path=db_folder, output_file=db)
     inp_f = None
     out_f = sb.DEVNULL
 
@@ -2347,12 +2340,28 @@ def onethousand(_):
     return 1000
 
 
+def sevenhundred(_):
+    return 700
+
+
+def fivehundred(_):
+    return 500
+
+
+def threehundred(_):
+    return 100
+
+
 def onehundred(_):
     return 100
 
 
 def fifty(_):
     return 50
+
+
+def twentyfive(_):
+    return 25
 
 
 def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
@@ -2898,13 +2907,12 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path,
     info('Phylogeny "{}" refined in {}s\n'.format(output_tree, int(t1 - t0)))
 
 
-def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
-                                      db_aa):
+def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = None
     input_faa = None
     inp_bz2 = os.path.join(args.data_folder, 'bz2')
-    input_fna = load_input_files(args.input_folder, inp_bz2,
-                                 args.genome_extension, verbose=args.verbose)
+    input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension,
+                                 verbose=args.verbose)
 
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'map_dna')
@@ -2974,35 +2982,32 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
                 inp_f = out_f
 
     out_f = os.path.join(args.data_folder, 'markers')
-    inputs2markers(inp_f, out_f, args.min_num_entries, args.proteome_extension
-                   if args.db_type == 'a' else args.genome_extension,
+    inputs2markers(inp_f, out_f, args.min_num_entries,
+                   args.proteome_extension if args.db_type == 'a' else args.genome_extension,
                    verbose=args.verbose)
     inp_f = out_f
 
     if args.integrate:
-        input_integrate = integrate(inp_f, os.path.join(args.databases_folder,
-                                                        args.database),
-                                    args.data_folder, nproc=args.nproc,
-                                    verbose=args.verbose)
+        input_integrate = integrate(inp_f, os.path.join(args.databases_folder, args.database),
+                                    args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
     out_f = os.path.join(args.data_folder, 'msas')
-    msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a'
-         else args.genome_extension, out_f, nproc=args.nproc,
-         verbose=args.verbose)
+    msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a' else args.genome_extension,
+         out_f, nproc=args.nproc, verbose=args.verbose)
     inp_f = out_f
 
+    # compute mutation rate from MSAs
+
+
     if args.trim:
-        if 'trim' in configs and \
-           ((args.trim == 'gappy') or (args.trim == 'greedy')):
+        if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
             out_f = os.path.join(args.data_folder, 'trim_gappy')
-            trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc,
-                       verbose=args.verbose)
+            trim_gappy(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if (args.trim == 'not_variant') or (args.trim == 'greedy'):
             out_f = os.path.join(args.data_folder, 'trim_not_variant')
-            trim_not_variant(inp_f, out_f, args.not_variant_threshold,
-                             nproc=args.nproc, verbose=args.verbose)
+            trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
     if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
@@ -3011,40 +3016,33 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
         if args.remove_fragmentary_entries:
             out_f = os.path.join(args.data_folder, 'fragmentary')
 
-        remove_fragmentary_entries(inp_f, args.data_folder, out_f,
-                                   args.fragmentary_threshold,
-                                   args.min_num_entries, nproc=args.nproc,
-                                   verbose=args.verbose)
+        remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold,
+                                   args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
     # compute inputs list
-    all_inputs = inputs_list(inp_f, '.aln',
-                             os.path.join(args.data_folder, 'all_inputs.pkl'),
+    all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, 'all_inputs.pkl'),
                              nproc=args.nproc, verbose=args.verbose)
 
     if args.subsample:
         out_f = os.path.join(args.data_folder, 'sub')
         subsample(inp_f, out_f, args.subsample, args.scoring_function,
                   os.path.join(args.submat_folder, args.submat + '.pkl'),
-                  unknown_fraction=args.unknown_fraction, nproc=args.nproc,
-                  verbose=args.verbose)
+                  unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
     if 'gene_tree1' in configs:
         sub_mod = load_substitution_model(args.maas)
         out_f = os.path.join(args.data_folder, 'gene_tree1')
-        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f,
-                        nproc=args.nproc, verbose=args.verbose)
+        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
         if 'gene_tree2' in configs:
             outt = os.path.join(args.data_folder, 'gene_tree1_polytomies')
-            resolve_polytomies(out_f, outt, nproc=args.nproc,
-                               verbose=args.verbose)
+            resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
             out_f = outt
 
             outt = os.path.join(args.data_folder, 'gene_tree2')
-            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f,
-                             outt, nproc=args.nproc, verbose=args.verbose)
+            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
             out_f = outt
 
         inp_f = out_f
@@ -3053,33 +3051,27 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna,
         inp_f = out_f
     else:
         if not all_inputs:
-            all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in
-                          input_faa_clean)
+            all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
 
         if args.integrate:
             all_inputs = (a for a in list(all_inputs) + list(input_integrate))
 
         out_f = os.path.join(args.data_folder, 'all.aln')
-        concatenate(all_inputs, inp_f, out_f, sort=args.sort,
-                    verbose=args.verbose)
+        concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
 
     out_f = project_name + '.tre'
-    build_phylogeny(configs, 'tree1', inp_f,
-                    os.path.abspath(args.output_folder), out_f,
+    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f,
                     nproc=args.nproc, verbose=args.verbose)
 
     if 'tree2' in configs:
         outt = project_name + '_resolved.tre'
-        resolve_polytomies(os.path.join(args.output_folder, out_f),
-                           os.path.join(args.output_folder, outt),
+        resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt),
                            nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.output_folder, outt)
 
-        refine_phylogeny(configs, 'tree2', inp_f, out_f,
-                         os.path.abspath(args.output_folder),
-                         project_name + '_refined.tre', nproc=args.nproc,
-                         verbose=args.verbose)
+        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder),
+                         project_name + '_refined.tre', nproc=args.nproc, verbose=args.verbose)
 
 
 def byte_to_megabyte(byte):
@@ -3118,8 +3110,7 @@ class ReportHook():
                 estimated_minutes = int(estimated_time / 60.0)
                 estimated_seconds = estimated_time - estimated_minutes * 60.0
                 status += ("{:3.2f} %  {:5.2f} MB/sec {:2.0f} min {:2.0f} sec "
-                           .format(percent_downloaded,
-                                   byte_to_megabyte(download_rate),
+                           .format(percent_downloaded, byte_to_megabyte(download_rate),
                                    estimated_minutes, estimated_seconds))
 
             status += "        \r"
@@ -3155,13 +3146,11 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
 
             os.makedirs(folder)
         except EnvironmentError:
-            error('unable to create database folder "{}"'.format(folder),
-                  exit=True)
+            error('unable to create database folder "{}"'.format(folder), exit=True)
 
     # Check the directory permissions
     if not os.access(folder, os.W_OK):
-        error('database directory "{}" is not writeable, please modify the '
-              'permissions'.format(folder), exit=True)
+        error('database directory "{}" is not writeable, please modify the permissions'.format(folder), exit=True)
 
     # download database
     tar_file = os.path.join(folder, db_name + ".tar")
@@ -3228,18 +3217,15 @@ def phylophlan2():
         clean_all(args.databases_folder, verbose=args.verbose)
 
     if args.clean:
-        clean_project(args.data_folder, args.output_folder,
-                      verbose=args.verbose)
+        clean_project(args.data_folder, args.output_folder, verbose=args.verbose)
 
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
-    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database,
-                           args.databases_folder, verbose=args.verbose)
+    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder, verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
-    db_dna, db_aa = init_database(args.database, args.databases_folder,
-                                  args.db_type, configs, 'db_dna', 'db_aa',
-                                  verbose=args.verbose)
+    db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
+                                  configs, 'db_dna', 'db_aa', verbose=args.verbose)
 
     if not args.meta:  # standard phylogeny reconstruction
         standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
