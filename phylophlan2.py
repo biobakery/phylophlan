@@ -311,7 +311,7 @@ def check_args(args, verbose=True):
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
-    check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
+    check_and_create_folder(args.databases_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
 
     if not args.genome_extension.startswith('.'):
