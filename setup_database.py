@@ -74,16 +74,32 @@ from Bio.SeqRecord import SeqRecord
 # ##############
 # # E. rectale #
 # ##############
-database_name = 'erectale'
-seqs = []
-seq_counter = 0
+# database_name = 'erectale'
+# seqs = []
+# seq_counter = 0
+# 
+# # for seq_record in SeqIO.parse('databases/erectale/core_genes_extracted.fa', "fasta"):
+# # for seq_record in SeqIO.parse('databases/erectale/core_gene_reference_sequences.fa', "fasta"):
+# for seq_record in SeqIO.parse('databases/erectale/20171110_extracted_rep_sequences.fasta', "fasta"):
+#     seqs.append(SeqRecord(seq_record.seq, id='{}_{}_{}'.format(database_name, seq_record.id.replace('_', '-'), seq_counter), description=''))
+#     seq_counter += 1
+# 
+# with open('databases/erectale/erectale.fna', 'w') as f:
+#     SeqIO.write(seqs, f, "fasta")
 
-# for seq_record in SeqIO.parse('databases/erectale/core_genes_extracted.fa', "fasta"):
-# for seq_record in SeqIO.parse('databases/erectale/core_gene_reference_sequences.fa', "fasta"):
-for seq_record in SeqIO.parse('databases/erectale/20171110_extracted_rep_sequences.fasta', "fasta"):
-    seqs.append(SeqRecord(seq_record.seq, id='{}_{}_{}'.format(database_name, seq_record.id.replace('_', '-'), seq_counter), description=''))
-    seq_counter += 1
+# ##############
+# # S. saureus #
+# ##############
+database_name = 'saureus'
 
-with open('databases/erectale/erectale.fna', 'w') as f:
-    SeqIO.write(seqs, f, "fasta")
+for marker in glob.iglob('databases/saureus/*.fasta'):
+    seqid = 0
+    out = []
 
+    with open(marker) as g:
+        for record in SeqIO.parse(g, "fasta"):
+            out.append(SeqRecord(record.seq, id='_'.join([database_name, marker[marker.rfind('/')+1:marker.find('.')], str(seqid)]), description=''))
+            seqid += 1
+
+    with open(marker[:marker.find('.')]+'.fna', 'w') as f:
+        SeqIO.write(out, f, "fasta")
