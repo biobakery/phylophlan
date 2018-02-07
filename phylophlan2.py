@@ -15,7 +15,7 @@ import argparse as ap
 import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
-from Bio import SeqIO  # Biopython (v 1.69) require NumPy (v 1.12.1)
+from Bio import SeqIO  # Biopython requires NumPy
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import AlignIO
@@ -25,12 +25,9 @@ import bz2
 import math
 import re
 import time
-try:
-    import _pickle as pickle
-except Exception as e:
-    import pickle
+import pickle
 from itertools import combinations
-import dendropy  # DendroPy (v 4.2.0)
+import dendropy  # DendroPy
 from urllib.request import urlretrieve
 import tarfile
 import hashlib
