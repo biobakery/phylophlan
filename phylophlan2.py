@@ -3,8 +3,8 @@
 
 __author__ = ('Nicola Segata (nicola.segata@unitn.it), '
               'Francesco Asnicar (f.asnicar@unitn.it)')
-__version__ = '0.10'
-__date__ = '10 Jan 2018'
+__version__ = '0.11'
+__date__ = '19 Feb 2018'
 
 
 import os
