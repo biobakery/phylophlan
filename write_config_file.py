@@ -137,7 +137,7 @@ if __name__ == '__main__':
     # setting the program for building the amino acids DB
     if args.db_aa:
         if 'usearch' in args.db_aa:
-            db_aa = {'program_name': find_executable('usearch9.2.64_i86linux32'),
+            db_aa = {'program_name': find_executable('usearch'),
                      'params': '-quiet',
                      'input': '-makeudb_ublast',
                      'output': '-output',
@@ -193,7 +193,7 @@ if __name__ == '__main__':
     # setting the software for mapping the proteomes (aa)
     if args.map_aa:
         if 'usearch' in args.map_aa:
-            map_aa = {'program_name': find_executable('usearch9.2.64_i86linux32'),
+            map_aa = {'program_name': find_executable('usearch'),
                       'params': ('-quiet -evalue 1e-10 -maxaccepts 8 '
                                  '-maxrejects 32'),
                       'threads': '-threads',
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
     # setting the MSA software
     if 'muscle' in args.msa:
-        msa = {'program_name': find_executable('muscle3.8.1551'),
+        msa = {'program_name': find_executable('muscle'),
                'params': '-quiet -maxiters 2',
                'input': '-in',
                'output': '-out',
@@ -239,7 +239,7 @@ if __name__ == '__main__':
         if args.db_type == 'a':
             msa['params'] += ' --protein'
     elif 'upp' in args.msa:
-        msa = {'program_name': find_executable('run-upp.sh'),
+        msa = {'program_name': find_executable('run-upp.sh', rollback='upp'),
                'params': '-x 1 -M -1 -T 0.66 -B 999999999',
                'input': '-s',
                'output': '-o',
@@ -269,7 +269,8 @@ if __name__ == '__main__':
     # setting gene_tree1
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
-            gene_tree1 = {'program_name': find_executable('FastTree-2.1.9-SSE3'),
+            gene_tree1 = {'program_name': find_executable('FastTree-2.1.9-SSE3',
+                                                          rollback='fasttree'),
                           'params': ('-quiet -mlacc 2 -slownni -spr 4 '
                                      '-fastest -mlnni 4 -no2nd'),
                           'output': '-out',
@@ -278,7 +279,7 @@ if __name__ == '__main__':
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -gtr -nt'
         elif 'raxml' in args.gene_tree1:
-            gene_tree1 = {'program_name': find_executable('raxmlHPC'),
+            gene_tree1 = {'program_name': find_executable('raxmlHPC', rollback='raxml'),
                           'params': '-p 1989',
                           'input': '-s',
                           'output_path': '-w',
@@ -301,7 +302,7 @@ if __name__ == '__main__':
     # setting gene_tree2
     if args.gene_tree2:
         if 'raxml' in args.gene_tree2:
-            gene_tree2 = {'program_name': find_executable('raxmlHPC'),
+            gene_tree2 = {'program_name': find_executable('raxmlHPC', rollback='raxml'),
                           'params': '-p 1989',
                           'database': '-t',  # starting tree
                           'input': '-s',
@@ -322,7 +323,7 @@ if __name__ == '__main__':
 
     # setting tree1
     if 'astral' in args.tree1:
-        tree1 = {'program_name': find_executable('java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar'),
+        tree1 = {'program_name': 'java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar',
                  'input': '-i',
                  'output': '-o',
                  # 'version': '--help',
@@ -336,7 +337,8 @@ if __name__ == '__main__':
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}
     elif 'fasttree' in args.tree1:
-        tree1 = {'program_name': find_executable('FastTreeMP-2.1.9-SSE3'),
+        tree1 = {'program_name': find_executable('FastTreeMP-2.1.9-SSE3',
+                                                 rollback='fasttree'),
                  'params': ('-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni '
                             '4 -no2nd'),
                  'output': '-out',
@@ -347,7 +349,8 @@ if __name__ == '__main__':
             tree1['params'] += ' -gtr -nt'
 
     elif 'raxml' in args.tree1:
-        tree1 = {'program_name': find_executable('raxmlHPC-PTHREADS-SSE3'),
+        tree1 = {'program_name': find_executable('raxmlHPC-PTHREADS-SSE3',
+                                                 rollback='raxml'),
                  'params': '-p 1989',
                  'threads': '-T',
                  'input': '-s',
