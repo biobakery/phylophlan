@@ -88,7 +88,7 @@ def check_params(args):
               exit=True)
 
 
-def find_executable(exe):
+def find_executable(exe, rollback=False):
     current_env = os.environ.copy()
 
     if 'PATH' in current_env:
@@ -99,7 +99,10 @@ def find_executable(exe):
                 if (os.path.exists(e) and (not os.path.isdir(e)) and
                         bool(os.stat(e)[stat.ST_MODE] & stat.S_IXUSR)):
                     if exe.lower() in e.lower():
-                        return f
+                        return (f, True if not rollback else False)
+
+    if rollback:
+        find_executable(rollback, rollback=True)
 
     error('could not find "{}" executable in your PATH environment variable', exit=True)
 
@@ -110,11 +113,15 @@ def find_executable(exe):
 # threads: specify the option to use to pass the number of threads
 # input: specify the option to use for the input file
 # database: specify the option to use for setting the database
-# output_path: specify the to option to use to set the path of the folder that will contains the output file
+# output_path: specify the to option to use to set the path of the folder that will
+#              contains the output file
 # output: specify the option to use for the output file
-# version: specify the option to use to get the version of the sotware, used to verify the software installation
-# command_line: specify the command line to generate with the position of each argument, '<' and '>' can be used to specify input/output redirection, respectivily
-# environment: specify variables and their values to be defined in the environment, syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
+# version: specify the option to use to get the version of the sotware, used to verify
+#          the software installation
+# command_line: specify the command line to generate with the position of each argument,
+#               '<' and '>' can be used to specify input/output redirection, respectivily
+# environment: specify variables and their values to be defined in the environment,
+#              syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
 
 
 if __name__ == '__main__':
@@ -125,7 +132,8 @@ if __name__ == '__main__':
     # setting the program for building the nucleotides DB
     if args.db_dna:
         if 'makeblastdb' in args.db_dna:
-            db_dna = {'program_name': find_executable('makeblastdb'),
+            exe, _ = find_executable('makeblastdb')
+            db_dna = {'program_name': exe,
                       'params': '-parse_seqids -dbtype nucl',
                       'input': '-in',
                       'output': '-out',
@@ -137,14 +145,16 @@ if __name__ == '__main__':
     # setting the program for building the amino acids DB
     if args.db_aa:
         if 'usearch' in args.db_aa:
-            db_aa = {'program_name': find_executable('usearch'),
+            exe, _ = find_executable('usearch')
+            db_aa = {'program_name': exe,
                      'params': '-quiet',
                      'input': '-makeudb_ublast',
                      'output': '-output',
                      'version': '-version',
                      'command_line': '#program_name# #params# #input# #output#'}
         elif 'diamond' in args.db_aa:
-            db_aa = {'program_name': find_executable('diamond'),
+            exe, _ = find_executable('diamond')
+            db_aa = {'program_name': exe,
                      'params': 'makedb',
                      'threads': '--threads',
                      'input': '--in',
@@ -157,30 +167,32 @@ if __name__ == '__main__':
     # setting the software for mapping the genomes (dna)
     if args.map_dna:
         if 'blastn' in args.map_dna:
-            map_dna = {'program_name': find_executable('blastn'),
+            exe, _ = find_executable('blastn')
+            map_dna = {'program_name': exe,
                        'params': '-outfmt 6 -max_target_seqs 1000000',
                        'input': '-query',
                        'database': '-db',
                        'output': '-out',
                        'version': '-version',
-                       'command_line': ('#program_name# #params# #input# '
-                                        '#database# #output#')}
+                       'command_line': ('#program_name# #params# #input# #database# '
+                                        '#output#')}
         elif 'tblastn' in args.map_dna:
-            map_dna = {'program_name': find_executable('tblastn'),
-                       'params': ('-outfmt "6 saccver qaccver pident length '
-                                  'mismatch gapopen sstart send qstart qend '
-                                  'evalue bitscore" -evalue 1e-50 '
-                                  '-max_target_seqs 1000000'),
+            exe, _ = find_executable('tblastn')
+            map_dna = {'program_name': exe,
+                       'params': ('-outfmt "6 saccver qaccver pident length mismatch '
+                                  'gapopen sstart send qstart qend evalue bitscore" '
+                                  '-evalue 1e-50 -max_target_seqs 1000000'),
                        'input': '-subject',
                        'database': '-query',
                        'output': '-out',
                        'version': '-version',
-                       'command_line': ('#program_name# #params# #input# '
-                                        '#database# #output#')}
+                       'command_line': ('#program_name# #params# #input# #database# '
+                                        '#output#')}
         elif 'diamond' in args.map_dna:
-            map_dna = {'program_name': find_executable('diamond'),
-                       'params': ('blastx --quiet --threads 1 --outfmt 6 '
-                                  '--more-sensitive --id 50 --max-hsps 35 -k 0'),
+            exe, _ = find_executable('diamond')
+            map_dna = {'program_name': exe,
+                       'params': ('blastx --quiet --threads 1 --outfmt 6 --more-sensitive '
+                                  '--id 50 --max-hsps 35 -k 0'),
                        'input': '--query',
                        'database': '--db',
                        'output': '--out',
@@ -193,9 +205,9 @@ if __name__ == '__main__':
     # setting the software for mapping the proteomes (aa)
     if args.map_aa:
         if 'usearch' in args.map_aa:
-            map_aa = {'program_name': find_executable('usearch'),
-                      'params': ('-quiet -evalue 1e-10 -maxaccepts 8 '
-                                 '-maxrejects 32'),
+            exe, _ = find_executable('usearch')
+            map_aa = {'program_name': exe,
+                      'params': '-quiet -evalue 1e-10 -maxaccepts 8 -maxrejects 32',
                       'threads': '-threads',
                       'input': '-ublast',
                       'database': '-db',
@@ -204,9 +216,10 @@ if __name__ == '__main__':
                       'command_line': ('#program_name# #params# #threads# #input# '
                                        '#database# #output#')}
         elif 'diamond' in args.map_aa:
-            map_aa = {'program_name': find_executable('diamond'),
-                      'params': ('blastp --quiet --threads 1 --outfmt 6 '
-                                 '--more-sensitive --id 50 --max-hsps 35 -k 0'),
+            exe, _ = find_executable('diamond')
+            map_aa = {'program_name': exe,
+                      'params': ('blastp --quiet --threads 1 --outfmt 6 --more-sensitive '
+                                 '--id 50 --max-hsps 35 -k 0'),
                       'input': '--query',
                       'database': '--db',
                       'output': '--out',
@@ -217,20 +230,23 @@ if __name__ == '__main__':
 
     # setting the MSA software
     if 'muscle' in args.msa:
-        msa = {'program_name': find_executable('muscle'),
+        exe, _ = find_executable('muscle')
+        msa = {'program_name': exe,
                'params': '-quiet -maxiters 2',
                'input': '-in',
                'output': '-out',
                'version': '-version',
                'command_line': '#program_name# #params# #input# #output#'}
     elif 'mafft' in args.msa:
-        msa = {'program_name': find_executable('mafft'),
+        exe, _ = find_executable('mafft')
+        msa = {'program_name': exe,
                'params': '--quiet --anysymbol --auto',
                'environment': 'TMPDIR=/local-storage',
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
     elif 'opal' in args.msa:
-        msa = {'program_name': find_executable('opal'),
+        exe, _ = find_executable('opal')
+        msa = {'program_name': exe,
                'input': '--in',
                'output': '--out',
                'params': '--quiet',
@@ -239,7 +255,8 @@ if __name__ == '__main__':
         if args.db_type == 'a':
             msa['params'] += ' --protein'
     elif 'upp' in args.msa:
-        msa = {'program_name': find_executable('run-upp.sh', rollback='upp'),
+        exe, _ = find_executable('run-upp.sh', rollback='upp')
+        msa = {'program_name': exe,
                'params': '-x 1 -M -1 -T 0.66 -B 999999999',
                'input': '-s',
                'output': '-o',
@@ -257,7 +274,8 @@ if __name__ == '__main__':
     # setting the trimming software
     if args.trim:
         if 'trimal' in args.trim:
-            trim = {'program_name': find_executable('trimal'),
+            exe, _ = find_executable('trimal')
+            trim = {'program_name': exe,
                     'params': '-gappyout',
                     'input': '-in',
                     'output': '-out',
@@ -269,17 +287,18 @@ if __name__ == '__main__':
     # setting gene_tree1
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
-            gene_tree1 = {'program_name': find_executable('FastTree-2.1.9-SSE3',
-                                                          rollback='fasttree'),
-                          'params': ('-quiet -mlacc 2 -slownni -spr 4 '
-                                     '-fastest -mlnni 4 -no2nd'),
+            exe, _ = find_executable('FastTree-2.1.9-SSE3', gene_tree1rollback='fasttree')
+            gene_tree1 = {'program_name': exe,
+                          'params': ('-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 '
+                                     '-no2nd'),
                           'output': '-out',
                           'command_line': '#program_name# #params# #output# #input#'}
 
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -gtr -nt'
         elif 'raxml' in args.gene_tree1:
-            gene_tree1 = {'program_name': find_executable('raxmlHPC', rollback='raxml'),
+            exe, _ = find_executable('raxmlHPC', rollback='raxml')
+            gene_tree1 = {'program_name': exe,
                           'params': '-p 1989',
                           'input': '-s',
                           'output_path': '-w',
@@ -288,21 +307,20 @@ if __name__ == '__main__':
 
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -m GTRCAT',
-                gene_tree1['command_line'] = ('#program_name# #params# '
-                                              '#output_path# #input# '
-                                              '#output#')
+                gene_tree1['command_line'] = ('#program_name# #params# #output_path# '
+                                              '#input# #output#')
             elif args.db_type == 'a':
                 gene_tree1['model'] = '-m'
-                gene_tree1['command_line'] = ('#program_name# #model# '
-                                              '#params# #output_path# #input# '
-                                              '#output#')
+                gene_tree1['command_line'] = ('#program_name# #model# #params# '
+                                              '#output_path# #input# #output#')
 
         progs['gene_tree1'] = gene_tree1
 
     # setting gene_tree2
     if args.gene_tree2:
         if 'raxml' in args.gene_tree2:
-            gene_tree2 = {'program_name': find_executable('raxmlHPC', rollback='raxml'),
+            exe, _ = find_executable('raxmlHPC', rollback='raxml')
+            gene_tree2 = {'program_name': exe,
                           'params': '-p 1989',
                           'database': '-t',  # starting tree
                           'input': '-s',
@@ -330,35 +348,37 @@ if __name__ == '__main__':
                  'version': '-i /CM/tools/astral-4.11.1/test_data/song_mammals.424.gene.tre',
                  'command_line': '#program_name# #input# #output#'}
     if 'astrid' in args.tree1:
-        tree1 = {'program_name': find_executable('ASTRID'),
+        exe, _ = find_executable('ASTRID')
+        tree1 = {'program_name': exe,
                  'input': '-i',
                  'params': '-m auto',
                  'output': '-o',
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}
     elif 'fasttree' in args.tree1:
-        tree1 = {'program_name': find_executable('FastTreeMP-2.1.9-SSE3',
-                                                 rollback='fasttree'),
-                 'params': ('-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni '
-                            '4 -no2nd'),
+        exe, rb = find_executable('FastTreeMP-2.1.9-SSE3', rollback='fasttree')
+        tree1 = {'program_name': exe,
+                 'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                  'output': '-out',
-                 'environment': 'OMP_NUM_THREADS=3',
                  'command_line': '#program_name# #params# #output# #input#'}
+        if not rb:
+            tree1['environment'] = 'OMP_NUM_THREADS=3'
 
         if args.db_type == 'n':
             tree1['params'] += ' -gtr -nt'
 
     elif 'raxml' in args.tree1:
-        tree1 = {'program_name': find_executable('raxmlHPC-PTHREADS-SSE3',
-                                                 rollback='raxml'),
+        exe, rb = find_executable('raxmlHPC-PTHREADS-SSE3', rollback='raxml')
+        tree1 = {'program_name': exe,
                  'params': '-p 1989',
-                 'threads': '-T',
                  'input': '-s',
                  'output_path': '-w',
                  'output': '-n',
                  'version': '-v',
-                 'command_line': ('#program_name# #params# #threads# '
-                                  '#database# #output_path# #input# #output#')}
+                 'command_line': ('#program_name# #params# #threads# #database# '
+                                  '#output_path# #input# #output#')}
+        if not rb:
+            tree1['threads'] = '-T'
 
         if args.db_type == 'n':
             tree1['params'] += ' -m GTRCAT'
@@ -370,9 +390,9 @@ if __name__ == '__main__':
     # setting tree2
     if args.tree2:
         if 'raxml' in args.tree2:
-            tree2 = {'program_name': find_executable('raxmlHPC-PTHREADS-SSE3'),
+            exe, rb = find_executable('raxmlHPC-PTHREADS-SSE3', rollback='raxml')
+            tree2 = {'program_name': exe,
                      'params': '-p 1989',
-                     'threads': '-T',
                      'database': '-t',  # starting tree
                      'input': '-s',
                      'output_path': '-w',
@@ -380,6 +400,8 @@ if __name__ == '__main__':
                      'version': '-v',
                      'command_line': ('#program_name# #params# #threads# #database# '
                                       '#output_path# #input# #output#')}
+            if not rb:
+                tree2['threads'] = '-T'
 
             if args.db_type == 'n':
                 tree2['params'] += ' -m GTRCAT'
