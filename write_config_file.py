@@ -116,10 +116,10 @@ def find_executable(exe, rollback=False):
 # output_path: specify the to option to use to set the path of the folder that will
 #              contains the output file
 # output: specify the option to use for the output file
-# version: specify the option to use to get the version of the sotware, used to verify
+# version: specify the option to use to get the version of the software, used to verify
 #          the software installation
 # command_line: specify the command line to generate with the position of each argument,
-#               '<' and '>' can be used to specify input/output redirection, respectivily
+#               '<' and '>' can be used to specify input/output redirection, respectively
 # environment: specify variables and their values to be defined in the environment,
 #              syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
 
