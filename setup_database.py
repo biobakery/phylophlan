@@ -143,14 +143,14 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
     if verbose:
         info('Writing output database "{}"'.format(output))
 
-    with open(output) as f:
+    with open(output, 'w') as f:
         SeqIO.write(seqs, f, "fasta")
 
 
 if __name__ == '__main__':
     args = read_params()
     check_params(args, verbose=args.verbose)
-    create_folder(os.path.join(args.db_name, args.output), verbose=args.verbose)
+    create_folder(os.path.join(args.output), verbose=args.verbose)
     create_database(args.db_name, args.input, args.input_extension,
                     os.path.join(args.output, args.db_name + args.output_extension),
                     args.overwrite, verbose=args.verbose)
