@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 
-__author__ = ('Nicola Segata (nicola.segata@unitn.it), '
-              'Francesco Asnicar (f.asnicar@unitn.it)')
-__version__ = '0.12'
-__date__ = '6 March 2018'
+ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+               'Mattia Bolzan (mattia.bolzan@unitn.it), '
+               'Nicola Segata (nicola.segata@unitn.it)')
+__version__ = '0.13'
+__date__ = '19 March 2018'
 
 
 import os
@@ -54,6 +55,7 @@ TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
 SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred',
                      'threehundred', 'onehundred', 'fifty', 'twentyfive']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
+DIVERSITY_CHOICES = ['low', 'medium', 'high']
 MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
@@ -109,15 +111,25 @@ def read_params():
                    help="Specify the substitution matrix to use")
 
     group = p.add_mutually_exclusive_group()
-    group.add_argument('--strain', action='store_true', default=False, help="")
-    group.add_argument('--species', action='store_true', default=False, help="")
-    group.add_argument('--genus', action='store_true', default=False, help="")
-    group.add_argument('--family', action='store_true', default=False, help="")
-    group.add_argument('--order', action='store_true', default=False, help="")
-    group.add_argument('--classs', action='store_true', default=False, help="")
-    group.add_argument('--phylum', action='store_true', default=False, help="")
-    group.add_argument('--tol', action='store_true', default=False, help="")
+    group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
+                       help=('[..];'
+                             '"low": ;'
+                             '"medium": ;'
+                             '"high": '))
     group.add_argument('--meta', action='store_true', default=False, help="")
+    # group.add_argument('--strain', action='store_true', default=False, help="")
+    # group.add_argument('--species', action='store_true', default=False, help="")
+    # group.add_argument('--genus', action='store_true', default=False, help="")
+    # group.add_argument('--family', action='store_true', default=False, help="")
+    # group.add_argument('--order', action='store_true', default=False, help="")
+    # group.add_argument('--classs', action='store_true', default=False, help="")
+    # group.add_argument('--phylum', action='store_true', default=False, help="")
+    # group.add_argument('--tol', action='store_true', default=False, help="")
+
+    p.add_argument('--accurate', action='store_true', default=False,
+                   help="If specified will set some parameters that should provide a more accurate phylogeny reconstruction. Affected parameters are:")
+    p.add_argument('--fast', action='store_true', default=False,
+                   help="If specified will set some parameters that should provide a faster phylogeny reconstruction. Affected parameters are:")
 
     p.add_argument('--clean_all', action='store_true', default=False,
                    help=("Remove all installation and database files that are "
@@ -157,7 +169,7 @@ def read_params():
                          "the top 700; 'fivehundred' return the top 500; 'threehundred' "
                          "return the top 300; 'onehundred' return the top 100 positions; "
                          "'fifty' return the top 50 positions; 'twentyfive' return the top "
-                         "25 positions;None, the complete alignment will be used"))
+                         "25 positions; None, the complete alignment will be used"))
     p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION,
                    help=("Define the amount of unknowns ('X' and '-') allowed in each "
                          "column of the MSA of the markers"))
@@ -255,12 +267,20 @@ def check_args(args, command_line_arguments, verbose=True):
     elif not args.database:
         error('-d (or --database) must be specified')
         database_list(args.databases_folder, exit=True)
-    elif not args.db_type:
-        error('-t (or --db_type) must be specified', exit=True)
+    # elif not args.db_type:
+    #     error('-t (or --db_type) must be specified', exit=True)
 
     if args.input:
+        if os.path.isdir(args.input):
+            args.input_folder = os.path.dirname(os.path.abspath(args.input))
+            args.input = os.path.basename(os.path.abspath(args.input))
+
         project_name = args.input
     elif args.clean:
+        if os.path.isdir(args.clean):
+            args.input_folder = os.path.dirname(os.path.abspath(args.clean))
+            args.clean = os.path.basename(os.path.abspath(args.clean))
+
         project_name = args.clean
 
     args.output_folder = os.path.join(args.output_folder,
@@ -273,11 +293,10 @@ def check_args(args, command_line_arguments, verbose=True):
         return None
 
     args.input_folder = os.path.join(args.input_folder, project_name)
-
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.databases_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
+    check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
     if not args.genome_extension.startswith('.'):
         args.genome_extension = '.' + args.genome_extension
@@ -455,18 +474,15 @@ def check_args(args, command_line_arguments, verbose=True):
         submat_list(args.submat_folder, exit=True, exit_value=1)
 
     # get scoring function
-    if args.scoring_function:
-        if '--scoring_function' in command_line_arguments:
-            score_function = args.scoring_function
-    elif scoring_function:
-        score_function = scoring_function
+    score_function = args.scoring_function if args.scoring_function and ('--scoring_function' in command_line_arguments) else scoring_function
 
-    if score_function in globals():
-        args.scoring_function = globals().get(score_function)
-    elif (not score_function) and (score_function in locals()):
-        args.scoring_function = locals().get(score_function)
-    else:
-        error('cannot find scoring function "{}"'.format(score_function), exit=True)
+    if score_function:
+        if score_function in globals():
+            args.scoring_function = globals().get(score_function)
+        elif (not score_function) and (score_function in locals()):
+            args.scoring_function = locals().get(score_function)
+        else:
+            error('cannot find scoring function "{}"'.format(score_function), exit=True)
 
     # get position function
     if args.subsample:
@@ -501,8 +517,7 @@ def check_configs(configs, verbose=False):
 
                     for option in options:
                         if verbose:
-                            info('Checking "{}" option in "{}" section\n'
-                                 .format(option, section))
+                            info('Checking "{}" option in "{}" section\n'.format(option, section))
 
                         if (option in configs[section]) and configs[section][option]:
                             mandatory_options = True
@@ -750,6 +765,41 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
                   verbose=False):
     db_dna, db_aa = None, None
 
+    if not db_type:
+        fna = os.path.join(databases_folder, database, database + '.fna')
+        fna_bz2 = os.path.join(databases_folder, database, database + '.fna.bz2')
+        faa = os.path.join(databases_folder, database, database + '.faa')
+        faa_bz2 = os.path.join(databases_folder, database, database + '.faa.bz2')
+        folder = os.path.join(databases_folder, database)
+        d = None
+
+        if os.path.isfile(fna) or os.path.isfile(fna_bz2):
+            d = Counter([len(set(r.seq))
+                         for r in SeqIO.parse(fna if os.path.isfile(fna)
+                                                  else bz2.open(fna_bz2, 'rt'), "fasta")])
+        elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
+            d = Counter([len(set(r.seq))
+                         for record in SeqIO.parse(faa if os.path.isfile(faa)
+                                                       else bz2.open(faa_bz2, 'rt'),
+                                                   "fasta")])
+        elif os.path.isdir(folder):
+            d = Counter([len(set(r.seq)) for f in glob(folder)
+                                         for record in SeqIO.parse(f if os.path.isfile(f)
+                                                                     else bz2.open(f, 'rt'),
+                                                                   "fasta")])
+        else:
+            error("-t (or --db_type) wasn't specified and I wasn't able to "
+                  "automatically detect the input database file(s)", exit=True)
+
+        # nucleotides --> A, T, G, C, S (G or C), N, -
+        if len([f for _, f in d.items() if f > 7]) > (len(d) / 2):  # if >50% are >7
+            db_type = 'a'  # amino acids
+        elif len([f for _, f in d.items() if f < 8]) > (len(d) / 2):  # if >50% are <=7
+            db_type = 'n'  # nucleotides
+        else:
+            error("-t (or --db_type) wasn't specified and I wasn't able to automatically "
+                  "distinguish based on the letters distribution", exit=True)
+
     if db_type == 'a':
         db_dna, db_aa = init_database_aa(database, databases_folder, params, key_dna,
                                          key_aa, verbose=verbose)
@@ -767,7 +817,7 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
     if (not db_dna) and (not db_aa):
         error('both db_dna and db_aa are None!', exit=True)
 
-    return (db_dna, db_aa)
+    return (db_type, db_dna, db_aa)
 
 
 def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbose=False):
@@ -3077,8 +3127,11 @@ def phylophlan2():
     download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder,
                            verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
-    db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
-                                  configs, 'db_dna', 'db_aa', verbose=args.verbose)
+    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder,
+                                           args.db_type, configs, 'db_dna', 'db_aa',
+                                           verbose=args.verbose)
+    if not args.db_type:
+        args.db_type = db_type
 
     if not args.meta:  # standard phylogeny reconstruction
         standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
