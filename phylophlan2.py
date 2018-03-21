@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 
- __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
-               'Mattia Bolzan (mattia.bolzan@unitn.it), '
-               'Nicola Segata (nicola.segata@unitn.it)')
+__author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+              'Mattia Bolzan (mattia.bolzan@unitn.it), '
+              'Nicola Segata (nicola.segata@unitn.it)')
 __version__ = '0.13'
 __date__ = '19 March 2018'
 
@@ -59,7 +59,7 @@ DIVERSITY_CHOICES = ['low', 'medium', 'high']
 MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
-NOT_VARIANT_THRESHOLD = 0.95
+NOT_VARIANT_THRESHOLD = 0.99
 FRAGMENTARY_THRESHOLD = 0.85
 UNKNOWN_FRACTION = 0.3
 DATABASE_DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
@@ -92,7 +92,7 @@ def read_params():
                           epilog='',
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    group = p.add_mutually_exclusive_group()
+    group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
                        help="Build a phylogenetic tree using only genomes provided by "
                             "the user")
@@ -110,26 +110,19 @@ def read_params():
     p.add_argument('-s', '--submat', type=str, default=None,
                    help="Specify the substitution matrix to use")
 
-    group = p.add_mutually_exclusive_group()
+    group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
                        help=('[..];'
                              '"low": ;'
                              '"medium": ;'
                              '"high": '))
     group.add_argument('--meta', action='store_true', default=False, help="")
-    # group.add_argument('--strain', action='store_true', default=False, help="")
-    # group.add_argument('--species', action='store_true', default=False, help="")
-    # group.add_argument('--genus', action='store_true', default=False, help="")
-    # group.add_argument('--family', action='store_true', default=False, help="")
-    # group.add_argument('--order', action='store_true', default=False, help="")
-    # group.add_argument('--classs', action='store_true', default=False, help="")
-    # group.add_argument('--phylum', action='store_true', default=False, help="")
-    # group.add_argument('--tol', action='store_true', default=False, help="")
 
-    p.add_argument('--accurate', action='store_true', default=False,
-                   help="If specified will set some parameters that should provide a more accurate phylogeny reconstruction. Affected parameters are:")
-    p.add_argument('--fast', action='store_true', default=False,
-                   help="If specified will set some parameters that should provide a faster phylogeny reconstruction. Affected parameters are:")
+    group = p.add_mutually_exclusive_group()
+    group.add_argument('--accurate', action='store_true', default=False,
+                       help="If specified will set some parameters that should provide a more accurate phylogeny reconstruction. Affected parameters are:")
+    group.add_argument('--fast', action='store_true', default=False,
+                       help="If specified will set some parameters that should provide a faster phylogeny reconstruction. Affected parameters are:")
 
     p.add_argument('--clean_all', action='store_true', default=False,
                    help=("Remove all installation and database files that are "
@@ -199,8 +192,8 @@ def read_params():
                          "removed. This is equivalent to specify '--remove_fragmentary_entries "
                          "--fragmentary_threshold 1'"))
 
-    group = p.add_argument_group(title="Folders", description=("Parameters for setting "
-                                                               "the folders location"))
+    group = p.add_argument_group(title="Folder paths",
+                                 description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER,
                        help="Path to the folder containing the folder with the input data")
     group.add_argument('--data_folder', type=str, default=None,
@@ -263,28 +256,50 @@ def check_args(args, command_line_arguments, verbose=True):
     elif args.submat_list:
         submat_list(args.submat_folder, exit=True)
     elif (not args.input) and (not args.clean):
-        error('either -i (--input) or -c (--clean) must be specified', exit=True)
+        error('either -i/--input or -c/--clean must be specified', exit=True)
     elif not args.database:
-        error('-d (or --database) must be specified')
+        error('-d/--database must be specified')
         database_list(args.databases_folder, exit=True)
     # elif not args.db_type:
     #     error('-t (or --db_type) must be specified', exit=True)
 
+    input_folder_setted = False
+
     if args.input:
         if os.path.isdir(args.input):
-            args.input_folder = os.path.dirname(os.path.abspath(args.input))
-            args.input = os.path.basename(os.path.abspath(args.input))
+            if '--input_folder' not in command_line_arguments:
+                input_folder_setted = True
+                args.input_folder = os.path.dirname(os.path.abspath(args.input))
+                args.input = os.path.basename(os.path.abspath(args.input))
+
+                if verbose:
+                    info('Automatically setting "input={}" and "input_folder={}"\n'
+                         .format(args.input, args.input_folder))
+            else:
+                error('--input_folder is specified and the -i/--input is a path to a folder',
+                      exit=True)
 
         project_name = args.input
     elif args.clean:
         if os.path.isdir(args.clean):
-            args.input_folder = os.path.dirname(os.path.abspath(args.clean))
-            args.clean = os.path.basename(os.path.abspath(args.clean))
+            if '--input_folder' not in command_line_arguments:
+                input_folder_setted = True
+                args.input_folder = os.path.dirname(os.path.abspath(args.clean))
+                args.clean = os.path.basename(os.path.abspath(args.clean))
+
+                if verbose:
+                    info('Automatically setting "clean={}" and "input_folder={}"\n'
+                         .format(args.input, args.input_folder))
+            else:
+                error('--input_folder is specified and the -c/--clean is a path to a folder',
+                      exit=True)
 
         project_name = args.clean
 
-    args.output_folder = os.path.join(args.output_folder,
-                                      project_name + '_' + args.database)
+    if not input_folder_setted:
+        args.input_folder = os.path.join(args.input_folder, project_name)
+
+    args.output_folder = os.path.join(args.output_folder, project_name + '_' + args.database)
     args.data_folder = os.path.join(args.output_folder, 'tmp')
 
     if args.clean:
@@ -292,7 +307,6 @@ def check_args(args, command_line_arguments, verbose=True):
         check_and_create_folder(args.output_folder, exit=True, verbose=verbose)
         return None
 
-    args.input_folder = os.path.join(args.input_folder, project_name)
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
     check_and_create_folder(args.databases_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
@@ -310,95 +324,71 @@ def check_args(args, command_line_arguments, verbose=True):
     if args.proteome_extension.endswith('.'):
         args.proteome_extension = args.proteome_extension[:-1]
 
+    # if both --accurate and --fast are not specified, then go with accurate
+    if (not args.accurate) and (not args.fast):
+        args.accurate = True
+
     # set pre-config params
     trim = None
     submat = None
     subsample = None
     scoring_function = None
     fragmentary_threshold = None
+    not_variant_threshold = None
 
-    if args.strain:  # params for strain-level phylogenies
-        trim = 'gappy'
-        submat = 'pfasum60'
-        subsample = 'twentyfive'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.8
+    if args.diversity == 'low':
+        if args.accurate:
+            trim = 'gappy'
+            fragmentary_threshold = 0.85
 
-        if verbose:
-            info('"strain" preset\nargs: {}\n'.format(args))
-    elif args.species:  # params for species-level phylogenies
-        trim = 'gappy'
-        submat = 'pfasum60'
-        subsample = 'twentyfive'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.8
+        if args.fast:
+            trim = 'gappy'
+            submat = 'pfasum60'
+            subsample = 'onehundred'
+            scoring_function = 'trident'
+            fragmentary_threshold = 0.85
 
-        if verbose:
-            info('"species" preset\nargs: {}\n'.format(args))
-    elif args.genus:  # params for genus-level phylogenies
-        trim = 'gappy'
-        submat = 'pfasum60'
-        subsample = 'twentyfive'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.8
+    if args.diversity == 'medium':
+        if args.accurate:
+            trim = 'gappy'
+            submat = 'pfasum60'
+            subsample = 'fifty'
+            scoring_function = 'trident'
+            fragmentary_threshold = 0.85
 
-        if verbose:
-            info('"genus" preset\nargs: {}\n'.format(args))
-    elif args.family:  # params for family-level phylogenies
-        trim = 'gappy'
-        submat = 'pfasum60'
-        subsample = 'twentyfive'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.8
+        if args.fast:
+            trim = 'greedy'
+            submat = 'pfasum60'
+            subsample = 'twentyfive'
+            scoring_function = 'trident'
+            fragmentary_threshold = 0.75
+            not_variant_threshold = 0.99
 
-        if verbose:
-            info('"family" preset\nargs: {}\n'.format(args))
-    elif args.order:  # params for order-level phylogenies
-        trim = 'greedy'
-        submat = 'pfasum60'
-        subsample = 'phylophlan'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.9
+    if args.diversity == 'high':
+        if args.accurate:
+            trim = 'greedy'
+            submat = 'pfasum60'
+            subsample = 'twentyfive'
+            scoring_function = 'trident'
+            fragmentary_threshold = 0.75
+            not_variant_threshold = 0.97
 
-        if verbose:
-            info('"order" preset\nargs: {}\n'.format(args))
-    elif args.classs:  # params for class-level phylogenies
-        trim = 'greedy'
-        submat = 'pfasum60'
-        subsample = 'phylophlan'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.9
+        if args.fast:
+            trim = 'greedy'
+            submat = 'pfasum60'
+            subsample = 'phylophlan'
+            scoring_function = 'trident'
+            fragmentary_threshold = 0.65
+            not_variant_threshold = 0.95
 
-        if verbose:
-            info('"classs" preset\nargs: {}\n'.format(args))
-    elif args.phylum:  # params for phylum-level phylogenies
-        trim = 'greedy'
-        submat = 'pfasum60'
-        subsample = 'phylophlan'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.9
-
-        if verbose:
-            info('"phylum" preset\nargs: {}\n'.format(args))
-    elif args.tol:  # params for tree-of-life phylogenies
-        trim = 'greedy'
-        submat = 'pfasum60'
-        subsample = 'phylophlan'
-        scoring_function = 'trident'
-        fragmentary_threshold = 0.9
-
-        if verbose:
-            info('"tree-of-life" preset\nargs: {}\n'.format(args))
-    elif args.meta:  # params for phylogenetic placement of metagenomic contigs
+    if args.meta:  # params for phylogenetic placement of metagenomic contigs
         pass
 
-        if verbose:
-            info('"metagenomic" preset\nargs: {}\n'.format(args))
-    else:
-        pass
-
-        if verbose:
-            info('"custom" preset\nargs: {}\n'.format(args))
+    if verbose:
+        info('"{}" preset\n'.format('meta' if args.meta else
+                                    '{}-{}'.format(args.diversity,
+                                                   'accurate' if args.accurate else
+                                                   'fast' if args.fast else 'none')))
 
     # check subsample settings with pre-config ones
     if args.subsample:
@@ -432,6 +422,10 @@ def check_args(args, command_line_arguments, verbose=True):
                      'the "database={}"\n'.format(args.min_num_proteins, args.database))
         else:
             args.min_num_proteins = MIN_NUM_PROTEINS
+
+    # check not_variant_threshold settings
+    if not_variant_threshold and ('--not_variant_threshold' not in command_line_arguments):
+        args.not_variant_threshold = not_variant_threshold
 
     # check fragmentary_threshold settings
     if fragmentary_threshold and ('--fragmentary_threshold' not in command_line_arguments):
@@ -496,6 +490,9 @@ def check_args(args, command_line_arguments, verbose=True):
             error('cannot find subsampling function "{}"'.format(args.subsample), exit=True)
 
         args.subsample = npos_function
+
+    if verbose:
+        info('args: {}\n'.format(args))
 
     return project_name
 
@@ -774,19 +771,18 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
         d = None
 
         if os.path.isfile(fna) or os.path.isfile(fna_bz2):
-            d = Counter([len(set(r.seq))
-                         for r in SeqIO.parse(fna if os.path.isfile(fna)
-                                                  else bz2.open(fna_bz2, 'rt'), "fasta")])
+            d = Counter([len(set(r.seq)) for r in SeqIO.parse(fna if os.path.isfile(fna)
+                                                                  else bz2.open(fna_bz2, 'rt'),
+                                                              "fasta")])
         elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
-            d = Counter([len(set(r.seq))
-                         for record in SeqIO.parse(faa if os.path.isfile(faa)
-                                                       else bz2.open(faa_bz2, 'rt'),
-                                                   "fasta")])
+            d = Counter([len(set(r.seq)) for r in SeqIO.parse(faa if os.path.isfile(faa)
+                                                                  else bz2.open(faa_bz2, 'rt'),
+                                                              "fasta")])
         elif os.path.isdir(folder):
             d = Counter([len(set(r.seq)) for f in glob(folder)
-                                         for record in SeqIO.parse(f if os.path.isfile(f)
-                                                                     else bz2.open(f, 'rt'),
-                                                                   "fasta")])
+                                         for r in SeqIO.parse(f if os.path.isfile(f)
+                                                                else bz2.open(f, 'rt'),
+                                                              "fasta")])
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to "
                   "automatically detect the input database file(s)", exit=True)
@@ -922,8 +918,6 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa, verbos
     if key_dna in params:
         if 'makeblastdb' in params[key_dna]['program_name']:
             db_dna = os.path.join(databases_folder, database, database)
-
-            print('db_dna: {}'.format(db_dna))
 
             if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database + ext))]:
                 make_database(params[key_dna], db_fasta, markers, db_folder, database, key_dna,
@@ -1342,7 +1336,6 @@ def best_hit(f):
     best_matches = {}
 
     for entry in tab:
-        print(entry)
         c = entry[0].split(' ')[0]
         m = entry[1].split('_')[1]
         cs = entry[6]
@@ -1358,7 +1351,6 @@ def best_hit(f):
         else:
             best_matches[m] = [c, m, cs, ce, rev, b]
 
-    print(best_matches)
     return [v for _, v in best_matches.items()]
 
 
@@ -2371,8 +2363,6 @@ def normalized_submat_scores(aa, submat):
             try:
                 m += submat[(aa, bb)] / math.sqrt(submat[(aa, aa)] * submat[(bb, bb)])
             except Exception as e:
-                print('aa: {}, bb: {}, submat: {}'.format(aa, bb, submat))
-                print('\n{}\n'.format(sys.exc_info()))
                 error(str(e), exit=True)
 
     return m
@@ -2745,8 +2735,9 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1,
 
     t0 = time.time()
     info('Building phylogeny "{}"\n'.format(inputt))
+    nproc_loc = 20 if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()) else nproc
     cmd = compose_command(configs[key], input_file=inputt, output_path=output_path,
-                          output_file=output_tree, nproc=nproc)
+                          output_file=output_tree, nproc=nproc_loc)
     inp_f = None
     out_f = sb.DEVNULL
 
@@ -2788,8 +2779,9 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
 
     t0 = time.time()
     info('Refining phylogeny "{}"\n'.format(starting_tree))
+    nproc_loc = 20 if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()) else nproc
     cmd = compose_command(configs[key], input_file=inputt, database=starting_tree,
-                          output_path=output_path, output_file=output_tree, nproc=nproc)
+                          output_path=output_path, output_file=output_tree, nproc=nproc_loc)
     inp_f = None
     out_f = sb.DEVNULL
 
