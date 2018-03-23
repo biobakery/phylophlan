@@ -296,7 +296,7 @@ def check_args(args, command_line_arguments, verbose=True):
 
         project_name = args.clean
 
-    if not input_folder_setted:
+    if input_folder_setted:
         args.input_folder = os.path.join(args.input_folder, project_name)
 
     args.output_folder = os.path.join(args.output_folder, project_name + '_' + args.database)
