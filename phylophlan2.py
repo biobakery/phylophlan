@@ -740,17 +740,20 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
 
 
 def remove_file(filename, path=None, verbose=False):
-    to_remove = path if path else ''
-    to_remove += filename if filename else ''
+    to_remove = ''
 
-    if to_remove:
-        if os.path.exists(to_remove):
-            if verbose:
-                info('Removing "{}"\n'.format(to_remove))
+    if os.path.isfile(filename):
+        to_remove = filename
+    elif os.path.isfile(os.path.join(path, filename)):
+        to_remove = os.path.join(path, filename)
 
-            os.remove(to_remove)
-        elif verbose:
-            error('file "{}" not found'.format(to_remove))
+    if os.path.isfile(to_remove):
+        if verbose:
+            info('Removing "{}"\n'.format(to_remove))
+
+        os.remove(to_remove)
+    elif verbose:
+        error('cannot remove "{}", file not found'.format(to_remove))
 
 
 def remove_files(file_list, path=None, verbose=False):
