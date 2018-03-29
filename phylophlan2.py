@@ -791,9 +791,9 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
                   "automatically detect the input database file(s)", exit=True)
 
         # nucleotides --> A, T, G, C, S (G or C), N, -
-        if len([f for _, f in d.items() if f > 7]) > (len(d) / 2):  # if >50% are >7
+        if len([f for f, _ in d.items() if f > 7]) > (len(d) / 2):  # if >50% are >7
             db_type = 'a'  # amino acids
-        elif len([f for _, f in d.items() if f < 8]) > (len(d) / 2):  # if >50% are <=7
+        elif len([f for f, _ in d.items() if f < 8]) > (len(d) / 2):  # if >50% are <=7
             db_type = 'n'  # nucleotides
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to automatically "
