@@ -4,8 +4,8 @@
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.13'
-__date__ = '19 March 2018'
+__version__ = '0.14'
+__date__ = '30 March 2018'
 
 
 import os
@@ -46,7 +46,8 @@ INPUT_FOLDER = 'input/'
 DATABASES_FOLDER = 'databases/'
 SUBMAT_FOLDER = 'substitution_matrices/'
 CONFIG_FOLDER = 'configs/'
-OUTPUT_FOLDER = 'output/'
+# OUTPUT_FOLDER = 'output/'
+OUTPUT_FOLDER = ''
 MIN_NUM_PROTEINS = 1
 MIN_LEN_PROTEIN = 50
 MIN_NUM_MARKERS = 0
@@ -300,7 +301,9 @@ def check_args(args, command_line_arguments, verbose=True):
         args.input_folder = os.path.join(args.input_folder, project_name)
 
     args.output_folder = os.path.join(args.output_folder, project_name + '_' + args.database)
-    args.data_folder = os.path.join(args.output_folder, 'tmp')
+
+    if not args.data_folder:
+        args.data_folder = os.path.join(args.output_folder, 'tmp')
 
     if args.clean:
         check_and_create_folder(args.data_folder, exit=True, verbose=verbose)
