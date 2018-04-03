@@ -287,7 +287,7 @@ if __name__ == '__main__':
     # setting gene_tree1
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
-            exe, _ = find_executable('FastTree-2.1.9-SSE3', gene_tree1rollback='fasttree')
+            exe, _ = find_executable('FastTree-2.1.9-SSE3', rollback='fasttree')
             gene_tree1 = {'program_name': exe,
                           'params': ('-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 '
                                      '-no2nd'),
