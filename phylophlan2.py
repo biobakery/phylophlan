@@ -4,8 +4,8 @@
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.14'
-__date__ = '30 March 2018'
+__version__ = '0.15'
+__date__ = '04 April 2018'
 
 
 import os
@@ -93,7 +93,7 @@ def read_params():
                           epilog='',
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
                        help="Build a phylogenetic tree using only genomes provided by "
                             "the user")
@@ -111,7 +111,7 @@ def read_params():
     p.add_argument('-s', '--submat', type=str, default=None,
                    help="Specify the substitution matrix to use")
 
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
                        help=('[..];'
                              '"low": ;'
