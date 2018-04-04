@@ -33,6 +33,8 @@ from urllib.request import urlretrieve
 import tarfile
 import hashlib
 
+if sys.version_info[0] < 3:
+   raise Exception("Not running Python3")
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2',
@@ -105,7 +107,8 @@ def read_params():
                    help="The name of the database to use")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help=("Specify the type of the database, where 'n' stands for "
-                         "nucleotides and 'a' for amino acids"))
+                         "nucleotides and 'a' for amino acids. If not specified, PhyloPhlAn2 "
+                         "will automatically detect the type of database"))
     p.add_argument('-f', '--config_file', type=str, default=None,
                    help="The configuration file to load")
     p.add_argument('-s', '--submat', type=str, default=None,
