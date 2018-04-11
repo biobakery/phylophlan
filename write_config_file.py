@@ -296,6 +296,8 @@ if __name__ == '__main__':
 
             if args.db_type == 'n':
                 gene_tree1['params'] += ' -gtr -nt'
+            elif args.db_type == 'a':
+                gene_tree1['params'] += ' -lg'
         elif 'raxml' in args.gene_tree1:
             exe, _ = find_executable('raxmlHPC', rollback='raxml')
             gene_tree1 = {'program_name': exe,
@@ -366,7 +368,8 @@ if __name__ == '__main__':
 
         if args.db_type == 'n':
             tree1['params'] += ' -gtr -nt'
-
+        elif args.db_type == 'a':
+            tree1['params'] += ' -lg'
     elif 'raxml' in args.tree1:
         exe, rb = find_executable('raxmlHPC-PTHREADS-SSE3', rollback='raxml')
         tree1 = {'program_name': exe,
