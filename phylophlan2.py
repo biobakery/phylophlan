@@ -2,10 +2,11 @@
 
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+              'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
 __version__ = '0.15'
-__date__ = '04 April 2018'
+__date__ = '16 April 2018'
 
 
 import os
@@ -32,6 +33,7 @@ import dendropy  # DendroPy
 from urllib.request import urlretrieve
 import tarfile
 import hashlib
+import gzip
 
 if sys.version_info[0] < 3:
    raise Exception("Not running Python3")
@@ -1044,12 +1046,8 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
         for f in files:
             if f.endswith('.bz2'):
-                if not os.path.isdir(tmp_folder):
-                    if verbose:
-                        info('Creating folder "{}"\n'.format(tmp_folder))
-
-                    os.mkdir(tmp_folder)
-
+                check_and_create_folder(tmp_folder, create=True, exit=True,
+                                        verbose=verbose)
                 # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
                 # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
                 file_clean = os.path.splitext(os.path.basename(f))[0]
@@ -1057,6 +1055,22 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g:
                         with bz2.open(f, 'rt') as h:
+                            SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
+                elif verbose:
+                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder,
+                                                                                file_clean)))
+
+                inputs[file_clean] = tmp_folder
+            elif f.endswith('.gz'):
+                check_and_create_folder(tmp_folder, create=True, exit=True,
+                                        verbose=verbose)
+                # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
+                # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
+                file_clean = os.path.splitext(os.path.basename(f))[0]
+
+                if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
+                    with open(os.path.join(tmp_folder, file_clean), 'w') as g:
+                        with gzip.open(f, 'rt') as h:
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
                 elif verbose:
                     info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder,
@@ -2823,7 +2837,7 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = None
     input_faa = None
-    inp_bz2 = os.path.join(args.data_folder, 'bz2')
+    inp_bz2 = os.path.join(args.data_folder, 'uncompressed')
     input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension,
                                  verbose=args.verbose)
 
