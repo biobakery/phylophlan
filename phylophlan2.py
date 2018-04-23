@@ -347,6 +347,7 @@ def check_args(args, command_line_arguments, verbose=True):
     if args.diversity == 'low':
         if args.accurate:
             trim = 'gappy'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.85
 
         if args.fast:
@@ -354,6 +355,7 @@ def check_args(args, command_line_arguments, verbose=True):
             submat = 'pfasum60'
             subsample = 'onehundred'
             scoring_function = 'trident'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.85
 
     if args.diversity == 'medium':
@@ -362,6 +364,7 @@ def check_args(args, command_line_arguments, verbose=True):
             submat = 'pfasum60'
             subsample = 'fifty'
             scoring_function = 'trident'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.85
 
         if args.fast:
@@ -369,6 +372,7 @@ def check_args(args, command_line_arguments, verbose=True):
             submat = 'pfasum60'
             subsample = 'twentyfive'
             scoring_function = 'trident'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.75
             not_variant_threshold = 0.99
 
@@ -378,6 +382,7 @@ def check_args(args, command_line_arguments, verbose=True):
             submat = 'pfasum60'
             subsample = 'twentyfive'
             scoring_function = 'trident'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.75
             not_variant_threshold = 0.97
 
@@ -386,6 +391,7 @@ def check_args(args, command_line_arguments, verbose=True):
             submat = 'pfasum60'
             subsample = 'phylophlan'
             scoring_function = 'trident'
+            remove_fragmentary_entries = True
             fragmentary_threshold = 0.65
             not_variant_threshold = 0.95
 
