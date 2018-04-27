@@ -35,8 +35,10 @@ import tarfile
 import hashlib
 import gzip
 
+
 if sys.version_info[0] < 3:
-   raise Exception("Not running Python3")
+    raise Exception("Not running Python3")
+
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2',
