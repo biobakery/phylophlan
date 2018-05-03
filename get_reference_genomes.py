@@ -11,9 +11,6 @@ __date__ = '27 April 2018'
 
 import sys
 import bz2
-import glob
-from Bio import SeqIO
-from Bio.SeqRecord import SeqRecord
 import os
 import argparse as ap
 from urllib.request import urlretrieve
@@ -56,12 +53,14 @@ def read_params():
     group.add_argument('-a', '--get_all', action='store_true', default=False,
                        help=("If specify -n/--num_ref reference proteomes will be "
                              "downloaded for all taxonomic labels"))
-    group.add_argument('-g', '--get_core_proteins', type=str,
+    group.add_argument('-g', '--get_reference_proteomes', type=str,
                        help=('Specify the taxonomic label for which download the set of '
                              'reference proteomes. The label can represents: '
-                             'a species ("--get_core_proteins s__Escherichia_coli") or a '
-                             'a genus ("--get_core_proteins g__Escherichia")'))  # DA VERIFICARE!!!
+                             'a species ("--get_reference_proteomes s__Escherichia_coli") or a '
+                             'a genus ("--get_reference_proteomes g__Escherichia")'))  # DA VERIFICARE!!!
 
+    p.add_argument('-e', '--output_file_extension', type=str, default='.faa.gz',
+                   help="Specify path to the extension of the output files")
     p.add_argument('-o', '--output', type=str, required=True,
                    help="Specify path to the output folder where to save the files")
     p.add_argument('-n', '--num_ref', type=int, default=4,
@@ -76,6 +75,15 @@ def check_params(args, verbose=False):
     if os.path.exists(args.output):
         if not os.path.isdir(args.output):
             error('output param is not a directory', exit=True)
+
+    if args.num_ref < 0:
+        args.num_ref = None
+
+    if not args.output_file_extension.startswith('.'):
+        args.output_file_extension = '.' + args.output_file_extension
+
+    if args.output_file_extension.endswith('.'):
+        args.output_file_extension = args.output_file_extension[:-1]
 
 
 def create_folder(output, verbose=False):
@@ -138,9 +146,9 @@ def download(url, download_file, verbose=False):
     if not os.path.isfile(download_file):
         try:
             if verbose:
-                info('Downloading "{}"\n'.format(url))
+                info('Downloading "{}" as "{}"\n'.format(url, download_file))
 
-            urlretrieve(url, download_file, reporthook=ReportHook().report)
+            urlretrieve(url, filename=download_file, reporthook=ReportHook().report)
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:
@@ -148,8 +156,9 @@ def download(url, download_file, verbose=False):
 
 
 def get_reference_proteomes(taxa2proteomes_file, download_url, taxa_label, num_ref,
-                            output, verbose=False):
+                            out_file_ext, output, verbose=False):
     download(download_url, taxa2proteomes_file, verbose=verbose)
+
     core_proteomes = {}
     metadata = None
 
@@ -160,11 +169,11 @@ def get_reference_proteomes(taxa2proteomes_file, download_url, taxa_label, num_r
 
         if taxa_label:
             if r.strip().split('\t')[1].endswith(taxa_label):
-                core_proteomes[r.strip().split('\t')[1]] = r.strip().split('\t')[-1].split(';')[:num_ref]
+                core_proteomes[r.strip().split('\t')[1]] = [tuple(t.split(' ')) for t in r.strip().split('\t')[-1].split(';')[:num_ref]]
             elif taxa_label in r.strip().split('\t')[1]:
                 core_proteomes[r.strip().split('\t')[1]] = None
         else:
-            core_proteomes[r.strip().split('\t')[1]] = r.strip().split('\t')[-1].split(';')[:num_ref]
+            core_proteomes[r.strip().split('\t')[1]] = [tuple(t.split(' ')) for t in r.strip().split('\t')[-1].split(';')[:num_ref]]
 
     if taxa_label:
         if not len(core_proteomes):
@@ -175,9 +184,9 @@ def get_reference_proteomes(taxa2proteomes_file, download_url, taxa_label, num_r
                   .format(len(core_proteomes), taxa_label, '    - {}\n'.join(core_proteomes.keys())),
                   exit=True)
 
-    for prot_url in core_proteomes.values():
-        prot_file = os.path.basename(prot_url)  # DA VERIFICARE!!!
-        download(prot_url, os.path.join(output, prot_file), verbose=verbose)
+    for _, prot_urls in core_proteomes.items():
+        for prot, url in prot_urls:
+            download(url.format(prot), os.path.join(output, prot + out_file_ext), verbose=verbose)
 
 
 if __name__ == '__main__':
@@ -186,4 +195,4 @@ if __name__ == '__main__':
     create_folder(os.path.join(args.output), verbose=args.verbose)
     get_reference_proteomes(TAXA2PROTEOMES_FILE, os.path.join(DOWNLOAD_URL, TAXA2PROTEOMES_FILE),
                             None if args.get_all else args.get_reference_proteomes,
-                            args.num_ref, args.output, verbose=args.verbose)
+                            args.num_ref, args.output_file_extension, args.output, verbose=args.verbose)
