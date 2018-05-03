@@ -2389,12 +2389,19 @@ def normalized_submat_scores(aa, submat):
     aa = aa.upper()
     m = 0.0
 
-    if (aa != '-') and (aa != 'X'):
+    if (aa != '-') and (aa != 'X') and (aa != 'Z'):
         for bb in aas:
             try:
                 m += submat[(aa, bb)] / math.sqrt(submat[(aa, aa)] * submat[(bb, bb)])
             except Exception as e:
-                error(str(e), exit=True)
+                error('{}\n    {}'.format(str(e),
+                                          '\n'.join(['    {}: {}'.format(l, v) for l, v in
+                                                     zip(['aa', 'bb', 'submat[(aa, bb)]',
+                                                          'submat[(aa, aa)]', 'submat[(bb, bb)]'],
+                                                         [aa, bb, submat[(aa, bb)], submat[(aa, aa)],
+                                                          submat[(bb, bb)]])])),
+                      exit=True)
+                error('error while normalizing submat scores', exit=True)
 
     return m
 
