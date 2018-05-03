@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.15'
-__date__ = '16 April 2018'
+__version__ = '0.16'
+__date__ = '3 May 2018'
 
 
 import os
@@ -227,7 +227,8 @@ def read_params():
 
     p.add_argument('--verbose', action='store_true', default=False,
                    help="Makes PhyloPhlAn2 verbose")
-    p.add_argument('-v', '--version', action='store_true', default=False,
+    p.add_argument('-v', '--version', action='version',
+                   version='PhyloPhlAn version {} ({})'.format(__version__, __date__),
                    help="Prints the current PhyloPhlAn2 version")
 
     return p.parse_args()
@@ -257,8 +258,6 @@ def check_args(args, command_line_arguments, verbose=True):
     if args.clean_all:
         check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
         return None
-    elif args.version:
-        info('PhyloPhlAn2 version {} ({})\n'.format(__version__, __date__), exit=True)
     elif args.database_list:
         database_list(args.databases_folder, exit=True)
     elif args.submat_list:
@@ -3140,7 +3139,7 @@ def phylophlan2():
     args = read_params()
 
     if args.verbose:
-        info('PhyloPhlAn2 v. {} of {}\nCommand line: {}\n'
+        info('PhyloPhlAn version {} ({})\nCommand line: {}\n'
              .format(__version__, __date__, ' '.join(sys.argv)))
 
     project_name = check_args(args, sys.argv, verbose=args.verbose)
