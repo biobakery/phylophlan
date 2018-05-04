@@ -101,45 +101,51 @@ def read_params():
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
-                       help="Build a phylogenetic tree using only genomes provided by "
+                       help="Build a phylogenetic tree using only genomes and/or proteomes provided by "
                             "the user")
     group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None,
                        help="Clean the output and partial data produced for the "
                             "specified project")
 
     p.add_argument('-d', '--database', type=str, default=None,
-                   help="The name of the database to use")
+                   help="The name of the database of markers to use.")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
-                   help=("Specify the type of the database, where 'n' stands for "
+                   help=("Specify the type of the database of markers, where 'n' stands for "
                          "nucleotides and 'a' for amino acids. If not specified, PhyloPhlAn2 "
                          "will automatically detect the type of database"))
     p.add_argument('-f', '--config_file', type=str, default=None,
-                   help="The configuration file to load")
-    p.add_argument('-s', '--submat', type=str, default=None,
-                   help="Specify the substitution matrix to use")
+                   help="The configuration file to load. "
+                        "Four ready-to-use configuration files are already available in the configs folder")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
-                       help=('[..];'
-                             '"low": ;'
-                             '"medium": ;'
-                             '"high": '))
+                       help=('Specify to PhyloPhlAn2 how diverse are the input genomes/proteomes;'
+                             '"low": for species-strain level phylogenies;'
+                             '"medium": for genus-family level phylogenies;'
+                             '"high": for tree-of-life size phylogenies'))
     group.add_argument('--meta', action='store_true', default=False, help="")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--accurate', action='store_true', default=False,
-                       help="If specified will set some parameters that should provide a more accurate phylogeny reconstruction. Affected parameters are:")
+                       help="If specified, it will set some parameters that should provide a more accurate "
+                            "phylogeny reconstruction. "
+                            "If not specified, PhyloPhlAn 2.0 will automatically run with this option. "
+                            "Check the tutorial on bitbucket to see which parameters are affected")
     group.add_argument('--fast', action='store_true', default=False,
-                       help="If specified will set some parameters that should provide a faster phylogeny reconstruction. Affected parameters are:")
+                       help="If specified will set some parameters that should provide a faster "
+                            "phylogeny reconstruction. "
+                            "Check the tutorial on bitbucket to see which parameters are affected")
 
     p.add_argument('--clean_all', action='store_true', default=False,
                    help=("Remove all installation and database files that are "
-                         "automatically generated at the first run of the pipeline"))
+                         "automatically generated at the first run of the PhyloPhlAn2"))
     p.add_argument('--database_list', action='store_true', default=False,
-                   help=("If specified lists the available databases that can "
+                   help=("List of all the available databases that can "
                          "be specified with the -d (or --database) option"))
+    p.add_argument('-s', '--submat', type=str, default=None,
+                   help="Specify the substitution matrix to use")
     p.add_argument('--submat_list', action='store_true', default=False,
-                   help=("If specified lists the available substitution matrices that can "
+                   help=("List of all the available substitution matrices that can "
                          "be specified with the -s (or --submat) option"))
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use")
     p.add_argument('--min_num_proteins', type=int, default=None,
@@ -148,19 +154,20 @@ def read_params():
     p.add_argument('--min_len_protein', type=int, default=MIN_LEN_PROTEIN,
                    help="Proteins in proteomes (.faa) shorter than this value will be discarded")
     p.add_argument('--min_num_markers', type=int, default=MIN_NUM_MARKERS,
-                   help="Inputs that map less than this number of markers will be discarded")
+                   help="Input genomes or proteomes that map to less than the specified "
+                        "number of markers will be discarded")
     p.add_argument('--trim', default=None, choices=TRIM_CHOICES,
-                   help=("Specify which type of trimming to perform. 'gappy' will use "
-                         "what specified in the 'trim' section of the configuration file "
-                         "(suggested, trimal --gappyout) to remove gappy columns; "
+                   help=("Specify which type of trimming to perform. "
+                         "'gappy' will use what specified in the 'trim' section of the configuration "
+                         "file to remove gappy columns (suggested, trimal --gappyout); "
                          "'not_variant' will remove columns that have at least one amino "
-                         "acid appearing above a certain threshold (see "
-                         "--not_variant_threshold); 'greedy' performs both 'gappy' and "
-                         "'not_variant'"))
+                         "acid appearing above a certain threshold (see '--not_variant_threshold' parameter)"
+                         "'greedy' performs both 'gappy' and 'not_variant'" 
+                         "Default is 'None'. In this case, the trimming step will not be performed"))
     p.add_argument('--not_variant_threshold', type=float,
                    default=NOT_VARIANT_THRESHOLD,
-                   help=("The value used to consider a column not variant when "
-                         "'--trim not_variant' is specified"))
+                   help=("Specify the value used to consider a column not variant when "
+                         "'--trim not_variant' is specified. Default is '0.95'"))
     p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES,
                    help=("Specify which function to use to compute the number of positions "
                          "to retain from single marker MSAs for the concatenated MSA. "
@@ -179,31 +186,32 @@ def read_params():
                    help=("Specify which scoring function to use to evaluate columns in "
                          "the MSA results"))
     p.add_argument('--sort', action='store_true', default=False,
-                   help="If specified the markers will be ordered")
+                   help="If specified, the markers will be ordered. "
+                   "When using the PhyloPhlAn database, it will be automatically set to 'True'")
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False,
                    help=("If specified the MSAs will be checked and cleaned from fragmentary "
                          "entries. See --fragmentary_threshold for the threshold values "
                          "above which an entry will be considered fragmentary"))
     p.add_argument('--fragmentary_threshold', type=float,
                    default=FRAGMENTARY_THRESHOLD,
-                   help=("The fraction of gaps in a MSA to be considered fragmentary and "
+                   help=("The fraction of gaps in the MSA to be considered fragmentary and "
                          "hence discarded"))
     p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES,
                    help=("The minimum number of entries to be present for each of the "
                          "markers in the database"))
     p.add_argument('--maas', type=str, default=None,
-                   help=("Specify a mapping file that specify the substitution model of "
+                   help=("Select a mapping file that specify the substitution model of "
                          "amino acid to use for each of the markers for the gene tree "
                          "reconstruction. File must be tab-separated"))
     p.add_argument('--remove_only_gaps_entries', action='store_true', default=False,
-                   help=("If specified entries in MSAs composed only of gaps ('-') will be "
+                   help=("If specified, entries in the MSAs composed only of gaps ('-') will be "
                          "removed. This is equivalent to specify '--remove_fragmentary_entries "
                          "--fragmentary_threshold 1'"))
 
     group = p.add_argument_group(title="Folder paths",
                                  description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER,
-                       help="Path to the folder containing the folder with the input data")
+                       help="Path to the folder containing the input data")
     group.add_argument('--data_folder', type=str, default=None,
                        help=('Path to the folder where to store the intermediate files, '
                              'default is "tmp" inside the project\'s output folder'))
