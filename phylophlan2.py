@@ -120,17 +120,22 @@ def read_params():
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
-                       help=('[..];'
-                             '"low": ;'
-                             '"medium": ;'
-                             '"high": '))
+                       help=('Specify the "diversity" of phylogeny to build in order to '
+                             'automatically adjust some parameters. Values can be: '
+                             '"low": for genus-/species-/strain-level phylogenies; '
+                             '"medium": for class-/order-level phylogenies; '
+                             '"high": for tree-of-life size phylogenies'))
     group.add_argument('--meta', action='store_true', default=False, help="")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--accurate', action='store_true', default=False,
-                       help="If specified will set some parameters that should provide a more accurate phylogeny reconstruction. Affected parameters are:")
+                       help=('If specified will set some parameters that should provide a '
+                             'more accurate phylogeny reconstruction. Affected parameters '
+                             'vary depending also on the "--diversity" parameter'))
     group.add_argument('--fast', action='store_true', default=False,
-                       help="If specified will set some parameters that should provide a faster phylogeny reconstruction. Affected parameters are:")
+                       help=('If specified will set some parameters that should provide a '
+                             'faster phylogeny reconstruction. Affected parameters vary '
+                             'depending also on the "--diversity" parameter'))
 
     p.add_argument('--clean_all', action='store_true', default=False,
                    help=("Remove all installation and database files that are "
@@ -199,6 +204,9 @@ def read_params():
                    help=("If specified entries in MSAs composed only of gaps ('-') will be "
                          "removed. This is equivalent to specify '--remove_fragmentary_entries "
                          "--fragmentary_threshold 1'"))
+    p.add_argument('--mutation_rates', action='store_true', default=False,
+                   help=("If specified will produced a mutation rates table for each of "
+                         "the aligned markers"))
 
     group = p.add_argument_group(title="Folder paths",
                                  description="Parameters for setting the folders location")
@@ -1648,97 +1656,6 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
                  .format(marker, len(sequences), min_num_entries))
 
 
-# def integrate(inp_f, database, data_folder, nproc=1, verbose=False):
-#     commands, ret_ids = [], []
-
-#     if os.path.isfile(os.path.join(data_folder, 'integrate_ids.pkl')):
-#         info('Integration already performed\n')
-
-#         if verbose:
-#             info('Loading integrated ids from "{}"\n'.format(os.path.join(data_folder, 'integrate_ids.pkl')))
-
-#         with open(os.path.join(data_folder, 'integrate_ids.pkl'), 'rb') as f:
-#             ret_ids = pickle.load(f)
-#     else:
-#         if os.path.isdir(database):
-#             markers = glob.glob(os.path.join(database, '*'))
-#             folder = True
-#         elif os.path.isfile(database + '.faa'):
-#             mrk_db = database + '.faa'
-#             folder = False
-#         else:
-#             error('integrate() what\'s this "{}"??'.format(database), exit=True)
-
-#         for mrk in glob.iglob(os.path.join(inp_f, '*')):
-#             marker = os.path.splitext(os.path.basename(mrk))
-
-#             if folder:
-#                 mrks = [m for m in markers if marker in m]
-
-#                 if len(mrks) == 1:
-#                     mrk_db = mrks[0]
-#                     marker = None
-#                 else:
-#                     error('ambiguous marker "{}" in ["{}"]'.format(marker, ', '.join(mrks)), exit=True)
-
-#             commands.append((mrk, mrk_db, marker))
-
-#         if commands:
-#             info('Integrating {} markers\n'.format(len(commands)))
-#             terminating = mp.Event()
-#             chunksize = math.floor(len(commands) / (nproc * 2))
-
-#             with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
-#                 try:
-#                     ret_ids = set([a for sublist in pool.imap_unordered(integrate_rec, commands,
-#                                                                         chunksize=chunksize if chunksize else 1)
-#                                    for a in sublist])
-#                 except Exception as e:
-#                     error(str(e), init_new_line=True)
-#                     error('integrate crashed', init_new_line=True, exit=True)
-
-#             with open(os.path.join(data_folder, 'integrate_ids.pkl'), 'wb') as f:
-#                 pickle.dump(ret_ids, f, protocol=pickle.HIGHEST_PROTOCOL)
-#         else:
-#             info('No markers to integrate\n')
-
-#     return ret_ids
-
-
-# def integrate_rec(x):
-#     if not terminating.is_set():
-#         try:
-#             t0 = time.time()
-#             ret_ids = None
-#             mrk_in, mrk_db, marker = x
-#             info('Integrating "{}"\n'.format(mrk_in))
-
-#             with open(mrk_in, 'a') as f:
-#                 if marker:
-#                     SeqIO.write((record for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id), f, "fasta")
-#                     ret_ids = [record.id for record in SeqIO.parse(mrk_db, "fasta") if marker in record.id]
-#                 else:
-#                     with open(mrk_db) as g:
-#                         f.write(g.read())
-
-#                     ret_ids = [record.id for record in SeqIO.parse(mrk_db, "fasta")]
-
-#             t1 = time.time()
-#             info('"{}" finished in {}s\n'.format(mrk_in, int(t1 - t0)))
-
-#             if ret_ids:
-#                 return set(ret_ids)
-#             else:
-#                 print('\nNO ret_ids {}\n'.format(x))
-#         except Exception as e:
-#             terminating.set()
-#             error('\n    '.join([str(a) for a in [e, type(e), e.args]]), init_new_line=True)
-#             error('error while integrating\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
-#             raise
-#     else:
-#         terminating.set()
-
-
 def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=False):
     commands = []
 
@@ -1830,16 +1747,12 @@ def is_msa_empty(msa, path=None):
     msa_path = os.path.join(path, msa) if path else msa
 
     if os.path.isfile(msa_path):
-        for aln in AlignIO.read(msa_path, "fasta"):
-            if not len(aln.seq):
-                return True  # found an empty sequence that shouldn't be there
-
-        return False  # all entries checked and are not empty
+        if [True for aln in AlignIO.parse(msa_path, "fasta") if len(aln.seq) <= 0]:
+            return True  # there is at least an empty sequence that shouldn't be there
     else:
         error('file "{}" not found'.format(msa_path))
-        return False
 
-    return True
+    return False  # all entries checked and are not empty or file not found
 
 
 def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
@@ -2180,7 +2093,7 @@ def inputs_list(input_folder, extension, output_file, nproc=1, verbose=False):
 def inputs_list_rec(x):
     if not terminating.is_set():
         try:
-            return [aln.id for aln in AlignIO.read(x, "fasta")]
+            return [aln.id for aln in AlignIO.parse(x, "fasta")]
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -2848,6 +2761,79 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
     info('Phylogeny "{}" refined in {}s\n'.format(output_tree, int(t1 - t0)))
 
 
+def compute_dists(s1, s2):
+    idd = [s for s in range(len(s1)) if (s1[s] not in ['-', 'N']) and (s2[s] not in ['-', 'N'])]
+    d = sum(a != b for a, b in zip([s1[s] for s in idd], [s2[s] for s in idd]))
+
+    return (d, len(idd))
+
+
+def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
+    commands = [(inp, os.path.join(output_folder, inp.replace(input_folder, '').replace('.aln', '.tsv')), verbose)
+                for inp in glob.iglob(input_folder + "*.aln") if not os.path.exists(os.path.join(output_folder, inp.replace(input_folder, '').replace('.aln', '.tsv')))]
+
+    if commands:
+        info('Computing mutation rates for {} markers\n'.format(len(commands)))
+        terminating = mp.Event()
+        chunksize = math.floor(len(commands) / (nproc * 2))
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(mutation_rates_rec, commands,
+                                                chunksize=chunksize if chunksize else 1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('mutation_rates crashed', init_new_line=True, exit=True)
+    else:
+        info('No mutation rates to compute\n')
+
+
+def mutation_rates_rec(x):
+    if not terminating.is_set():
+        try:
+            inp_aln, out_tsv, verbose = x
+
+            if verbose:
+                info('Computing mutation rates of "{}"\n'.format(inp_aln))
+
+            inp = AlignIO.read(inp_aln, "fasta")
+            dists = dict([((inp[i].id, inp[j].id), compute_dists(inp[i], inp[j]))
+                          for i in range(len(inp)) for j in range(i + 1, len(inp))])
+            out_tbl = [['ids'] + [inp[i].id for i in range(len(inp))]]  # header
+
+            for i in range(len(inp)):
+                row = [inp[i].id]
+
+                for j in range(len(inp)):
+                    a, b = (i, j) if (inp[i].id, inp[j].id) in dists else (j, i)
+
+                    if i < j:  # upper triangular
+                        row.append(str(float(dists[(inp[a].id, inp[b].id)][0] /
+                                             dists[(inp[a].id, inp[b].id)][1]))
+                                   if dists[(inp[a].id, inp[b].id)][1] > 0 else 'NaN')
+                    elif i > j:  # lower triangular
+                        row.append('/'.join([str(e) for e in dists[(inp[a].id, inp[b].id)]]))
+                    else:
+                        row.append('0')
+
+                out_tbl.append(row)
+
+            if verbose:
+                info('Writing output to "{}"\n'.format(out_tsv))
+
+            with open(out_tsv, 'w') as f:
+                f.write('\n'.join(['\t'.join(r) for r in out_tbl]))
+        except Exception as e:
+            terminating.set()
+            remove_file(out_tsv)
+            error(str(e), init_new_line=True)
+            error('error while computing mutation rates\n    {}'.format('\n    '.join([str(a) for a in x])),
+                  init_new_line=True)
+            raise
+    else:
+        terminating.set()
+
+
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = None
     input_faa = None
@@ -2920,7 +2906,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
          out_f, nproc=args.nproc, verbose=args.verbose)
     inp_f = out_f
 
-    # compute mutation rate from MSAs
+    if args.mutation_rates:
+        mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates'), verbose=args.verbose)
 
     if args.trim:
         if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
@@ -2980,7 +2967,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         if not all_inputs:
             all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
 
-        out_f = os.path.join(args.data_folder, 'all.aln')
+        out_f = os.path.join(args.output_folder, 'all.aln')
         concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
 
