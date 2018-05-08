@@ -146,7 +146,7 @@ def download(url, download_file, verbose=False):
     if not os.path.isfile(download_file):
         try:
             if verbose:
-                info('Downloading "{}" as "{}"\n'.format(url, download_file))
+                info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, filename=download_file, reporthook=ReportHook().report)
         except EnvironmentError:
@@ -158,7 +158,6 @@ def download(url, download_file, verbose=False):
 def get_reference_proteomes(taxa2proteomes_file, download_url, taxa_label, num_ref,
                             out_file_ext, output, verbose=False):
     download(download_url, taxa2proteomes_file, verbose=verbose)
-
     core_proteomes = {}
     metadata = None
 

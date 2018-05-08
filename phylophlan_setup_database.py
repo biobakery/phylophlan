@@ -96,6 +96,8 @@ def check_params(args, verbose=False):
 
     if args.get_core_proteins:
         args.input = args.output
+        args.input_extension = PROTEOME_EXTENSION
+        args.output_extension = PROTEOME_EXTENSION
 
         if not args.db_name:
             args.db_name = args.get_core_proteins
@@ -176,7 +178,7 @@ def download(url, download_file, verbose=False):
     if not os.path.isfile(download_file):
         try:
             if verbose:
-                info('Downloading "{}"\n'.format(url))
+                info('Downloading "{}"" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
         except EnvironmentError:
@@ -195,7 +197,7 @@ def create_folder(output, verbose=False):
         info("Output database folder already present\n")
 
 
-def get_core_proteins(taxa2core_file, download_url, taxa_label, verbose=False):
+def get_core_proteins(taxa2core_file, download_url, taxa_label, output, output_extension, verbose=False):
     download(download_url, taxa2core_file, verbose=verbose)
     core_proteins = {}
     metadata = None
@@ -204,7 +206,7 @@ def get_core_proteins(taxa2core_file, download_url, taxa_label, verbose=False):
         if r.startswith('#'):
             metadata = r.strip()
         elif r.strip().split('\t')[1].endswith(taxa_label):
-            core_proteins[r.strip().split('\t')[1]] = r.strip().split('\t')[-1].split(';')
+            core_proteins[r.strip().split('\t')[1]] = [tuple(t.split(' ')) for t in r.strip().split('\t')[-1].split(';')]
         elif taxa_label in r.strip().split('\t')[1]:
             core_proteins[r.strip().split('\t')[1]] = None
 
@@ -216,9 +218,12 @@ def get_core_proteins(taxa2core_file, download_url, taxa_label, verbose=False):
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())),
               exit=True)
 
-    for prot_url in core_proteins.values():
-        prot_file = os.path.basename(prot_url)  # DA VERIFICARE!!!
-        download(prot_url, prot_file, verbose=verbose)
+    for lbl, prot_urls in core_proteins.items():
+        if verbose:
+            info('Downloading {} core proteins for {}\n'.format(len(prot_urls), lbl))
+
+        for prot, url in prot_urls:
+            download(url.format(prot), os.path.join(output, prot + output_extension), verbose=verbose)
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
@@ -230,7 +235,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
     if os.path.isdir(inputt):
         for marker in glob.iglob(os.path.join(inputt, '*' + input_ext + '*')):
             seqs += [SeqRecord(record.seq,
-                               id='_'.join([db_name, record.id.replace('_', '-'), str(count)]),
+                               id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
                                description='')
                      for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt')
                                                                 if marker.endswith('.bz2')
@@ -238,7 +243,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
                                                                 "fasta"))]
     else:
         seqs = [SeqRecord(record.seq,
-                          id='_'.join([db_name, record.id.replace('_', '-'), str(count)]),
+                          id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
                           description='')
                 for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt')
                                                            if inputt.endswith('.bz2')
@@ -249,7 +254,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
               exit=True)
 
     if verbose:
-        info('Writing output database "{}"'.format(output))
+        info('Writing output database "{}"\n'.format(output))
 
     with open(output, 'w') as f:
         SeqIO.write(seqs, f, "fasta")
@@ -258,11 +263,11 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
 if __name__ == '__main__':
     args = read_params()
     check_params(args, verbose=args.verbose)
-    create_folder(os.path.join(args.output), verbose=args.verbose)
+    create_folder(args.output, verbose=args.verbose)
 
     if args.get_core_proteins:
         get_core_proteins(TAXA2CORE_FILE, os.path.join(TAXA2CORE_FILE, DOWNLOAD_URL),
-                          args.get_core_proteins, verbose=args.verbose)
+                          args.get_core_proteins, args.output, args.output_extension, verbose=args.verbose)
 
     create_database(args.db_name, args.input, args.input_extension,
                     os.path.join(args.output, args.db_name + args.output_extension),
