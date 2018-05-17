@@ -34,6 +34,7 @@ from urllib.request import urlretrieve
 import tarfile
 import hashlib
 import gzip
+import random
 
 
 if sys.version_info[0] < 3:
@@ -60,8 +61,9 @@ MIN_NUM_MARKERS = 0
 DB_TYPE_CHOICES = ['n', 'a']
 TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
 SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred',
-                     'threehundred', 'onehundred', 'fifty', 'twentyfive']
-SCORING_FUNCTION_CHOICES = ['trident', 'muscle']
+                     'threehundred', 'onehundred', 'fifty', 'twentyfive', 'tenpercent',
+                     'twentyfivepercent', 'fiftypercent']
+SCORING_FUNCTION_CHOICES = ['trident', 'muscle', 'random']
 DIVERSITY_CHOICES = ['low', 'medium', 'high']
 MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
@@ -212,7 +214,8 @@ def read_params():
                          '"--remove_fragmentary_entries --fragmentary_threshold 1"'))
     p.add_argument('--mutation_rates', action='store_true', default=False,
                    help=("If specified will produced a mutation rates table for each of "
-                         "the aligned markers"))
+                         "the aligned markers and a summary table for the concatenated MSA. "
+                         "This operation can take long time to finish"))
 
     group = p.add_argument_group(title="Folder paths",
                                  description="Parameters for setting the folders location")
@@ -497,7 +500,8 @@ def check_args(args, command_line_arguments, verbose=True):
         submat_list(args.submat_folder, exit=True, exit_value=1)
 
     # get scoring function
-    score_function = args.scoring_function if args.scoring_function and ('--scoring_function' in command_line_arguments) else scoring_function
+    score_function = args.scoring_function if args.scoring_function and ('--scoring_function' in command_line_arguments)
+                                           else scoring_function
 
     if score_function:
         if score_function in globals():
@@ -2170,7 +2174,8 @@ def subsample_rec(x):
             t0 = time.time()
             inp, out, npos_function, score_function, unknown_fraction, mat = x
             info('Subsampling "{}"\n'.format(inp))
-            inp_aln = AlignIO.read(inp, "fasta")
+            inp_aln = AlignIO.parse(inp, "fasta")
+            len_seq = inp_aln.get_alignment_length()
             scores = []
             out_aln = []
 
@@ -2193,7 +2198,7 @@ def subsample_rec(x):
             except Exception as _:
                 marker = None
 
-            npos = npos_function(marker)
+            npos = npos_function(marker, len_seq)
             best_npos = [p for _, p in sorted(scores)[-npos:]]
 
             for aln in inp_aln:
@@ -2216,37 +2221,49 @@ def subsample_rec(x):
         terminating.set()
 
 
-def phylophlan(marker):
+def phylophlan(marker, len_seq):
     # return max(int(max(int((400-marker)*30/400.0), 1)**2/30.0), 3)  # ~4k AAs (original PhyloPhlAn formulae)
     return max(int(math.ceil((max(int(math.ceil(((400 - marker) * 30) / 400.0)), 1)**2) / 30.0)), 3)  # ~4.6k AAs
 
 
-def onethousand(_):
-    return 1000
+def onethousand(marker, len_seq):
+    return 1000 if 1000 < len_seq else len_seq
 
 
-def sevenhundred(_):
-    return 700
+def sevenhundred(marker, len_seq):
+    return 700 if 700 < len_seq else len_seq
 
 
-def fivehundred(_):
-    return 500
+def fivehundred(marker, len_seq):
+    return 500 if 500 < len_seq else len_seq
 
 
-def threehundred(_):
-    return 300
+def threehundred(marker, len_seq):
+    return 300 if 300 < len_seq else len_seq
 
 
-def onehundred(_):
-    return 100
+def onehundred(marker, len_seq):
+    return 100 if 100 < len_seq else len_seq
 
 
-def fifty(_):
-    return 50
+def fifty(marker, len_seq):
+    return 50 if 50 < len_seq else len_seq
 
 
-def twentyfive(_):
-    return 25
+def twentyfive(marker, len_seq):
+    return 25 if 25 < len_seq else len_seq
+
+
+def tenpercent(marker, len_seq):
+    return int(math.ceil(len_seq * 0.1))
+
+
+def twentyfivepercent(marker, len_seq):
+    return int(math.ceil(len_seq * 0.25))
+
+
+def fiftypercent(marker, len_seq):
+    return int(math.ceil(len_seq * 0.5))
 
 
 def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
@@ -2264,6 +2281,10 @@ def muscle(seq, submat):
         retval = sum(combos) / len(combos)
 
     return retval
+
+
+def random(seq, submat):
+    return random.random()
 
 
 def symbol_diversity(seq, log_base=21):
@@ -2775,8 +2796,10 @@ def compute_dists(s1, s2):
 
 
 def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
-    commands = [(inp, os.path.join(output_folder, inp.replace(input_folder, '').replace('.aln', '.tsv')), verbose)
-                for inp in glob.iglob(input_folder + "*.aln") if not os.path.exists(os.path.join(output_folder, inp.replace(input_folder, '').replace('.aln', '.tsv')))]
+    commands = [(inp, output_folder, inp.replace(input_folder, '').replace('.aln', ''), verbose)
+                for inp in glob.iglob(input_folder + "*.aln")
+                if not os.path.exists(os.path.join(output_folder,
+                                                   inp.replace(input_folder, '').replace('.aln', '.tsv')))]
 
     if commands:
         info('Computing mutation rates for {} markers\n'.format(len(commands)))
@@ -2797,7 +2820,9 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
 def mutation_rates_rec(x):
     if not terminating.is_set():
         try:
-            inp_aln, out_tsv, verbose = x
+            inp_aln, out_fld, fn, verbose = x
+            out_tsv = os.path.join(out_fld, fn + '.tsv')
+            out_pkl = os.path.join(out_fld, fn + '.pkl')
 
             if verbose:
                 info('Computing mutation rates of "{}"\n'.format(inp_aln))
@@ -2805,6 +2830,13 @@ def mutation_rates_rec(x):
             inp = AlignIO.read(inp_aln, "fasta")
             dists = dict([((inp[i].id, inp[j].id), compute_dists(inp[i], inp[j]))
                           for i in range(len(inp)) for j in range(i + 1, len(inp))])
+
+            if verbose:
+                info('Serializing to "{}"\n'.format(out_pkl))
+
+            with open(out_pkl, 'wb') as f:
+                pickle.dump(dists, f, protocol=pickle.HIGHEST_PROTOCOL)
+
             out_tbl = [['ids'] + [inp[i].id for i in range(len(inp))]]  # header
 
             for i in range(len(inp)):
@@ -2838,6 +2870,54 @@ def mutation_rates_rec(x):
             raise
     else:
         terminating.set()
+
+
+def aggregate_mutation_rates(input_folder, output_file, verbose=False):
+    mutation_rates = glob.glob(input_folder + "*.pkl")
+    aggregated = {}
+    ids = set()
+
+    if verbose:
+        info('Aggregating {} mutation rates\n'.format(len(mutation_rates)))
+
+    for mr in mutation_rates:
+        with open(mr, 'rb') as f:
+            mr_dists = pickle.load(f)
+
+        for k, d in mr_dists.items():
+            a, b = k if k in aggregated else (k[1], k[0])
+            ids.update(k)
+
+            if (a, b) in aggregated:
+                aggregated[(a, b)] = (d[0] + aggregated[(a, b)][0],
+                                      d[1] + aggregated[(a, b)][1])
+            else:
+                aggregated[k] = d  # the assignment of (a, b) will swap the order if not in aggregated!
+
+    s_ids = sorted(ids)
+    out_tbl = [['ids'] + s_ids]  # header
+
+    for i in s_ids:
+        row = [i]
+
+        for j in s_ids:
+            a, b = (i, j) if (i, j) in aggregated else (j, i)
+
+            if i < j:  # upper triangular
+                row.append(str(float(aggregated[(a, b)][0] / aggregated[(a, b)][1]))
+                           if aggregated[(a, b)][1] > 0 else 'NaN')
+            elif i > j:  # lower triangular
+                row.append('/'.join([str(e) for e in aggregated[(a, b)]]))
+            else:
+                row.append('0')
+
+        out_tbl.append(row)
+
+    if verbose:
+        info('Writing output to "{}"\n'.format(output_file))
+
+    with open(output_file, 'w') as f:
+        f.write('\n'.join(['\t'.join(r) for r in out_tbl]))
 
 
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
@@ -2913,7 +2993,10 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     inp_f = out_f
 
     if args.mutation_rates:
-        mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates'), verbose=args.verbose)
+        mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates'),
+                       verbose=args.verbose)
+        aggregate_mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates.tsv'),
+                                 verbose=args.verbose)
 
     if args.trim:
         if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
