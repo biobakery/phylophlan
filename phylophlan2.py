@@ -6,7 +6,7 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
 __version__ = '0.16'
-__date__ = '3 May 2018'
+__date__ = '17 May 2018'
 
 
 import os
@@ -34,7 +34,7 @@ from urllib.request import urlretrieve
 import tarfile
 import hashlib
 import gzip
-import random
+import random as lib_random
 
 
 if sys.version_info[0] < 3:
@@ -42,8 +42,7 @@ if sys.version_info[0] < 3:
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
-CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2',
-                       'tree1', 'tree2']
+CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
 CONFIG_OPTIONS_MANDATORY = [['program_name'], ['command_line']]
 CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database',
                       'output_path', 'output', 'version', 'environment', 'command_line']
@@ -52,7 +51,7 @@ INPUT_FOLDER = 'input/'
 # DATA_FOLDER = 'data/'
 DATABASES_FOLDER = 'databases/'
 SUBMAT_FOLDER = 'substitution_matrices/'
-CONFIG_FOLDER = 'configs/'
+CONFIGS_FOLDER = 'configs/'
 # OUTPUT_FOLDER = 'output/'
 OUTPUT_FOLDER = ''
 MIN_NUM_PROTEINS = 1
@@ -60,9 +59,8 @@ MIN_LEN_PROTEIN = 50
 MIN_NUM_MARKERS = 0
 DB_TYPE_CHOICES = ['n', 'a']
 TRIM_CHOICES = ['gappy', 'not_variant', 'greedy']
-SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred',
-                     'threehundred', 'onehundred', 'fifty', 'twentyfive', 'tenpercent',
-                     'twentyfivepercent', 'fiftypercent']
+SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred', 'threehundred', 'onehundred',
+                     'fifty', 'twentyfive', 'tenpercent', 'twentyfivepercent', 'fiftypercent']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle', 'random']
 DIVERSITY_CHOICES = ['low', 'medium', 'high']
 MIN_NUM_ENTRIES = 4
@@ -103,14 +101,11 @@ def read_params():
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
-                       help=("Build a phylogenetic tree using only genomes and/or "
-                             "proteomes provided by the user"))
+                       help="Build a phylogenetic tree using only genomes and/or proteomes provided by the user")
     group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None,
-                       help=("Clean the output and partial data produced for the "
-                             "specified project"))
+                       help="Clean the output and partial data produced for the specified project")
 
-    p.add_argument('-d', '--database', type=str, default=None,
-                   help="The name of the database of markers to use.")
+    p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use.")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help=('Specify the type of the database of markers, where "n" stands '
                          'for nucleotides and "a" for amino acids. If not specified, '
@@ -229,12 +224,14 @@ def read_params():
     group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER,
                        help=("Path to the folder containing the substitution matrices to "
                              "use to compute the column score for the subsampling step"))
+    group.add_argument('--configs_folder', type=str, default=CONFIGS_FOLDER,
+                       help=("Path to the folder containing the substitution matrices to "
+                             "use to compute the column score for the subsampling step"))
     group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER,
                        help="Path to the output folder where to save the results")
 
     group = p.add_argument_group(title="Filename extensions",
-                                 description=("Parameters for setting the extensions of "
-                                              "the input files"))
+                                 description="Parameters for setting the extensions of the input files")
     group.add_argument('--genome_extension', type=str,
                        default=GENOME_EXTENSION,
                        help="Set the extension for the genomes in your inputs")
@@ -284,8 +281,6 @@ def check_args(args, command_line_arguments, verbose=True):
     elif not args.database:
         error('-d/--database must be specified')
         database_list(args.databases_folder, exit=True)
-    # elif not args.db_type:
-    #     error('-t (or --db_type) must be specified', exit=True)
 
     input_folder_setted = False
 
@@ -334,6 +329,7 @@ def check_args(args, command_line_arguments, verbose=True):
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
+    check_and_create_folder(args.configs_folder, exit=True, verbose=verbose)
     check_and_create_folder(args.databases_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
@@ -419,15 +415,13 @@ def check_args(args, command_line_arguments, verbose=True):
     if verbose:
         info('"{}" preset\n'.format('meta' if args.meta else
                                     '{}-{}'.format(args.diversity,
-                                                   'accurate' if args.accurate else
-                                                   'fast' if args.fast else 'none')))
+                                                   'accurate' if args.accurate else 'fast' if args.fast else 'none')))
 
     # check subsample settings with pre-config ones
     if args.subsample:
         if '--subsample' in command_line_arguments:
             if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
-                error('scoring function "phylophlan" is compatible only with "phylophlan" '
-                      'database', exit=True)
+                error('scoring function "phylophlan" is compatible only with "phylophlan" database', exit=True)
     elif subsample:
         args.subsample = subsample
 
@@ -436,8 +430,7 @@ def check_args(args, command_line_arguments, verbose=True):
         args.sort = True
 
         if verbose:
-            info('Setting "sort={}" because "database={}"\n'.format(args.sort,
-                                                                    args.database))
+            info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
     # check min_num_proteins settings
     if not args.min_num_proteins:
         if args.database == 'phylophlan':
@@ -478,30 +471,34 @@ def check_args(args, command_line_arguments, verbose=True):
         args.trim = trim
 
     # check submat settings
-    if submat and (('-s' not in command_line_arguments) or
-                   ('--submat' not in command_line_arguments)):
+    if submat and (('-s' not in command_line_arguments) or ('--submat' not in command_line_arguments)):
         args.submat = submat
 
     # checking configuration file
     if not args.config_file:
-        error('-f (or --config_file) must be specified')
-        config_list(CONFIG_FOLDER, exit=True, exit_value=1)
-    elif not os.path.isfile(args.config_file):
+        error('-f/--config_file must be specified')
+        config_list(args.configs_folder, exit=True, exit_value=1)
+
+    if os.path.isfile(args.config_file):
+        pass
+    elif os.path.isfile(os.path.join(args.configs_folder, args.config_file)):
+        args.config_file = os.path.join(args.configs_folder, args.config_file)
+    else:
         error('configuration file "{}" not found'.format(args.config_file))
-        config_list(CONFIG_FOLDER, exit=True, exit_value=1)
+        config_list(args.configs_folder, exit=True, exit_value=1)
 
     # checking substitution matrix
     if args.subsample and (not args.submat):
-        error('-s (or --submat) must be specified')
+        error('-s/--submat must be specified')
         submat_list(args.submat_folder, exit=True, exit_value=1)
-    elif (args.submat and
-          (not os.path.isfile(os.path.join(args.submat_folder, args.submat + '.pkl')))):
+    elif (args.submat and (not os.path.isfile(os.path.join(args.submat_folder, args.submat + '.pkl')))):
         error('substitution matrix "{}" not found in "{}"'.format(args.submat, args.submat_folder))
         submat_list(args.submat_folder, exit=True, exit_value=1)
 
     # get scoring function
-    score_function = args.scoring_function if args.scoring_function and ('--scoring_function' in command_line_arguments)
-                                           else scoring_function
+    score_function = (args.scoring_function
+                      if args.scoring_function and ('--scoring_function' in command_line_arguments)
+                      else scoring_function)
 
     if score_function:
         if score_function in globals():
@@ -554,8 +551,7 @@ def check_configs(configs, verbose=False):
                             break
 
                     if not mandatory_options:
-                        error('could not find "{}" mandatory option in section "{}"'
-                              .format(option, section), exit=True)
+                        error('could not find "{}" mandatory option in section "{}"'.format(option, section), exit=True)
 
         if not mandatory_sections:
             error('could not find "{}" section'.format(section), exit=True)
@@ -574,8 +570,8 @@ def check_configs(configs, verbose=False):
         if mandatory_options and actual_options:
             for option in mandatory_options:
                 if option not in actual_options:
-                    error('option "{}" not defined in section "{}" in your configuration '
-                          'file'.format(option, section), exit=True)
+                    error('option "{}" not defined in section "{}" in your configuration file'
+                          .format(option, section), exit=True)
         else:
             error('wrongly formatted configuration file?', exit=True)
 
@@ -646,28 +642,30 @@ def check_database(db_name, databases_folder, verbose=False):
 
 def database_list(databases_folder, exit=False, exit_value=0):
     if not os.path.isdir(databases_folder):
-        error('folder "{}" does not exists'.format(databases_folder),
-              exit=True, exit_value=exit_value)
+        error('folder "{}" does not exists'.format(databases_folder), exit=True, exit_value=exit_value)
 
-    info('Available databases in "{}":\n    {}\n'
-         .format(databases_folder,
-                 '\n    '.join([a for a in sorted(os.listdir(databases_folder))
-                                if os.path.isdir(os.path.join(databases_folder, a))])),
+    info('Available databases in "{}":\n    '.format(databases_folder))
+    info('\n    '.join([a for a in sorted(os.listdir(databases_folder))
+                        if os.path.isdir(os.path.join(databases_folder, a))]),
          exit=exit, exit_value=exit_value)
 
 
 def submat_list(submat_folder, exit=False, exit_value=0):
-    info('Available substitution matrices in "{}":\n    {}\n'
-         .format(submat_folder,
-                 '\n    '.join(sorted([os.path.splitext(os.path.basename(a))
-                                       for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))]))),
+    if not os.path.isdir(submat_folder):
+        error('folder "{}" does not exists'.format(submat_folder), exit=True, exit_value=exit_value)
+
+    info('Available substitution matrices in "{}":\n    '.format(submat_folder))
+    info('\n    '.join(sorted([os.path.splitext(os.path.basename(a))[0]
+                               for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))])) + '\n',
          exit=exit, exit_value=exit_value)
 
 
 def config_list(config_folder, exit=False, exit_value=0):
-    info('Available configuration files in "{}":\n    {}\n'
-         .format(config_folder,
-                 '\n    '.join(sorted(glob.iglob(os.path.join(config_folder, '*.cfg'))))),
+    if not os.path.isdir(config_folder):
+        error('folder "{}" does not exists'.format(config_folder), exit=True, exit_value=exit_value)
+
+    info('Available configuration files in "{}":\n    '.format(config_folder))
+    info('\n    '.join(sorted(glob.iglob(os.path.join(config_folder, '*.cfg')))) + '\n',
          exit=exit, exit_value=exit_value)
 
 
@@ -1757,7 +1755,7 @@ def is_msa_empty(msa, path=None):
     msa_path = os.path.join(path, msa) if path else msa
 
     if os.path.isfile(msa_path):
-        if [True for aln in AlignIO.parse(msa_path, "fasta") if len(aln.seq) <= 0]:
+        if [True for aln in AlignIO.read(msa_path, "fasta") if len(aln.seq) <= 0]:
             return True  # there is at least an empty sequence that shouldn't be there
     else:
         error('file "{}" not found'.format(msa_path))
@@ -1800,7 +1798,7 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
         error('unrecognized input "{}" is not a folder nor a file'.format(inputt), exit=True)
 
     if commands:
-        info('Trimming gappy form {} markers (key: "{}")\n'.format(len(commands), key))
+        info('Trimming gappy for {} markers (key: "{}")\n'.format(len(commands), key))
         terminating = mp.Event()
         chunksize = math.floor(len(commands) / (nproc * 2))
 
@@ -2103,7 +2101,7 @@ def inputs_list(input_folder, extension, output_file, nproc=1, verbose=False):
 def inputs_list_rec(x):
     if not terminating.is_set():
         try:
-            return [aln.id for aln in AlignIO.parse(x, "fasta")]
+            return [aln.id for aln in AlignIO.read(x, "fasta")]
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -2126,7 +2124,7 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
             mat = pickle.load(f)
 
         if verbose:
-            info('substitution matrix "{}" loaded\n'.format(submat))
+            info('Substitution matrix "{}" loaded\n'.format(submat))
 
     if not os.path.isdir(output_folder):
         if verbose:
@@ -2174,7 +2172,7 @@ def subsample_rec(x):
             t0 = time.time()
             inp, out, npos_function, score_function, unknown_fraction, mat = x
             info('Subsampling "{}"\n'.format(inp))
-            inp_aln = AlignIO.parse(inp, "fasta")
+            inp_aln = AlignIO.read(inp, "fasta")
             len_seq = inp_aln.get_alignment_length()
             scores = []
             out_aln = []
@@ -2284,7 +2282,7 @@ def muscle(seq, submat):
 
 
 def random(seq, submat):
-    return random.random()
+    return lib_random.random()
 
 
 def symbol_diversity(seq, log_base=21):
@@ -2790,16 +2788,23 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
 
 def compute_dists(s1, s2):
     idd = [s for s in range(len(s1)) if (s1[s] not in ['-', 'N']) and (s2[s] not in ['-', 'N'])]
-    d = sum(a != b for a, b in zip([s1[s] for s in idd], [s2[s] for s in idd]))
+    d = sum((a != b for a, b in zip((s1[s] for s in idd), (s2[s] for s in idd))))
 
     return (d, len(idd))
 
 
 def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
-    commands = [(inp, output_folder, inp.replace(input_folder, '').replace('.aln', ''), verbose)
-                for inp in glob.iglob(input_folder + "*.aln")
-                if not os.path.exists(os.path.join(output_folder,
-                                                   inp.replace(input_folder, '').replace('.aln', '.tsv')))]
+    if not os.path.isdir(output_folder):
+        if verbose:
+            info('Creating folder "{}"\n'.format(output_folder))
+
+        os.mkdir(output_folder)
+    elif verbose:
+        info('Folder "{}" already exists\n'.format(output_folder))
+
+    commands = [(inp, output_folder, os.path.splitext(os.path.basename(inp))[0], verbose)
+                for inp in glob.iglob(os.path.join(input_folder, "*.aln"))
+                if not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.tsv'))]
 
     if commands:
         info('Computing mutation rates for {} markers\n'.format(len(commands)))
@@ -2814,7 +2819,7 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
                 error(str(e), init_new_line=True)
                 error('mutation_rates crashed', init_new_line=True, exit=True)
     else:
-        info('No mutation rates to compute\n')
+        info('Mutation rates already computed\n')
 
 
 def mutation_rates_rec(x):
@@ -2873,9 +2878,17 @@ def mutation_rates_rec(x):
 
 
 def aggregate_mutation_rates(input_folder, output_file, verbose=False):
-    mutation_rates = glob.glob(input_folder + "*.pkl")
+    mutation_rates = glob.glob(os.path.join(input_folder, "*.pkl"))
     aggregated = {}
     ids = set()
+
+    if not mutation_rates:
+        info('No mutation rates to aggregate\n')
+        return
+
+    if os.path.exists(output_file):
+        info('Mutation rates already aggregated\n')
+        return
 
     if verbose:
         info('Aggregating {} mutation rates\n'.format(len(mutation_rates)))
@@ -2993,10 +3006,10 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     inp_f = out_f
 
     if args.mutation_rates:
-        mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates'),
-                       verbose=args.verbose)
-        aggregate_mutation_rates(inp_f, os.path.join(args.output_folder, 'mutation_rates.tsv'),
-                                 verbose=args.verbose)
+        mr_out_d = os.path.join(args.output_folder, 'mutation_rates')
+        mr_out_f = os.path.join(args.output_folder, 'mutation_rates.tsv')
+        mutation_rates(inp_f, mr_out_d, nproc=args.nproc, verbose=args.verbose)
+        aggregate_mutation_rates(mr_out_d, mr_out_f, verbose=args.verbose)
 
     if args.trim:
         if 'trim' in configs and ((args.trim == 'gappy') or (args.trim == 'greedy')):
