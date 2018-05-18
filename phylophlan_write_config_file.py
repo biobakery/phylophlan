@@ -84,7 +84,7 @@ def check_params(args):
         error('at least one of --map_dna and --map_aa must be specified', exit=True)
 
     if (os.path.isfile(args.output)) and (not args.overwrite):
-        error('cannot write ouptut file {} because it already exists'.format(args.output),
+        error('cannot write output file {} because it already exists'.format(args.output),
               exit=True)
 
 
@@ -189,6 +189,10 @@ if __name__ == '__main__':
                        'command_line': ('#program_name# #params# #input# #database# '
                                         '#output#')}
         elif 'diamond' in args.map_dna:
+          if args.db_type == 'n':
+            error('Configuration file not created. \n'
+                  'Select blastn to map genomes to a nucleotides database. DIAMOND can only be selected to map genomes or proteomes to an amino acids database. ', exit=True)
+          else:
             exe, _ = find_executable('diamond')
             map_dna = {'program_name': exe,
                        'params': ('blastx --quiet --threads 1 --outfmt 6 --more-sensitive '
