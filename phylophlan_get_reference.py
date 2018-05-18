@@ -51,20 +51,18 @@ def read_params():
 
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-g', '--get', type=str,
-                       help=('Specify the taxonomic label for which download the set of '
-                             'reference proteomes. The label must represents a valid taxonomic '
-                             'level or the special case "all"'))
+                       help=('Specify the taxonomic label for which download the set of reference proteomes. '
+                             'The label must represents a valid taxonomic level or the special case "all"'))
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
-                       help='')
+                       help='Print for all taxa in "{}" their total number of species and reference genomes'
+                            .format(TAXA2PROTEOMES_FILE))
 
     p.add_argument('-e', '--output_file_extension', type=str, default='.faa.gz',
                    help="Specify path to the extension of the output files")
     p.add_argument('-o', '--output', type=str,
-                   help="Specify path to the output folder where to save the files, "
-                        "required when -g/--get is specified")
+                   help="Specify path to the output folder where to save the files, required when -g/--get is specified")
     p.add_argument('-n', '--num_ref', type=int, default=4,
-                   help=('Specify how many reference proteomes to download, where -1 '
-                         'stands for "all available"'))
+                   help='Specify how many reference proteomes to download, where -1 stands for "all available"')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
 
     return p.parse_args()
@@ -75,8 +73,7 @@ def check_params(args, verbose=False):
         return
 
     if args.get[:3] not in ['k__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__', 'all']:
-        error('Taxnomic label provided "{}" is not in the correct format'.format(args.get),
-              exit=True)
+        error('Taxnomic label provided "{}" is not in the correct format'.format(args.get), exit=True)
 
     if not args.output:
         error('-o/--output is required', exit=True)
@@ -176,8 +173,6 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         taxa = r.strip().split('\t')[1].split('|')
         num_ref_gen = len(r.strip().split('\t')[-1].split(';'))
 
-        # list clades and for each the number of species and the number of references (total for all species)
-
         for i, c in enumerate(taxa):
             cl = '|'.join(taxa[:i+1])
 
@@ -192,8 +187,7 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         info('\t'.join([k, str(v[0]), str(v[1])]) + '\n')
 
 
-def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_ext, output,
-                            verbose=False):
+def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
     core_proteomes = {}
     metadata = None
 
@@ -202,13 +196,14 @@ def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_e
             metadata = r.strip()
             continue
 
-        if (taxa_label in r.strip().split('\t')[1].split('|')) or (taxa_label == 'all'):
-            core_proteomes[r.strip().split('\t')[1]] = [tuple(t.split(' ')) for t in r.strip().split('\t')[-1].split(';')[:num_ref]]
+        r_clean = r.strip().split('\t')
+
+        if (taxa_label in r_clean[1].split('|')) or (taxa_label == 'all'):
+            core_proteomes[r_clean[1]] = [tuple(t.split(' ')) for t in r_clean[-1].split(';')[:num_ref]]
 
     if taxa_label != 'all':
         if not len(core_proteomes):
-            error('no entry found for "{}", please check the taxonomic label provided'
-                  .format(taxa_label), exit=True)
+            error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
 
     for _, prot_urls in core_proteomes.items():
         for prot, url in prot_urls:
@@ -218,8 +213,7 @@ def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_e
 if __name__ == '__main__':
     args = read_params()
     check_params(args, verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, TAXA2PROTEOMES_FILE), TAXA2PROTEOMES_FILE,
-             verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, TAXA2PROTEOMES_FILE), TAXA2PROTEOMES_FILE, verbose=args.verbose)
 
     if args.list_clades:
         list_available_clades(TAXA2PROTEOMES_FILE, verbose=args.verbose)
