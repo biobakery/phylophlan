@@ -80,8 +80,6 @@ def read_params():
 
 
 def check_params(args, verbose=False):
-    if not os.path.isdir(args.output):
-        error('output param is not a directory', exit=True)
 
     if args.input:
         if (not os.path.isdir(args.input)) and (not os.path.isfile(args.input)):
