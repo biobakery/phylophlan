@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.16'
-__date__ = '17 May 2018'
+__version__ = '0.17'
+__date__ = '1 June 2018'
 
 
 import os
@@ -49,9 +49,9 @@ CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database',
 CONFIG_OPTIONS_TO_EXCLUDE = ['version', 'environment']
 INPUT_FOLDER = 'input/'
 # DATA_FOLDER = 'data/'
-DATABASES_FOLDER = 'databases/'
-SUBMAT_FOLDER = 'substitution_matrices/'
-CONFIGS_FOLDER = 'configs/'
+DATABASES_FOLDER = 'phylophlan_databases/'
+SUBMAT_FOLDER = 'phylophlan_substitution_matrices/'
+CONFIGS_FOLDER = 'phylophlan_configs/'
 # OUTPUT_FOLDER = 'output/'
 OUTPUT_FOLDER = ''
 MIN_NUM_PROTEINS = 1
@@ -225,8 +225,8 @@ def read_params():
                        help=("Path to the folder containing the substitution matrices to "
                              "use to compute the column score for the subsampling step"))
     group.add_argument('--configs_folder', type=str, default=CONFIGS_FOLDER,
-                       help=("Path to the folder containing the substitution matrices to "
-                             "use to compute the column score for the subsampling step"))
+                       help=("Path to the folder containing the configuration files that "
+                             "contains the software to use for the phylogenetic analysis"))
     group.add_argument('--output_folder', type=str, default=OUTPUT_FOLDER,
                        help="Path to the output folder where to save the results")
 
@@ -646,7 +646,7 @@ def database_list(databases_folder, exit=False, exit_value=0):
 
     info('Available databases in "{}":\n    '.format(databases_folder))
     info('\n    '.join([a for a in sorted(os.listdir(databases_folder))
-                        if os.path.isdir(os.path.join(databases_folder, a))]),
+                        if os.path.isdir(os.path.join(databases_folder, a))]) + '\n',
          exit=exit, exit_value=exit_value)
 
 
@@ -1069,8 +1069,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
         for f in files:
             if f.endswith('.bz2'):
-                check_and_create_folder(tmp_folder, create=True, exit=True,
-                                        verbose=verbose)
+                check_and_create_folder(tmp_folder, create=True, exit=True, verbose=verbose)
                 # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
                 # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
                 file_clean = os.path.splitext(os.path.basename(f))[0]
@@ -1080,13 +1079,11 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                         with bz2.open(f, 'rt') as h:
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
                 elif verbose:
-                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder,
-                                                                                file_clean)))
+                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith('.gz'):
-                check_and_create_folder(tmp_folder, create=True, exit=True,
-                                        verbose=verbose)
+                check_and_create_folder(tmp_folder, create=True, exit=True, verbose=verbose)
                 # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
                 # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
                 file_clean = os.path.splitext(os.path.basename(f))[0]
@@ -1096,8 +1093,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                         with gzip.open(f, 'rt') as h:
                             SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
                 elif verbose:
-                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder,
-                                                                                file_clean)))
+                    info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith(extension):
@@ -1119,8 +1115,7 @@ def initt(terminating_):
     terminating = terminating_
 
 
-def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder, nproc=1,
-                          verbose=False):
+def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder, nproc=1, verbose=False):
     good_inputs = []
 
     if os.path.isfile(os.path.join(data_folder, 'checked_inputs.pkl')):
@@ -1326,8 +1321,7 @@ def gene_markers_identification_rec(x):
         terminating.set()
 
 
-def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1,
-                           verbose=False):
+def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, verbose=False):
     commands = [(f, f[:-4], function, min_num_proteins)
                 for f in glob.iglob(os.path.join(input_folder, '*.b6o.bkp'))
                 if not os.path.isfile(f[:-4])]
@@ -1513,23 +1507,23 @@ def gene_markers_extraction_rec(x):
                             idd += 'c'
                             seq = seq.reverse_complement()
 
-                        out_file_seq.append(SeqRecord(seq, id=idd + '{}-{}'.format(s, e),
+                        out_file_seq.append(SeqRecord(seq, id='{}{}-{}'.format(idd, s, e),
                                                       description=''))
 
                         if frameshifts:
                             if not rev:
                                 out_file_seq.append(SeqRecord(seq_record.seq[s:e],
-                                                              id=idd + '{}-{}'.format(s + 1, e),
+                                                              id='{}{}-{}'.format(idd, s + 1, e),
                                                               description=''))
                                 out_file_seq.append(SeqRecord(seq_record.seq[s + 1:e],
-                                                              id=idd + '{}-{}'.format(s + 2, e),
+                                                              id='{}{}-{}'.format(idd, s + 2, e),
                                                               description=''))
                             else:
                                 out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 1].reverse_complement(),
-                                                              id=idd + '{}-{}'.format(s, e - 1),
+                                                              id='{}{}-{}'.format(idd, s, e - 1),
                                                               description=''))
                                 out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 2].reverse_complement(),
-                                                              id=idd + '{}-{}'.format(s, e - 2),
+                                                              id='{}{}-{}'.format(idd, s, e - 2),
                                                               description=''))
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
@@ -1554,8 +1548,7 @@ def gene_markers_extraction_rec(x):
         terminating.set()
 
 
-def fake_proteome(input_folder, output_folder, in_extension, out_extension,
-                  min_len_protein, nproc=1, verbose=False):
+def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_len_protein, nproc=1, verbose=False):
     commands = []
 
     if not os.path.isdir(output_folder):
@@ -2742,8 +2735,7 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1,
     info('Phylogeny "{}" built in {}s\n'.format(output_tree, int(t1 - t0)))
 
 
-def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tree,
-                     nproc=1, verbose=False):
+def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tree, nproc=1, verbose=False):
     if os.path.isfile(os.path.join(output_path, output_tree)) or \
        os.path.isfile(os.path.join(output_path, 'RAxML_bestTree.' + output_tree)) or \
        os.path.isfile(os.path.join(output_path, 'RAxML_info.' + output_tree)) or \
@@ -2755,6 +2747,7 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
     t0 = time.time()
     info('Refining phylogeny "{}"\n'.format(starting_tree))
     nproc_loc = 20 if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()) else nproc
+    nproc_loc = 2 if (nproc_loc == 1) and ('raxml' in configs[key]['program_name'].lower()) and ('threads' in configs[key]) else nproc_loc  # threaded RAxML complains if number of threads is 1!
     cmd = compose_command(configs[key], input_file=inputt, database=starting_tree,
                           output_path=output_path, output_file=output_tree, nproc=nproc_loc)
     inp_f = None
