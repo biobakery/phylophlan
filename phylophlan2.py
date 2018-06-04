@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.17'
-__date__ = '1 June 2018'
+__version__ = '0.18'
+__date__ = '4 June 2018'
 
 
 import os
@@ -38,7 +38,8 @@ import random as lib_random
 
 
 if sys.version_info[0] < 3:
-    raise Exception("Not running Python3")
+    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
@@ -51,6 +52,7 @@ INPUT_FOLDER = 'input/'
 # DATA_FOLDER = 'data/'
 DATABASES_FOLDER = 'phylophlan_databases/'
 SUBMAT_FOLDER = 'phylophlan_substitution_matrices/'
+SUBMOD_FOLDER = 'phylophlan_substitution_models/'
 CONFIGS_FOLDER = 'phylophlan_configs/'
 # OUTPUT_FOLDER = 'output/'
 OUTPUT_FOLDER = ''
@@ -144,8 +146,10 @@ def read_params():
                    help=('Specify the substitution matrix to use, the available substitution '
                          'matrices can be listed using the "--submat_list" parameter'))
     p.add_argument('--submat_list', action='store_true', default=False,
-                   help=("List of all the available substitution matrices that can "
-                         "be specified with the -s (or --submat) option"))
+                   help=("List of all the available substitution matrices that can be specified with the "
+                         "-s/--submat option"))
+    p.add_argument('--submod_list', action='store_true', default=False,
+                   help="List of all the available substitution models that can be specified with the --maas option")
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use")
     p.add_argument('--min_num_proteins', type=int, default=None,
                    help=("Proteomes (.faa) with less than this number of proteins will "
@@ -224,6 +228,9 @@ def read_params():
     group.add_argument('--submat_folder', type=str, default=SUBMAT_FOLDER,
                        help=("Path to the folder containing the substitution matrices to "
                              "use to compute the column score for the subsampling step"))
+    group.add_argument('--submod_folder', type=str, default=SUBMOD_FOLDER,
+                       help=("Path to the folder containing the substitution models mapping "
+                             "file for building the gene trees"))
     group.add_argument('--configs_folder', type=str, default=CONFIGS_FOLDER,
                        help=("Path to the folder containing the configuration files that "
                              "contains the software to use for the phylogenetic analysis"))
@@ -243,7 +250,7 @@ def read_params():
                    help="Makes PhyloPhlAn verbose")
     p.add_argument('-v', '--version', action='version',
                    version='PhyloPhlAn version {} ({})'.format(__version__, __date__),
-                   help="Prints the current PhyloPhlAn version")
+                   help="Prints the current PhyloPhlAn version and exit")
 
     return p.parse_args()
 
@@ -266,21 +273,29 @@ def read_configs(config_file, verbose=False):
 
 
 def check_args(args, command_line_arguments, verbose=True):
-    args.databases_folder = os.path.join(args.databases_folder)
-    args.submat_folder = os.path.join(args.submat_folder)
+    args.databases_folder = check_and_create_folder(os.path.join(args.databases_folder),
+                                                    try_local=True, create=True, exit=True, verbose=verbose)
+    args.submat_folder = check_and_create_folder(os.path.join(args.submat_folder),
+                                                 try_local=True, create=True, exit=True, verbose=verbose)
+    args.submod_folder = check_and_create_folder(os.path.join(args.submod_folder),
+                                                 try_local=True, create=True, exit=True, verbose=verbose)
 
     if args.clean_all:
-        check_and_create_folder(args.databases_folder, exit=True, verbose=verbose)
         return None
     elif args.database_list:
         database_list(args.databases_folder, exit=True)
     elif args.submat_list:
         submat_list(args.submat_folder, exit=True)
+    elif args.submod_list:
+        submod_list(args.submod_folder, exit=True)
     elif (not args.input) and (not args.clean):
         error('either -i/--input or -c/--clean must be specified', exit=True)
     elif not args.database:
         error('-d/--database must be specified')
         database_list(args.databases_folder, exit=True)
+
+    if not args.diversity and not args.meta:  # --diversity or --meta must be specified
+        error('--diversity or --meta must be specified', exit=True)
 
     input_folder_setted = False
 
@@ -329,8 +344,7 @@ def check_args(args, command_line_arguments, verbose=True):
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    check_and_create_folder(args.configs_folder, exit=True, verbose=verbose)
-    check_and_create_folder(args.databases_folder, create=True, exit=True, verbose=verbose)
+    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=True, verbose=verbose)
     check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
@@ -417,6 +431,15 @@ def check_args(args, command_line_arguments, verbose=True):
                                     '{}-{}'.format(args.diversity,
                                                    'accurate' if args.accurate else 'fast' if args.fast else 'none')))
 
+    # check substitution model
+    if args.maas:
+        if not os.path.isfile(args.maas):
+            if os.path.isfile(os.path.join(args.submod_folder, args.maas)):
+                args.maas = os.path.join(args.submod_folder, args.maas)
+            else:
+                error('file "{}" not found in "{}"'.format(args.maas, args.submod_folder))
+                submod_list(args.submod_folder, exit=True)
+
     # check subsample settings with pre-config ones
     if args.subsample:
         if '--subsample' in command_line_arguments:
@@ -431,6 +454,7 @@ def check_args(args, command_line_arguments, verbose=True):
 
         if verbose:
             info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
+
     # check min_num_proteins settings
     if not args.min_num_proteins:
         if args.database == 'phylophlan':
@@ -576,19 +600,30 @@ def check_configs(configs, verbose=False):
             error('wrongly formatted configuration file?', exit=True)
 
 
-def check_and_create_folder(folder, create=False, exit=False, verbose=False):
-    if not os.path.isdir(folder):
-        if create:
-            if verbose:
-                info('Creating folder "{}"\n'.format(folder))
+def check_and_create_folder(folder, try_local=False, create=False, exit=False, verbose=False):
+    folders_to_test = [folder]
+    msg_err = ''
 
-            os.mkdir(folder, mode=0o775)
-            return True
+    if try_local:
+        folders_to_test.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), folder))
+
+    for f in folders_to_test:
+        if not os.path.isdir(f):
+            if not create:
+                msg_err = '"{}" folder does not exists'.format(f)
         else:
-            error('"{}" folder does not exists'.format(folder), exit=exit)
-            return False
+            return f
 
-    return True
+    if msg_err:
+        error(msg_err, exit=exit)
+        return None
+
+    if create:
+        if verbose:
+            info('Creating folder "{}"\n'.format(f))
+
+        os.mkdir(f, mode=0o775)
+        return f
 
 
 def check_dependencies(configs, nproc, verbose=False):
@@ -657,6 +692,15 @@ def submat_list(submat_folder, exit=False, exit_value=0):
     info('Available substitution matrices in "{}":\n    '.format(submat_folder))
     info('\n    '.join(sorted([os.path.splitext(os.path.basename(a))[0]
                                for a in glob.iglob(os.path.join(submat_folder, '*.pkl'))])) + '\n',
+         exit=exit, exit_value=exit_value)
+
+
+def submod_list(submod_folder, exit=False, exit_value=0):
+    if not os.path.isdir(submod_folder):
+        error('folder "{}" does not exists'.format(submod_folder), exit=True, exit_value=exit_value)
+
+    info('Available substitution models in "{}":\n    '.format(submod_folder))
+    info('\n    '.join(sorted([os.path.basename(a) for a in glob.iglob(os.path.join(submod_folder, '*.tsv'))])) + '\n',
          exit=exit, exit_value=exit_value)
 
 
