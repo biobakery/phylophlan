@@ -24,7 +24,7 @@ DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
-TAXA2CORE_FILE = "taxa2core.tsv.bz2"
+TAXA2CORE_FILE = "taxa2core_latest.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -104,7 +104,7 @@ def check_params(args, verbose=False):
 
     if not args.db_type:
         if not args.output_extension:
-            error('either -t (--db_type) or -x (--output_extension) must be specified', exit=True)
+            error('either -t/--db_type or -x/--output_extension must be specified', exit=True)
         else:
             if not args.output_extension.startswith('.'):
                 args.output_extension = '.' + args.output_extension
@@ -121,8 +121,8 @@ def check_params(args, verbose=False):
             if verbose:
                 info('Setting output extension to "{}"'.format(args.output_extension))
         else:
-            error("both -t (--db_type) and -x (--output_extension) were specified, don't "
-                  "know which one to pick!", exit=True)
+            error("both -t/--db_type and -x/--output_extension were specified, don't know which one to use!",
+                  exit=True)
 
 
 def byte_to_megabyte(byte):
@@ -195,32 +195,40 @@ def create_folder(output, verbose=False):
 
 
 def get_core_proteins(taxa2core_file, download_url, taxa_label, output, output_extension, verbose=False):
-    download(download_url, taxa2core_file, verbose=verbose)
     core_proteins = {}
+    url = None
     metadata = None
+
+    # taxa2core format
+    #
+    #   # taxid   taxonomy      UniRefURL       core_list
+    #   12345     k__|...|s__   http://..{}..   UP123;UP456;...
 
     for r in bz2.open(taxa2core_file, 'rt'):
         if r.startswith('#'):
             metadata = r.strip()
-        elif r.strip().split('\t')[1].endswith(taxa_label):
-            core_proteins[r.strip().split('\t')[1]] = [tuple(t.split(' ')) for t in r.strip().split('\t')[-1].split(';')]
-        elif taxa_label in r.strip().split('\t')[1]:
-            core_proteins[r.strip().split('\t')[1]] = None
+            continue
+
+        r_clean = r.strip().split('\t')
+
+        if taxa_label in r_clean[1].split('|'):
+            url = r_clean[2]
+            core_proteins[r_clean[1]] = r_clean[3].split(';')
+        elif taxa_label in r_clean[1]:
+            core_proteins[r_clean[1]] = None
 
     if not len(core_proteins):
-        error('no entry found for "{}", please check the taxonomic label provided'
-              .format(taxa_label), exit=True)
+        error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
     elif len(core_proteins) > 1:
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
-              .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())),
-              exit=True)
+              .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
 
-    for lbl, prot_urls in core_proteins.items():
+    for lbl, core_prots in core_proteins.items():
         if verbose:
-            info('Downloading {} core proteins for {}\n'.format(len(prot_urls), lbl))
+            info('Downloading {} core proteins for {}\n'.format(len(core_prots), lbl))
 
-        for prot, url in prot_urls:
-            download(url.format(prot), os.path.join(output, prot + output_extension), verbose=verbose)
+        for core_prot in core_prots:
+            download(url.format(core_prot), os.path.join(output, core_prot + output_extension), verbose=verbose)
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
@@ -263,8 +271,18 @@ if __name__ == '__main__':
     create_folder(args.output, verbose=args.verbose)
 
     if args.get_core_proteins:
-        get_core_proteins(TAXA2CORE_FILE, os.path.join(TAXA2CORE_FILE, DOWNLOAD_URL),
-                          args.get_core_proteins, args.output, args.output_extension, verbose=args.verbose)
+        taxa2core_file_latest = None
+        download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, verbose=args.verbose)
+
+        with open(TAXA2CORE_FILE) as f:
+            for r in f:
+                if not r.startswith('#'):
+                    taxa2core_file_latest = r.strip()
+                    break  # file should contains only one line, i.e., the name of the latest taxa2core file
+
+        download(os.path.join(DOWNLOAD_URL, taxa2core_file_latest), taxa2core_file_latest, verbose=args.verbose)
+        get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension,
+                          verbose=args.verbose)
 
     create_database(args.db_name, args.input, args.input_extension,
                     os.path.join(args.output, args.db_name + args.output_extension),
