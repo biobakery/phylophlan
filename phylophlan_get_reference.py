@@ -21,7 +21,7 @@ DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
-TAXA2PROTEOMES_FILE = "taxa2proteomes.tsv.bz2"
+TAXA2GENOMES_FILE = "taxa2genomes_latest.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -54,8 +54,7 @@ def read_params():
                        help=('Specify the taxonomic label for which download the set of reference proteomes. '
                              'The label must represents a valid taxonomic level or the special case "all"'))
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
-                       help='Print for all taxa in "{}" their total number of species and reference genomes'
-                            .format(TAXA2PROTEOMES_FILE))
+                       help='Print for all taxa the total number of species and reference genomes available')
 
     p.add_argument('-e', '--output_file_extension', type=str, default='.faa.gz',
                    help="Specify path to the extension of the output files")
@@ -187,11 +186,17 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         info('\t'.join([k, str(v[0]), str(v[1])]) + '\n')
 
 
-def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
-    core_proteomes = {}
+def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
+    core_genomes = {}
     metadata = None
+    url = None
 
-    for r in bz2.open(taxa2proteomes_file, 'rt'):
+    # taxa2genomes format
+    #
+    #   # taxid   taxonomy      UniRefURL       genomes_list
+    #   12345     k__|...|s__   http://..{}..   UP123;UP456;...
+
+    for r in bz2.open(taxa2genomes_file, 'rt'):
         if r.startswith('#'):
             metadata = r.strip()
             continue
@@ -199,26 +204,39 @@ def get_reference_proteomes(taxa2proteomes_file, taxa_label, num_ref, out_file_e
         r_clean = r.strip().split('\t')
 
         if (taxa_label in r_clean[1].split('|')) or (taxa_label == 'all'):
-            core_proteomes[r_clean[1]] = [tuple(t.split(' ')) for t in r_clean[-1].split(';')[:num_ref]]
+            url = r_clean[2]
+            core_genomes[r_clean[1]] = r_clean[3].split(';')[:num_ref]
 
     if taxa_label != 'all':
-        if not len(core_proteomes):
+        if not len(core_genomes):
             error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
 
-    for _, prot_urls in core_proteomes.items():
-        for prot, url in prot_urls:
-            download(url.format(prot), os.path.join(output, prot + out_file_ext), verbose=verbose)
+    for lbl, genomes in core_genomes.items():
+        if verbose:
+            info('Downloading {} reference genomes for {}\n'.format(len(genomes), lbl))
+
+        for genome in genomes:
+            download(url.format(genomes), os.path.join(output, genomes + out_file_ext), verbose=verbose)
 
 
 if __name__ == '__main__':
+    taxa2genomes_file_latest = None
     args = read_params()
     check_params(args, verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, TAXA2PROTEOMES_FILE), TAXA2PROTEOMES_FILE, verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, verbose=args.verbose)
+
+    with open(TAXA2GENOMES_FILE) as f:
+        for r in f:
+            if not r.startswith('#'):
+                taxa2genomes_file_latest = r.strip()
+                break  # file should contains only one line, i.e., the name of the latest taxa2genomes file
+
+    download(os.path.join(DOWNLOAD_URL, taxa2genomes_file_latest), taxa2genomes_file_latest, verbose=args.verbose)
 
     if args.list_clades:
-        list_available_clades(TAXA2PROTEOMES_FILE, verbose=args.verbose)
+        list_available_clades(taxa2genomes_file_latest, verbose=args.verbose)
         sys.exit(0)
 
     create_folder(os.path.join(args.output), verbose=args.verbose)
-    get_reference_proteomes(TAXA2PROTEOMES_FILE, args.get, args.num_ref,
-                            args.output_file_extension, args.output, verbose=args.verbose)
+    get_reference_genomes(taxa2genomes_file_latest, args.get, args.num_ref, args.output_file_extension,
+                          args.output, verbose=args.verbose)

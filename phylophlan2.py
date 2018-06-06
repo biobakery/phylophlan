@@ -49,12 +49,10 @@ CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database',
                       'output_path', 'output', 'version', 'environment', 'command_line']
 CONFIG_OPTIONS_TO_EXCLUDE = ['version', 'environment']
 INPUT_FOLDER = 'input/'
-# DATA_FOLDER = 'data/'
 DATABASES_FOLDER = 'phylophlan_databases/'
 SUBMAT_FOLDER = 'phylophlan_substitution_matrices/'
 SUBMOD_FOLDER = 'phylophlan_substitution_models/'
 CONFIGS_FOLDER = 'phylophlan_configs/'
-# OUTPUT_FOLDER = 'output/'
 OUTPUT_FOLDER = ''
 MIN_NUM_PROTEINS = 1
 MIN_LEN_PROTEIN = 50
@@ -850,17 +848,14 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
 
         if os.path.isfile(fna) or os.path.isfile(fna_bz2):
             d = Counter([len(set(r.seq)) for r in SeqIO.parse(fna if os.path.isfile(fna)
-                                                                  else bz2.open(fna_bz2, 'rt'),
-                                                              "fasta")])
+                                                                  else bz2.open(fna_bz2, 'rt'), "fasta")])
         elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
             d = Counter([len(set(r.seq)) for r in SeqIO.parse(faa if os.path.isfile(faa)
-                                                                  else bz2.open(faa_bz2, 'rt'),
-                                                              "fasta")])
+                                                                  else bz2.open(faa_bz2, 'rt'), "fasta")])
         elif os.path.isdir(folder):
             d = Counter([len(set(r.seq)) for f in glob(folder)
                                          for r in SeqIO.parse(f if os.path.isfile(f)
-                                                                else bz2.open(f, 'rt'),
-                                                              "fasta")])
+                                                                else bz2.open(f, 'rt'), "fasta")])
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to "
                   "automatically detect the input database file(s)", exit=True)
@@ -2495,8 +2490,7 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('build_gene_tree crashed', init_new_line=True, exit=True)
@@ -2651,8 +2645,7 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('refine_gene_tree crashed', init_new_line=True, exit=True)
