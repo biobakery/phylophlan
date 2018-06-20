@@ -72,7 +72,8 @@ def check_params(args, verbose=False):
         return
 
     if args.get[:3] not in ['k__', 'p__', 'c__', 'o__', 'f__', 'g__', 's__', 'all']:
-        error('Taxnomic label provided "{}" is not in the correct format'.format(args.get), exit=True)
+        error('Taxonomic label provided "{}" is not in the correct format, it should starts with either: '
+              '"k__", "p__", "c__", "o__", "f__", "g__", "s__", or "all"'.format(args.get), exit=True)
 
     if not args.output:
         error('-o/--output is required', exit=True)

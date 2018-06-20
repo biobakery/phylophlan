@@ -92,6 +92,9 @@ def check_params(args, verbose=False):
                 error('input is a folder, hence --input_extension must be specified', exit=True)
 
     if args.get_core_proteins:
+        if args.get_core_proteins[:3] != 's__':  # not sure it's needed, but I don't think we are handling sitautions different than species right now! (Tue 19 Jun 2018)
+            error('The taxonomic label provided "{}" does not starts with "s__"'.format(args.get_core_proteins), exit=True)
+
         args.input = args.output
         args.input_extension = PROTEOME_EXTENSION
         args.output_extension = PROTEOME_EXTENSION
@@ -175,7 +178,7 @@ def download(url, download_file, verbose=False):
     if not os.path.isfile(download_file):
         try:
             if verbose:
-                info('Downloading "{}"" to "{}"\n'.format(url, download_file))
+                info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
         except EnvironmentError:
@@ -194,7 +197,7 @@ def create_folder(output, verbose=False):
         info("Output database folder already present\n")
 
 
-def get_core_proteins(taxa2core_file, download_url, taxa_label, output, output_extension, verbose=False):
+def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verbose=False):
     core_proteins = {}
     url = None
     metadata = None
@@ -223,12 +226,38 @@ def get_core_proteins(taxa2core_file, download_url, taxa_label, output, output_e
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
 
+    retry2download = []
+
     for lbl, core_prots in core_proteins.items():
         if verbose:
             info('Downloading {} core proteins for {}\n'.format(len(core_prots), lbl))
 
         for core_prot in core_prots:
-            download(url.format(core_prot), os.path.join(output, core_prot + output_extension), verbose=verbose)
+            local_prot = os.path.join(output, core_prot + output_extension)
+            download(url.format(core_prot), local_prot, verbose=verbose)
+
+            if not os.path.exists(local_prot):
+                retry2download.append(core_prot)
+
+    not_mapped = []
+
+    if retry2download:
+        if verbose:
+            info("Re-trying to download {} core proteins that just failed, please wait as it might take some time\n"
+                 .format(len(retry2download)))
+
+        # try to re-map the ids
+        # in case "not mapped"
+        # store in not_mapped
+
+    if not_mapped:
+        nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
+
+        if verbose:
+            info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'.format(len(not_mapped), nd_out))
+
+        with open(nd_out, 'w') as f:
+            f.write('\n'.join(not_mapped))
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
@@ -244,8 +273,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
                                description='')
                      for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt')
                                                                 if marker.endswith('.bz2')
-                                                                else open(marker),
-                                                                "fasta"))]
+                                                                else open(marker), "fasta"))]
     else:
         seqs = [SeqRecord(record.seq,
                           id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
@@ -255,8 +283,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
                                                            else open(inputt), "fasta"))]
 
     if not seqs:
-        error('no sequences found, make sure the input folder/file provided is no empty',
-              exit=True)
+        error('no sequences found, make sure the input folder/file provided is not empty', exit=True)
 
     if verbose:
         info('Writing output database "{}"\n'.format(output))
