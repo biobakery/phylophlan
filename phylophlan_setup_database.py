@@ -249,14 +249,14 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
         if verbose:
             info("Re-trying to download {} core proteins that just failed, please wait as it might take some time\n"
                  .format(len(retry2download)))
-        url = 'http://www.uniprot.org/uploadlists/'
+        idmapping_url = 'http://www.uniprot.org/uploadlists/'
         contact = "phylophlan@cibiocm.com"
         params = {'from': 'ID',
                   'to': 'NF90',
                   'format': 'tab',  # or 'list' for only converted clusters
                   'query': ' '.join(retry2download)}
         data = urlencode(params).encode('utf-8')
-        request = Request(url, data, headers={'User-Agent': 'Python {}'.format(contact)})
+        request = Request(idmapping_url, data, headers={'User-Agent': 'Python {}'.format(contact)})
 
         try:
             response = urlopen(request, data)
