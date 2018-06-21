@@ -17,6 +17,9 @@ from Bio.SeqRecord import SeqRecord
 import os
 import argparse as ap
 from urllib.request import urlretrieve
+from urllib.parse import urlencode
+from urllib.request import Request
+from urllib.request import urlopen
 import time
 
 
@@ -241,15 +244,46 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
     not_mapped = []
 
+    # try to re-map the ids
+    # in case "not mapped"
+    # store in not_mapped
     if retry2download:
         if verbose:
             info("Re-trying to download {} core proteins that just failed, please wait as it might take some time\n"
                  .format(len(retry2download)))
+        url = 'http://www.uniprot.org/uploadlists/'
+        contact = "phylophlan@cibiocm.com"
 
-        # try to re-map the ids
-        # in case "not mapped"
-        # store in not_mapped
+        params = {'from' : 'ID',
+                  'to' : 'NF90',
+                  'format' : 'tab', #or 'list' for only converted clusters
+                  'query' : ' '.join(retry2download)}
 
+        data = urlencode(params).encode('utf-8')
+        request = Request(url, data, headers = {'User-Agent' : 'Python %s' % contact})
+        try:
+            response = urlopen(request, data)
+            uniprotkb2uniref90 = [line.decode().split('\t')[0:2] for line in response.readlines()]
+        except Exception:
+            error('unable convert UniProtKB ID to UniRef90 ID')
+
+        if len(uniprotkb2uniref90) == len(retry2download):
+            for uniref90_id in (x[1] for x in uniprotkb2uniref90[1:]):
+                local_prot = os.path.join(output, uniref90_id + output_extension)
+                download(url.format(uniref90_id), local_prot, verbose=verbose)
+
+                if not os.path.exists(local_prot):
+                    not_mapped.append(uniref90_id)
+        else:
+            request_id = uniprotkb2uniref90[0][0].split(':')[1]
+            not_mapped_url = 'http://www.uniprot.org/mapping/{}.not'.format(request_id)
+            try:
+                not_mapped_request = urlopen(not_mapped_url)
+                not_mapped_response = [x.decode().strip() for x in not_mapped_request.readlines()]
+                not_mapped.extend(not_mapped_response)
+            except Exception:
+                error('unable fetch not converted IDs')
+    
     if not_mapped:
         nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
 
