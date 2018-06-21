@@ -260,11 +260,11 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
         try:
             response = urlopen(request, data)
-            uniprotkb2uniref90 = [line.decode().split('\t')[0:2] for line in response.readlines()]
+            uniprotkb2uniref90 = [line.decode().split('\t')[:2] for line in response.readlines()]
         except Exception:
             error('unable convert UniProtKB ID to UniRef90 ID')
 
-        for uniref90_id in (x[1] for x in uniprotkb2uniref90[1:]):
+        for uniref90_id in (x[1].split('_')[-1] for x in uniprotkb2uniref90[1:]):
             local_prot = os.path.join(output, uniref90_id + output_extension)
             download(url.format(uniref90_id), local_prot, verbose=verbose)
 
