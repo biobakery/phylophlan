@@ -267,20 +267,21 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
         except Exception:
             error('unable convert UniProtKB ID to UniRef90 ID')
 
-        if len(uniprotkb2uniref90) == len(retry2download):
-            for uniref90_id in (x[1] for x in uniprotkb2uniref90[1:]):
-                local_prot = os.path.join(output, uniref90_id + output_extension)
-                download(url.format(uniref90_id), local_prot, verbose=verbose)
+        
+        for uniref90_id in (x[1] for x in uniprotkb2uniref90[1:]):
+            local_prot = os.path.join(output, uniref90_id + output_extension)
+            download(url.format(uniref90_id), local_prot, verbose=verbose)
 
-                if not os.path.exists(local_prot):
-                    not_mapped.append(uniref90_id)
-        else:
+            if not os.path.exists(local_prot):
+                not_mapped.append(uniref90_id)
+                
+        if len(uniprotkb2uniref90)-1 != len(retry2download):
             request_id = uniprotkb2uniref90[0][0].split(':')[1]
             not_mapped_url = 'http://www.uniprot.org/mapping/{}.not'.format(request_id)
             try:
                 not_mapped_request = urlopen(not_mapped_url)
                 not_mapped_response = [x.decode().strip() for x in not_mapped_request.readlines()]
-                not_mapped.extend(not_mapped_response)
+                not_mapped.extend(not_mapped_response[1:])
             except Exception:
                 error('unable fetch not converted IDs')
     
