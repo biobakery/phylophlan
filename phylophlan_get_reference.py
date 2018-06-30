@@ -15,11 +15,10 @@ import os
 import argparse as ap
 from urllib.request import urlretrieve
 import time
+import ftplib
 
 
 DB_TYPE_CHOICES = ['n', 'a']
-GENOME_EXTENSION = '.fna'
-PROTEOME_EXTENSION = '.faa'
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
 TAXA2GENOMES_FILE = "taxa2genomes_latest.txt"
 
@@ -56,11 +55,11 @@ def read_params():
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
                        help='Print for all taxa the total number of species and reference genomes available')
 
-    p.add_argument('-e', '--output_file_extension', type=str, default='.faa.gz',
+    p.add_argument('-e', '--output_file_extension', type=str, default='.fna.gz',
                    help="Specify path to the extension of the output files")
     p.add_argument('-o', '--output', type=str,
                    help="Specify path to the output folder where to save the files, required when -g/--get is specified")
-    p.add_argument('-n', '--num_ref', type=int, default=4,
+    p.add_argument('-n', '--how_many', type=int, default=4,
                    help='Specify how many reference proteomes to download, where -1 stands for "all available"')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
 
@@ -82,8 +81,8 @@ def check_params(args, verbose=False):
         if not os.path.isdir(args.output):
             error('output param is not a directory', exit=True)
 
-    if args.num_ref < 0:
-        args.num_ref = None
+    if args.how_many < 0:
+        args.how_many = None
 
     if not args.output_file_extension.startswith('.'):
         args.output_file_extension = '.' + args.output_file_extension
@@ -161,6 +160,30 @@ def download(url, download_file, verbose=False):
         info('File "{}" already present!\n'.format(download_file))
 
 
+def retrieve_refseq_url(gcx_id):
+    refseq_base_ftp_url = 'ftp.ncbi.nlm.nih.gov'
+    refseq_genomes_url = 'genomes/all'
+
+    gcx, number = gcx_id.split('.')[0].split('_')
+    gcx_url = '/'.join([gcx] + [number[i:i+3] for i in range(0, len(number), 3)])
+
+    ftp = ftplib.FTP(refseq_base_ftp_url)
+    _ = ftp.login()
+    _ = ftp.cwd('/'.join([refseq_genomes_url, gcx_url]))
+    folder = ftp.nlst()[0]
+    _ = ftp.cwd(folder)
+    files = ftp.nlst()
+    _ = ftp.quit()
+
+    url = None
+
+    for file in files:
+        if (folder + '_genomic.fna.gz') == file:
+            url = 'https://' + '/'.join([refseq_base_ftp_url, refseq_genomes_url, gcx_url, folder, file])
+
+    return url
+
+
 def list_available_clades(taxa2proteomes_file, verbose=False):
     clades = {}
     metadata = None
@@ -190,12 +213,11 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
 def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
     core_genomes = {}
     metadata = None
-    url = None
 
     # taxa2genomes format
     #
-    #   # taxid   taxonomy      UniRefURL       genomes_list
-    #   12345     k__|...|s__   http://..{}..   UP123;UP456;...
+    #   # taxid   taxonomy      genomes_list
+    #   12345     k__|...|s__   UP123;UP456;...
 
     for r in bz2.open(taxa2genomes_file, 'rt'):
         if r.startswith('#'):
@@ -205,8 +227,7 @@ def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, 
         r_clean = r.strip().split('\t')
 
         if (taxa_label in r_clean[1].split('|')) or (taxa_label == 'all'):
-            url = r_clean[2]
-            core_genomes[r_clean[1]] = r_clean[3].split(';')[:num_ref]
+            core_genomes[r_clean[1]] = [(g.split('.')[0], retrieve_refseq_url(g)) for g in r_clean[2].split(';')[:num_ref]]
 
     if taxa_label != 'all':
         if not len(core_genomes):
@@ -216,8 +237,13 @@ def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, 
         if verbose:
             info('Downloading {} reference genomes for {}\n'.format(len(genomes), lbl))
 
-        for genome in genomes:
-            download(url.format(genomes), os.path.join(output, genomes + out_file_ext), verbose=verbose)
+        for t in genomes:
+            genome, url = t
+
+            if url:
+                download(url, os.path.join(output, genome + out_file_ext), verbose=verbose)
+            else:
+                error('no URL found on RefSeq for "{}"'.format(genome))
 
 
 if __name__ == '__main__':
@@ -239,5 +265,5 @@ if __name__ == '__main__':
         sys.exit(0)
 
     create_folder(os.path.join(args.output), verbose=args.verbose)
-    get_reference_genomes(taxa2genomes_file_latest, args.get, args.num_ref, args.output_file_extension,
+    get_reference_genomes(taxa2genomes_file_latest, args.get, args.how_many, args.output_file_extension,
                           args.output, verbose=args.verbose)
