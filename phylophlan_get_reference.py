@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.02'
-__date__ = '17 May 2018'
+__version__ = '0.03'
+__date__ = '3 July 2018'
 
 
 import sys
@@ -20,7 +20,9 @@ import ftplib
 
 DB_TYPE_CHOICES = ['n', 'a']
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
+GB_ASSEMBLY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
 TAXA2GENOMES_FILE = "taxa2genomes_latest.txt"
+GB_ASSEMBLY_FILE = "assembly_summary_genbank.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -61,6 +63,9 @@ def read_params():
                    help="Specify path to the output folder where to save the files, required when -g/--get is specified")
     p.add_argument('-n', '--how_many', type=int, default=4,
                    help='Specify how many reference proteomes to download, where -1 stands for "all available"')
+    p.add_argument('-m', '--genbank_mapping', type=str, default=GB_ASSEMBLY_FILE,
+                   help='The local GenBank mapping file, if not found it will be automatically downloaded')
+
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
 
     return p.parse_args()
@@ -165,11 +170,11 @@ def retrieve_refseq_url(gcx_id):
     refseq_genomes_url = 'genomes/all'
 
     gcx, number = gcx_id.split('.')[0].split('_')
-    gcx_url = '/'.join([gcx] + [number[i:i+3] for i in range(0, len(number), 3)])
+    gcx_url = '/'.join([gcx] + [number[i:i + 3] for i in range(0, len(number), 3)])
 
     ftp = ftplib.FTP(refseq_base_ftp_url)
     _ = ftp.login()
-    _ = ftp.cwd('/'.join([refseq_genomes_url, gcx_url]))
+    _ = ftp.cwd(refseq_genomes_url + '/' + gcx_url)
     folder = ftp.nlst()[0]
     _ = ftp.cwd(folder)
     files = ftp.nlst()
@@ -177,9 +182,9 @@ def retrieve_refseq_url(gcx_id):
 
     url = None
 
-    for file in files:
-        if (folder + '_genomic.fna.gz') == file:
-            url = 'https://' + '/'.join([refseq_base_ftp_url, refseq_genomes_url, gcx_url, folder, file])
+    for ff in files:
+        if (folder + '_genomic.fna.gz') == ff:
+            url = 'https://' + '/'.join([refseq_base_ftp_url, refseq_genomes_url, gcx_url, folder, ff])
 
     return url
 
@@ -197,7 +202,7 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         num_ref_gen = len(r.strip().split('\t')[-1].split(';'))
 
         for i, c in enumerate(taxa):
-            cl = '|'.join(taxa[:i+1])
+            cl = '|'.join(taxa[:i + 1])
 
             if cl in clades:
                 num_spp, num_ref = clades[cl]
@@ -210,9 +215,17 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         info('\t'.join([k, str(v[0]), str(v[1])]) + '\n')
 
 
-def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
+def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
     core_genomes = {}
     metadata = None
+
+    download(GB_ASSEMBLY_URL, gb_assembly_file, verbose=args.verbose)
+
+    # load GenBank assembly summary
+    gb_assembly_summary = dict([(r.strip().split('\t')[0],
+                                 (r.strip().split('\t')[19].replace('ftp://', 'https://') + '/' +
+                                  r.strip().split('\t')[19].split('/')[-1] + '_genomic.fna.gz'))
+                                for r in open(gb_assembly_file) if not r.startswith('#')])
 
     # taxa2genomes format
     #
@@ -227,11 +240,13 @@ def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, 
         r_clean = r.strip().split('\t')
 
         if (taxa_label in r_clean[1].split('|')) or (taxa_label == 'all'):
-            core_genomes[r_clean[1]] = [(g.split('.')[0], retrieve_refseq_url(g)) for g in r_clean[2].split(';')[:num_ref]]
+            core_genomes[r_clean[1]] = [(g.split('.')[0],
+                                         gb_assembly_summary[g] if g in gb_assembly_summary else retrieve_refseq_url(g))
+                                        for g in r_clean[2].split(';')[:num_ref]]
 
-    if taxa_label != 'all':
-        if not len(core_genomes):
-            error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
+    if not len(core_genomes):
+        error('no reference genomes found for "{}", please check the taxonomic label provided'.format(taxa_label),
+              exit=True)
 
     for lbl, genomes in core_genomes.items():
         if verbose:
@@ -243,7 +258,7 @@ def get_reference_genomes(taxa2genomes_file, taxa_label, num_ref, out_file_ext, 
             if url:
                 download(url, os.path.join(output, genome + out_file_ext), verbose=verbose)
             else:
-                error('no URL found on RefSeq for "{}"'.format(genome))
+                error('no URL found for "{}"'.format(genome))
 
 
 if __name__ == '__main__':
@@ -265,5 +280,5 @@ if __name__ == '__main__':
         sys.exit(0)
 
     create_folder(os.path.join(args.output), verbose=args.verbose)
-    get_reference_genomes(taxa2genomes_file_latest, args.get, args.how_many, args.output_file_extension,
-                          args.output, verbose=args.verbose)
+    get_reference_genomes(args.genbank_mapping, taxa2genomes_file_latest, args.get, args.how_many,
+                          args.output_file_extension, args.output, verbose=args.verbose)
