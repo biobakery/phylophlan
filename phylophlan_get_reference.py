@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.03'
-__date__ = '3 July 2018'
+__version__ = '0.04'
+__date__ = '5 July 2018'
 
 
 import sys
@@ -103,7 +103,7 @@ def create_folder(output, verbose=False):
 
         os.mkdir(output, mode=0o775)
     elif verbose:
-        info("Output folder already present\n")
+        info('Output folder "{}" present\n'.format(output))
 
 
 def byte_to_megabyte(byte):
@@ -162,7 +162,7 @@ def download(url, download_file, verbose=False):
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:
-        info('File "{}" already present!\n'.format(download_file))
+        info('File "{}" present\n'.format(download_file))
 
 
 def retrieve_refseq_url(gcx_id):

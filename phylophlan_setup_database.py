@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.03'
-__date__ = '27 April 2018'
+__version__ = '0.05'
+__date__ = '5 July 2018'
 
 
 import sys
@@ -61,11 +61,10 @@ def read_params():
                              "files or the file of markers, in (multi-)fasta format"))
     group.add_argument('-g', '--get_core_proteins', type=str, default=None,
                        help=('Specify the taxonomic label for which download the set of '
-                             'core proteins. The label can represents: '
-                             'a species ("--get_core_proteins s__Escherichia_coli") or a '
-                             'a genus ("--get_core_proteins g__Escherichia")'))
+                             'core proteins. The label must represents a species: '
+                             '"--get_core_proteins s__Escherichia_coli"'))
 
-    p.add_argument('-o', '--output', type=str, required=True, default=None,
+    p.add_argument('-o', '--output', type=str, default=None,
                    help="Specify path to the output folder where to save the database")
     p.add_argument('-d', '--db_name', type=str, help="Specify the name of the output database")
     p.add_argument('-e', '--input_extension', type=str, default=None,
@@ -97,6 +96,17 @@ def check_params(args, verbose=False):
     if args.get_core_proteins:
         if args.get_core_proteins[:3] != 's__':  # not sure it's needed, but I don't think we are handling sitautions different than species right now! (Tue 19 Jun 2018)
             error('The taxonomic label provided "{}" does not starts with "s__"'.format(args.get_core_proteins), exit=True)
+
+        if not args.output:
+            args.output = args.get_core_proteins
+
+            if verbose:
+                info('Setting output folder "{}"'.format(args.output))
+        elif not args.ouptut.endswith(args.get_core_proteins):
+            args.output = os.path.join(args.output, args.get_core_proteins)
+
+            if verbose:
+                info('Setting output folder "{}"'.format(args.output))
 
         args.input = args.output
         args.input_extension = PROTEOME_EXTENSION
@@ -187,17 +197,17 @@ def download(url, download_file, verbose=False):
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:
-        info('File "{}" already present!\n'.format(download_file))
+        info('File "{}" present\n'.format(download_file))
 
 
 def create_folder(output, verbose=False):
     if not os.path.exists(output):
         if verbose:
-            info('Creating output database folder "{}"\n'.format(output))
+            info('Creating output folder "{}"\n'.format(output))
 
         os.mkdir(output, mode=0o775)
     elif verbose:
-        info("Output database folder already present\n")
+        info('Output "{}" folder present\n'.format(output))
 
 
 def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verbose=False):
@@ -249,9 +259,9 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
         if verbose:
             info("Re-trying to download {} core proteins that just failed, please wait as it might take some time\n"
                  .format(len(retry2download)))
-        idmapping_url = 'http://www.uniprot.org/uploadlists/'
+        idmapping_url = 'https://www.uniprot.org/uploadlists/'
         contact = "phylophlan@cibiocm.com"
-        params = {'from': 'ID',
+        params = {'from': 'ACC+ID',
                   'to': 'NF90',
                   'format': 'tab',  # or 'list' for only converted clusters
                   'query': ' '.join(retry2download)}
@@ -304,15 +314,13 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
             seqs += [SeqRecord(record.seq,
                                id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
                                description='')
-                     for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt')
-                                                                if marker.endswith('.bz2')
+                     for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt') if marker.endswith('.bz2')
                                                                 else open(marker), "fasta"))]
     else:
         seqs = [SeqRecord(record.seq,
                           id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
                           description='')
-                for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt')
-                                                           if inputt.endswith('.bz2')
+                for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt') if inputt.endswith('.bz2')
                                                            else open(inputt), "fasta"))]
 
     if not seqs:
