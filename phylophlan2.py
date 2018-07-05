@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.18'
-__date__ = '4 June 2018'
+__version__ = '0.20'
+__date__ = '5 July 2018'
 
 
 import os
@@ -259,7 +259,7 @@ def read_configs(config_file, verbose=False):
     config.read(config_file)
 
     if verbose:
-        info('Reading configuration file "{}"\n'.format(config_file))
+        info('Loading configuration file "{}"\n'.format(config_file))
 
     for section in config.sections():  # "DEFAULT" section not included!
         configs[section.lower()] = {}
@@ -544,20 +544,20 @@ def check_args(args, command_line_arguments, verbose=True):
         args.subsample = npos_function
 
     if verbose:
-        info('args: {}\n'.format(args))
+        info('Arguments: {}\n'.format(vars(args)))
 
     return project_name
 
 
 def check_configs(configs, verbose=False):
+    if verbose:
+        info('Checking configuration file\n')
+
     # checking whether mandatory sections and options are present
     for sections in CONFIG_SECTIONS_MANDATORY:
         mandatory_sections = False
 
         for section in sections:
-            if verbose:
-                info('Checking "{}" section\n'.format(section))
-
             if section in configs:
                 mandatory_sections = True
 
@@ -565,9 +565,6 @@ def check_configs(configs, verbose=False):
                     mandatory_options = False
 
                     for option in options:
-                        if verbose:
-                            info('Checking "{}" option in "{}" section\n'.format(option, section))
-
                         if (option in configs[section]) and configs[section][option]:
                             mandatory_options = True
                             break
@@ -592,8 +589,8 @@ def check_configs(configs, verbose=False):
         if mandatory_options and actual_options:
             for option in mandatory_options:
                 if option not in actual_options:
-                    error('option "{}" not defined in section "{}" in your configuration file'
-                          .format(option, section), exit=True)
+                    error('option "{}" not defined in section "{}" in your configuration file'.format(option, section),
+                          exit=True)
         else:
             error('wrongly formatted configuration file?', exit=True)
 
@@ -920,7 +917,7 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbos
                     error('database "{}" has not been created... something went wrong!'
                           .format(os.path.join(db_folder, db_dna)), exit=True)
             elif verbose:
-                info('"{}" database "{}" already present\n'.format(key_aa, db_dna))
+                info('"{}" database "{}" present\n'.format(key_aa, db_dna))
             else:
                 db_dna = None
 
@@ -941,7 +938,7 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbos
                     error('database "{}" has not been created... something went wrong!'
                           .format(db_aa), exit=True)
             elif verbose:
-                info('"{}" database "{}" already present\n'.format(key_aa, db_aa))
+                info('"{}" database "{}" present\n'.format(key_aa, db_aa))
             else:
                 db_aa = None
         elif 'diamond' in params[key_aa]['program_name']:
@@ -955,7 +952,7 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbos
                     error('database "{}" has not been created... something went wrong!'
                           .format(db_aa), exit=True)
             elif verbose:
-                info('"{}" database "{}" already present\n'.format(key_aa, db_aa))
+                info('"{}" database "{}" present\n'.format(key_aa, db_aa))
 
             db_dna = db_aa  # if there are genomes the database is the same
         else:
@@ -1000,7 +997,7 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa, verbos
                     error('database "{}" ({}) has not been created... something went wrong!'
                           .format(key_dna, os.path.join(databases_folder, database), ', '.join(makeblastdb_exts)), exit=True)
             elif verbose:
-                info('"{}" database "{}" ({}) already present\n'
+                info('"{}" database "{}" ({}) present\n'
                      .format(key_dna, os.path.join(databases_folder, database), ', '.join(makeblastdb_exts)))
         else:
             error('program "{}" not recognize'
@@ -1021,7 +1018,7 @@ def make_database(command, fasta, markers, db_folder, db, label, output_exts=[],
                 f.write(g.read())
                 g.close()
     elif verbose:
-        info('File "{}" already present\n'.format(fasta))
+        info('File "{}" present\n'.format(fasta))
 
     info('Generating "{}" indexed database "{}"\n'.format(label, db))
     cmd = compose_command(command, input_file=fasta, output_path=db_folder, output_file=db)
@@ -1101,6 +1098,7 @@ def clean_project(data_folder, output_folder, verbose=False):
 
 def load_input_files(input_folder, tmp_folder, extension, verbose=False):
     inputs = {}
+    done = False
 
     if os.path.isdir(input_folder):
         info('Loading files from "{}"\n'.format(input_folder))
@@ -1108,9 +1106,11 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
         for f in files:
             if f.endswith('.bz2'):
+                if verbose and (not done):
+                    info('Decompressing input files\n')
+                    done = True
+
                 check_and_create_folder(tmp_folder, create=True, exit=True, verbose=verbose)
-                # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
-                # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
                 file_clean = os.path.splitext(os.path.basename(f))[0]
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
@@ -1122,9 +1122,11 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
                 inputs[file_clean] = tmp_folder
             elif f.endswith('.gz'):
+                if verbose and (not done):
+                    info('Decompressing input files\n')
+                    done = True
+
                 check_and_create_folder(tmp_folder, create=True, exit=True, verbose=verbose)
-                # hashh = hashlib.sha1(f.encode(encoding='utf-8')).hexdigest()[:7]
-                # file_clean = os.path.splitext(os.path.splitext(os.path.basename(f))[0])[0] + '_' + hashh + extension
                 file_clean = os.path.splitext(os.path.basename(f))[0]
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
@@ -1139,7 +1141,6 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 inputs[os.path.basename(f)] = input_folder
             elif verbose:
                 info('Input file "{}" not recognized\n'.format(f))
-
     elif verbose:
         info('Folder "{}" does not exists\n'.format(input_folder))
 
@@ -1222,7 +1223,7 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     commands = [(inp, os.path.join(output_folder, os.path.basename(inp)))
                 for inp in inputs if not os.path.isfile(os.path.join(output_folder,
@@ -1289,7 +1290,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp, inp_fol in inputs.items():
         out = os.path.splitext(inp)[0] + '.b6o.bkp'
@@ -1483,7 +1484,7 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for f in glob.iglob(os.path.join(input_folder, '*.b6o')):
         f_clean = os.path.basename(f).replace('.b6o', extension)
@@ -1596,7 +1597,7 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for f in glob.iglob(os.path.join(input_folder, '*' + in_extension)):
         out = os.path.join(output_folder,
@@ -1670,7 +1671,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
         os.mkdir(output_folder)
     else:
         if verbose:
-            info('Folder "{}" already exists\n'.format(output_folder))
+            info('Folder "{}" exists\n'.format(output_folder))
 
         for f in glob.iglob(os.path.join(output_folder, '*' + extension)):
             info('Inputs already translated into markers\n')
@@ -1705,7 +1706,7 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*' + extension)):
         out = os.path.splitext(os.path.basename(inp))[0] + '.aln'
@@ -1804,7 +1805,7 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     if os.path.isdir(inputt):
         for inp in glob.iglob(os.path.join(inputt, '*.aln')):
@@ -1907,7 +1908,7 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     if os.path.isdir(inputt):
         for inp in glob.iglob(os.path.join(inputt, '*.aln')):
@@ -2018,7 +2019,7 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder,
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         out = os.path.join(output_folder, os.path.basename(inp))
@@ -2164,7 +2165,7 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         out = os.path.join(output_folder, os.path.basename(inp))
@@ -2456,7 +2457,7 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         marker, _ = os.path.splitext(os.path.basename(inp))
@@ -2562,7 +2563,7 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
 
             os.mkdir(output)
         elif verbose:
-            info('Folder "{}" already exists\n'.format(output))
+            info('Folder "{}" exists\n'.format(output))
 
         for inp in glob.iglob(os.path.join(inputt, '*.tre')):
             out = os.path.basename(inp)
@@ -2618,7 +2619,7 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     for inp in glob.iglob(os.path.join(input_alns, '*.aln')):
         marker, _ = os.path.splitext(os.path.basename(inp))
@@ -2830,7 +2831,7 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
 
         os.mkdir(output_folder)
     elif verbose:
-        info('Folder "{}" already exists\n'.format(output_folder))
+        info('Folder "{}" exists\n'.format(output_folder))
 
     commands = [(inp, output_folder, os.path.splitext(os.path.basename(inp))[0], verbose)
                 for inp in glob.iglob(os.path.join(input_folder, "*.aln"))
@@ -2967,8 +2968,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     all_inputs = None
     input_faa = None
     inp_bz2 = os.path.join(args.data_folder, 'uncompressed')
-    input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension,
-                                 verbose=args.verbose)
+    input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension, verbose=args.verbose)
 
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'map_dna')
@@ -3173,7 +3173,7 @@ def download(url, download_file, verbose=False):
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:
-        info('File "{}" already present!\n'.format(download_file))
+        info('File "{}" present\n'.format(download_file))
 
 
 def download_and_unpack_db(url, db_name, folder, verbose=False):
@@ -3192,7 +3192,7 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
 
     if os.path.isdir(os.path.join(folder, db_name)):  # check if there already exists the folder
         if verbose:
-            info('Database folder "{}" already present\n'.format(os.path.join(folder, db_name)))
+            info('Database folder "{}" present\n'.format(os.path.join(folder, db_name)))
 
         return
 
