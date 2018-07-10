@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.04'
-__date__ = '5 July 2018'
+__version__ = '0.05'
+__date__ = '10 July 2018'
 
 
 import sys
@@ -21,7 +21,7 @@ import ftplib
 DB_TYPE_CHOICES = ['n', 'a']
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
 GB_ASSEMBLY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
-TAXA2GENOMES_FILE = "taxa2genomes_latest.txt"
+TAXA2GENOMES_FILE = "taxa2genomes.txt"
 GB_ASSEMBLY_FILE = "assembly_summary_genbank.txt"
 
 

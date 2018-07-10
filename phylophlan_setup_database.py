@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.05'
-__date__ = '5 July 2018'
+__version__ = '0.06'
+__date__ = '10 July 2018'
 
 
 import sys
@@ -27,7 +27,7 @@ DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
-TAXA2CORE_FILE = "taxa2core_latest.txt"
+TAXA2CORE_FILE = "taxa2core.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
