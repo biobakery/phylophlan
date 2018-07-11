@@ -101,12 +101,12 @@ def check_params(args, verbose=False):
             args.output = args.get_core_proteins
 
             if verbose:
-                info('Setting output folder "{}"'.format(args.output))
-        elif not args.ouptut.endswith(args.get_core_proteins):
+                info('Setting output folder "{}"\n'.format(args.output))
+        elif not args.output.endswith(args.get_core_proteins):
             args.output = os.path.join(args.output, args.get_core_proteins)
 
             if verbose:
-                info('Setting output folder "{}"'.format(args.output))
+                info('Setting output folder "{}"\n'.format(args.output))
 
         args.input = args.output
         args.input_extension = PROTEOME_EXTENSION
@@ -135,7 +135,7 @@ def check_params(args, verbose=False):
                 args.output_extension = PROTEOME_EXTENSION
 
             if verbose:
-                info('Setting output extension to "{}"'.format(args.output_extension))
+                info('Setting output extension to "{}"\n'.format(args.output_extension))
         else:
             error("both -t/--db_type and -x/--output_extension were specified, don't know which one to use!",
                   exit=True)
