@@ -11,7 +11,8 @@ phylophlan_write_config_file.py -o phylophlan_configs/supermatrix_nt.cfg \
     --trim trimal \
     --tree1 fasttree \
     --tree2 raxml \
-    --overwrite
+    --overwrite \
+    --verbose
 # supertree_nt.cfg
 # python3 ../phylophlan_write_config_file.py -o supertree_nt.cfg \
 phylophlan_write_config_file.py -o phylophlan_configs/supertree_nt.cfg \
@@ -23,7 +24,8 @@ phylophlan_write_config_file.py -o phylophlan_configs/supertree_nt.cfg \
     --gene_tree1 fasttree \
     --gene_tree2 raxml \
     --tree1 astral \
-    --overwrite
+    --overwrite \
+    --verbose
 # supermatrix_aa.cfg
 # python3 ../phylophlan_write_config_file.py -o supermatrix_aa.cfg \
 phylophlan_write_config_file.py -o phylophlan_configs/supermatrix_aa.cfg \
@@ -35,7 +37,8 @@ phylophlan_write_config_file.py -o phylophlan_configs/supermatrix_aa.cfg \
     --trim trimal \
     --tree1 fasttree \
     --tree2 raxml \
-    --overwrite
+    --overwrite \
+    --verbose
 # supertree_aa.cfg
 # python3 ../phylophlan_write_config_file.py -o supertree_aa.cfg \
 phylophlan_write_config_file.py -o phylophlan_configs/supertree_aa.cfg \
@@ -48,4 +51,5 @@ phylophlan_write_config_file.py -o phylophlan_configs/supertree_aa.cfg \
     --gene_tree1 fasttree \
     --gene_tree2 raxml \
     --tree1 astral \
-    --overwrite
+    --overwrite \
+    --verbose
