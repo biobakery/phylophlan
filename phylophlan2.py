@@ -1170,16 +1170,13 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder
     else:
         info('Checking {} inputs\n'.format(len(inputs)))
         terminating = mp.Event()
-        chunksize = math.floor(len(inputs) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
                 good_inputs = [a for a in
                                pool.imap_unordered(check_input_proteomes_rec,
                                                    ((os.path.join(inp_fol, inp), min_len_protein, min_num_proteins, verbose)
-                                                    for inp, inp_fol in inputs.items()),
-                                                   chunksize=chunksize if chunksize else 1)
-                               if a]
+                                                    for inp, inp_fol in inputs.items()), chunksize=1) if a]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('check_input_proteomes crashed', init_new_line=True, exit=True)
@@ -1226,18 +1223,15 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
         info('Folder "{}" exists\n'.format(output_folder))
 
     commands = [(inp, os.path.join(output_folder, os.path.basename(inp)))
-                for inp in inputs if not os.path.isfile(os.path.join(output_folder,
-                                                                     os.path.basename(inp)))]
+                for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
 
     if commands:
         info('Cleaning {} inputs\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('clean_input_proteomes crashed', init_new_line=True, exit=True)
@@ -1302,13 +1296,10 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
     if commands:
         info('Mapping "{}" on {} inputs (key: "{}")\n'.format(database_name, len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in
-                 pool.imap_unordered(gene_markers_identification_rec, commands,
-                                     chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(gene_markers_identification_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('gene_markers_identification crashed', init_new_line=True, exit=True)
@@ -1369,12 +1360,10 @@ def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, ve
     if commands:
         info('Selecting {} markers from "{}"\n'.format(len(commands), input_folder))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(gene_markers_selection_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(gene_markers_selection_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('gene_markers_selection crashed', init_new_line=True, exit=True)
@@ -1497,12 +1486,10 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
     if commands:
         info('Extracting markers from {} inputs\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(gene_markers_extraction_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(gene_markers_extraction_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('gene_markers_extraction crashed', init_new_line=True, exit=True)
@@ -1609,12 +1596,10 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_
     if commands:
         info('Generate proteomes from {} genomes\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(fake_proteome_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(fake_proteome_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('fake_proteomes crashed', init_new_line=True, exit=True)
@@ -1722,12 +1707,10 @@ def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=
     if commands:
         info('Aligning {} markers (key: "{}")\n'.format(len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(msas_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(msas_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('msas crashed', init_new_line=True, exit=True)
@@ -1833,12 +1816,10 @@ def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
     if commands:
         info('Trimming gappy for {} markers (key: "{}")\n'.format(len(commands), key))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(trim_gappy_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(trim_gappy_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('trim_gappy crashed', init_new_line=True, exit=True)
@@ -1936,12 +1917,10 @@ def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verb
     if commands:
         info('Trimming not variant from {} markers\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(trim_not_variant_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('trim_not_variant crashed', init_new_line=True, exit=True)
@@ -2040,13 +2019,10 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder,
         info('Checking {} alignments for fragmentary entries (thr: {})\n'
              .format(len(commands), fragmentary_threshold))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                frag_entries = [a for a in pool.imap_unordered(remove_fragmentary_entries_rec,
-                                                               commands,
-                                                               chunksize=chunksize if chunksize else 1) if a]
+                frag_entries = [a for a in pool.imap_unordered(remove_fragmentary_entries_rec, commands, chunksize=1) if a]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('remove_fragmentary_entries crashed', init_new_line=True, exit=True)
@@ -2108,13 +2084,10 @@ def inputs_list(input_folder, extension, output_file, nproc=1, verbose=False):
         if commands:
             tmp_input_list = None
             terminating = mp.Event()
-            chunksize = math.floor(len(commands) / (nproc * 2))
 
             with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
                 try:
-                    tmp_input_list = [a for a in pool.imap_unordered(inputs_list_rec,
-                                                                     commands,
-                                                                     chunksize=chunksize if chunksize else 1) if a]
+                    tmp_input_list = [a for a in pool.imap_unordered(inputs_list_rec, commands, chunksize=1) if a]
                 except Exception as e:
                     error(str(e), init_new_line=True)
                     error('inputs_list crashed', init_new_line=True, exit=True)
@@ -2186,12 +2159,10 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
     if commands:
         info('Subsampling {} markers\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(subsample_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(subsample_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('subsample crashed', init_new_line=True, exit=True)
@@ -2487,11 +2458,10 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(build_gene_tree_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('build_gene_tree crashed', init_new_line=True, exit=True)
@@ -2575,12 +2545,10 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
     if commands:
         info('Resolving {} polytomies\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(resolve_polytomies_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(resolve_polytomies_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('resolve_polytomies crashed', init_new_line=True, exit=True)
@@ -2642,11 +2610,10 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
     if commands:
         info('Refining {} gene trees\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(refine_gene_tree_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('refine_gene_tree crashed', init_new_line=True, exit=True)
@@ -2840,12 +2807,10 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
     if commands:
         info('Computing mutation rates for {} markers\n'.format(len(commands)))
         terminating = mp.Event()
-        chunksize = math.floor(len(commands) / (nproc * 2))
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(mutation_rates_rec, commands,
-                                                chunksize=chunksize if chunksize else 1)]
+                [_ for _ in pool.imap_unordered(mutation_rates_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('mutation_rates crashed', init_new_line=True, exit=True)
