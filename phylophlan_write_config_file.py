@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
 
 
+__author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+              'Francesco Beghini (francesco.beghini@unitn.it), '
+              'Mattia Bolzan (mattia.bolzan@unitn.it), '
+              'Nicola Segata (nicola.segata@unitn.it)')
+__version__ = '0.01'
+__date__ = '13 July 2018'
+
+
 import os
 import sys
 import stat
 import argparse as ap
 import configparser as cp
 
+
+if sys.version_info[0] < 3:
+    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
 DB_DNA_CHOICES = ['makeblastdb']
@@ -89,7 +101,9 @@ def read_params():
                          'phylogeny previously built with what specified in the "tree1" section'))
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
-
+    p.add_argument('-v', '--version', action='version',
+                   version='phylophlan_write_config_file.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_write_config_file.py version and exit")
     return p.parse_args()
 
 

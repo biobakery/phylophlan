@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.06'
-__date__ = '10 July 2018'
+__version__ = '0.07'
+__date__ = '13 July 2018'
 
 
 import sys
@@ -22,6 +22,10 @@ from urllib.request import Request
 from urllib.request import urlopen
 import time
 
+
+if sys.version_info[0] < 3:
+    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
@@ -77,7 +81,9 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False,
                    help="If specified and the output file exists it will be overwritten")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
-
+    p.add_argument('-v', '--version', action='version',
+                   version='phylophlan_setup_database.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_setup_database.py version and exit")
     return p.parse_args()
 
 
