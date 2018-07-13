@@ -452,22 +452,22 @@ def check_args(args, command_line_arguments, verbose=True):
         if verbose:
             info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
 
-    # check min_num_proteins settings
-    if not args.min_num_proteins:
+    # check min_num_markers settings
+    if not args.min_num_markers:
         if args.database == 'phylophlan':
-            args.min_num_proteins = 100
+            args.min_num_markers = 100
 
             if verbose:
-                info('Setting "min_num_proteins={}" since no value has been specified and '
-                     'the "database={}"\n'.format(args.min_num_proteins, args.database))
+                info('Setting "min_num_markers={}" since no value has been specified and '
+                     'the "database={}"\n'.format(args.min_num_markers, args.database))
         elif args.database == 'amphora2':
-            args.min_num_proteins = 34
+            args.min_num_markers = 34
 
             if verbose:
-                info('Setting "min_num_proteins={}" since no value has been specified and '
-                     'the "database={}"\n'.format(args.min_num_proteins, args.database))
+                info('Setting "min_num_markers={}" since no value has been specified and '
+                     'the "database={}"\n'.format(args.min_num_markers, args.database))
         else:
-            args.min_num_proteins = MIN_NUM_PROTEINS
+            args.min_num_markers = MIN_NUM_MARKERS
 
     # check not_variant_threshold settings
     if not_variant_threshold and ('--not_variant_threshold' not in command_line_arguments):
