@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.05'
-__date__ = '10 July 2018'
+__version__ = '0.06'
+__date__ = '13 July 2018'
 
 
 import sys
@@ -17,6 +17,10 @@ from urllib.request import urlretrieve
 import time
 import ftplib
 
+
+if sys.version_info[0] < 3:
+    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
@@ -65,9 +69,10 @@ def read_params():
                    help='Specify how many reference proteomes to download, where -1 stands for "all available"')
     p.add_argument('-m', '--genbank_mapping', type=str, default=GB_ASSEMBLY_FILE,
                    help='The local GenBank mapping file, if not found it will be automatically downloaded')
-
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
-
+    p.add_argument('-v', '--version', action='version',
+                   version='phylophlan_get_reference.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_get_reference.py version and exit")
     return p.parse_args()
 
 

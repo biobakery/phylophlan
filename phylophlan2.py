@@ -41,7 +41,6 @@ if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
-
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
 CONFIG_OPTIONS_MANDATORY = [['program_name'], ['command_line']]
