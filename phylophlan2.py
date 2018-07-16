@@ -1161,8 +1161,7 @@ def check_input_proteomes(inputs, min_num_proteins, min_len_protein, data_folder
         info('Inputs already checked\n')
 
         if verbose:
-            info('Loading checked inputs from "{}"\n'.format(os.path.join(data_folder,
-                                                                          'checked_inputs.pkl')))
+            info('Loading checked inputs from "{}"\n'.format(os.path.join(data_folder, 'checked_inputs.pkl')))
 
         with open(os.path.join(data_folder, 'checked_inputs.pkl'), 'rb') as f:
             good_inputs = pickle.load(f)
@@ -2936,16 +2935,13 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'map_dna')
-        gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database,
-                                    db_dna, args.min_num_proteins, nproc=args.nproc,
-                                    verbose=args.verbose)
+        gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna,
+                                    args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
         gene_markers_selection(inp_f, largest_cluster if args.db_type == 'a' else best_hit,
                                args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.data_folder, 'markers_dna')
-        gene_markers_extraction(input_fna, inp_f, out_f, args.genome_extension,
-                                args.min_num_markers,
-                                frameshifts=True if args.db_type == 'a' else False,
-                                nproc=args.nproc, verbose=args.verbose)
+        gene_markers_extraction(input_fna, inp_f, out_f, args.genome_extension, args.min_num_markers,
+                                frameshifts=True if args.db_type == 'a' else False, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
         if args.db_type == 'a':
@@ -2953,37 +2949,30 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
             fake_proteome(inp_f, out_f, args.genome_extension, args.proteome_extension,
                           args.min_len_protein, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
-            input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension,
-                                         verbose=args.verbose)
+            input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
             inp_f = out_f
 
     if args.db_type == 'a':
-        faa = load_input_files(args.input_folder, inp_bz2, args.proteome_extension,
-                               verbose=args.verbose)
+        faa = load_input_files(args.input_folder, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
         if input_faa:  # if duplicates input keep the ones from 'faa'
             input_faa.update(faa)
         else:  # otherwise use only the ones from 'faa'
             input_faa = faa
 
-        input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins,
-                                                  args.min_len_protein, args.data_folder,
-                                                  nproc=args.nproc, verbose=args.verbose)
+        input_faa_checked = check_input_proteomes(input_faa, args.min_num_proteins, args.min_len_protein,
+                                                  args.data_folder, nproc=args.nproc, verbose=args.verbose)
 
         if input_faa_checked:
             inp_f = os.path.join(args.data_folder, 'clean_aa')
-            clean_input_proteomes(input_faa_checked, inp_f, nproc=args.nproc,
-                                  verbose=args.verbose)
-            input_faa_clean = load_input_files(inp_f, inp_bz2, args.proteome_extension,
-                                               verbose=args.verbose)
+            clean_input_proteomes(input_faa_checked, inp_f, nproc=args.nproc, verbose=args.verbose)
+            input_faa_clean = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
             if input_faa_clean:
                 inp_f = os.path.join(args.data_folder, 'map_aa')
-                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f,
-                                            args.database, db_aa, args.min_num_proteins,
-                                            nproc=args.nproc, verbose=args.verbose)
-                gene_markers_selection(inp_f, best_hit, args.min_num_proteins,
-                                       nproc=args.nproc, verbose=args.verbose)
+                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa,
+                                            args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                 out_f = os.path.join(args.data_folder, 'markers_aa')
                 gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension,
                                         args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
@@ -2991,8 +2980,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
     out_f = os.path.join(args.data_folder, 'markers')
     inputs2markers(inp_f, out_f, args.min_num_entries,
-                   args.proteome_extension if args.db_type == 'a' else args.genome_extension,
-                   verbose=args.verbose)
+                   args.proteome_extension if args.db_type == 'a' else args.genome_extension, verbose=args.verbose)
     inp_f = out_f
     out_f = os.path.join(args.data_folder, 'msas')
     msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a' else args.genome_extension,
@@ -3013,8 +3001,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
         if (args.trim == 'not_variant') or (args.trim == 'greedy'):
             out_f = os.path.join(args.data_folder, 'trim_not_variant')
-            trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc,
-                             verbose=args.verbose)
+            trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
     if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
@@ -3028,22 +3015,19 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         inp_f = out_f
 
     # compute inputs list
-    all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, 'all_inputs.pkl'),
+    all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
                              nproc=args.nproc, verbose=args.verbose)
 
     if args.subsample:
         out_f = os.path.join(args.data_folder, 'sub')
-        subsample(inp_f, out_f, args.subsample, args.scoring_function,
-                  os.path.join(args.submat_folder, args.submat + '.pkl'),
-                  unknown_fraction=args.unknown_fraction, nproc=args.nproc,
-                  verbose=args.verbose)
+        subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat + '.pkl'),
+                  unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
     if 'gene_tree1' in configs:
         sub_mod = load_substitution_model(args.maas)
         out_f = os.path.join(args.data_folder, 'gene_tree1')
-        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc,
-                        verbose=args.verbose)
+        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
 
         if 'gene_tree2' in configs:
             outt = os.path.join(args.data_folder, 'gene_tree1_polytomies')
@@ -3051,8 +3035,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
             out_f = outt
 
             outt = os.path.join(args.data_folder, 'gene_tree2')
-            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt,
-                             nproc=args.nproc, verbose=args.verbose)
+            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
             out_f = outt
 
         inp_f = out_f
@@ -3063,13 +3046,12 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         if not all_inputs:
             all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
 
-        out_f = os.path.join(args.output_folder, 'all.aln')
+        out_f = os.path.join(args.output_folder, project_name + '_concatenated.aln')
         concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
 
     out_f = project_name + '.tre'
-    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f,
-                    nproc=args.nproc, verbose=args.verbose)
+    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
 
     if 'tree2' in configs:
         outt = project_name + '_resolved.tre'
