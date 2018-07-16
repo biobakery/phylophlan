@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.20'
-__date__ = '5 July 2018'
+__version__ = '0.21'
+__date__ = '13 July 2018'
 
 
 import os
@@ -148,7 +148,7 @@ def read_params():
     p.add_argument('--submod_list', action='store_true', default=False,
                    help="List of all the available substitution models that can be specified with the --maas option")
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use")
-    p.add_argument('--min_num_proteins', type=int, default=None,
+    p.add_argument('--min_num_proteins', type=int, default=MIN_NUM_PROTEINS,
                    help=("Proteomes (.faa) with less than this number of proteins will "
                          "be discarded"))
     p.add_argument('--min_len_protein', type=int, default=MIN_LEN_PROTEIN,
