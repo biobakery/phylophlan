@@ -843,15 +843,12 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
         d = None
 
         if os.path.isfile(fna) or os.path.isfile(fna_bz2):
-            d = Counter([len(set(r.seq)) for r in SeqIO.parse(fna if os.path.isfile(fna)
-                                                                  else bz2.open(fna_bz2, 'rt'), "fasta")])
+            d = Counter([len(set(r.seq)) for r in SeqIO.parse(fna if os.path.isfile(fna) else bz2.open(fna_bz2, 'rt'), "fasta")])
         elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
-            d = Counter([len(set(r.seq)) for r in SeqIO.parse(faa if os.path.isfile(faa)
-                                                                  else bz2.open(faa_bz2, 'rt'), "fasta")])
+            d = Counter([len(set(r.seq)) for r in SeqIO.parse(faa if os.path.isfile(faa) else bz2.open(faa_bz2, 'rt'), "fasta")])
         elif os.path.isdir(folder):
-            d = Counter([len(set(r.seq)) for f in glob(folder)
-                                         for r in SeqIO.parse(f if os.path.isfile(f)
-                                                                else bz2.open(f, 'rt'), "fasta")])
+            d = Counter([len(set(r.seq))
+                         for f in glob.iglob(folder) for r in SeqIO.parse(f if os.path.isfile(f) else bz2.open(f, 'rt'), "fasta")])
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to "
                   "automatically detect the input database file(s)", exit=True)
@@ -1532,24 +1529,19 @@ def gene_markers_extraction_rec(x):
                             idd += 'c'
                             seq = seq.reverse_complement()
 
-                        out_file_seq.append(SeqRecord(seq, id='{}{}-{}'.format(idd, s, e),
-                                                      description=''))
+                        out_file_seq.append(SeqRecord(seq, id='{}{}-{}'.format(idd, s, e), description=''))
 
                         if frameshifts:
                             if not rev:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s:e],
-                                                              id='{}{}-{}'.format(idd, s + 1, e),
+                                out_file_seq.append(SeqRecord(seq_record.seq[s:e], id='{}{}-{}'.format(idd, s + 1, e),
                                                               description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s + 1:e],
-                                                              id='{}{}-{}'.format(idd, s + 2, e),
+                                out_file_seq.append(SeqRecord(seq_record.seq[s + 1:e], id='{}{}-{}'.format(idd, s + 2, e),
                                                               description=''))
                             else:
                                 out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 1].reverse_complement(),
-                                                              id='{}{}-{}'.format(idd, s, e - 1),
-                                                              description=''))
+                                                              id='{}{}-{}'.format(idd, s, e - 1), description=''))
                                 out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 2].reverse_complement(),
-                                                              id='{}{}-{}'.format(idd, s, e - 2),
-                                                              description=''))
+                                                              id='{}{}-{}'.format(idd, s, e - 2), description=''))
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
