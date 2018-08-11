@@ -124,6 +124,12 @@ def find_executable(exe, rollback=False):
 
     if 'PATH' in current_env:
         for d in current_env['PATH'].split(':'):
+            if not os.path.exists(d):
+                continue
+
+            if not os.path.isdir(d):
+                continue
+
             for f in os.listdir(d):
                 e = os.path.realpath(os.path.join(d, f))
 

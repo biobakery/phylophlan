@@ -146,6 +146,15 @@ def check_params(args, verbose=False):
             error("both -t/--db_type and -x/--output_extension were specified, don't know which one to use!",
                   exit=True)
 
+    if not args.output:
+        args.output = args.input
+
+        if os.path.isdir(args.input):
+            args.output = os.path.dirname(args.input)
+
+        if verbose:
+            info('Output folder not specified, setting to "{}"\n'.format(args.output))
+
 
 def byte_to_megabyte(byte):
     """
@@ -220,6 +229,9 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
     core_proteins = {}
     url = None
     metadata = None
+    retry2download = []
+    not_mapped = []
+    not_mapped_again = []
 
     # taxa2core format
     #
@@ -245,8 +257,6 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
 
-    retry2download = []
-
     for lbl, core_prots in core_proteins.items():
         if verbose:
             info('Downloading {} core proteins for {}\n'.format(len(core_prots), lbl))
@@ -257,8 +267,6 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
             if not os.path.exists(local_prot):
                 retry2download.append(core_prot)
-
-    not_mapped = []
 
     # try to re-map the ids in case "not mapped" store in not_mapped
     if retry2download:
@@ -298,15 +306,24 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
             except Exception:
                 error('unable fetch not converted IDs')
 
-    if not_mapped:
+    # probably deleted proteins in the Uniprot versions, try to download their latest version in any case
+    for nm in not_mapped:
+        local_prot = os.path.join(output, nm + output_extension)
+        download('https://www.uniprot.org/uniprot/{}.fasta?version=*'.format(nm), local_prot, verbose=verbose)
+
+        if not os.path.exists(local_prot):
+            not_mapped_again.append(core_prot)
+
+    # really don't know what else to try... I'm sorry!
+    if not_mapped_again:
         nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
 
         if verbose:
             info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'
-                 .format(len(not_mapped), nd_out))
+                 .format(len(not_mapped_again), nd_out))
 
         with open(nd_out, 'w') as f:
-            f.write('\n'.join(not_mapped))
+            f.write('\n'.join(not_mapped_again))
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
@@ -318,13 +335,17 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
     if os.path.isdir(inputt):
         for marker in glob.iglob(os.path.join(inputt, '*' + input_ext + '*')):
             seqs += [SeqRecord(record.seq,
-                               id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
+                               id='_'.join([db_name.replace('_', '-'),
+                                            record.id.replace('_', '-').replace(',', '-'),
+                                            str(count)]),
                                description='')
                      for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt') if marker.endswith('.bz2')
                                                                 else open(marker), "fasta"))]
     else:
         seqs = [SeqRecord(record.seq,
-                          id='_'.join([db_name.replace('_', '-'), record.id.replace('_', '-'), str(count)]),
+                          id='_'.join([db_name.replace('_', '-'),
+                                       record.id.replace('_', '-').replace(',', '-'),
+                                       str(count)]),
                           description='')
                 for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt') if inputt.endswith('.bz2')
                                                            else open(inputt), "fasta"))]
