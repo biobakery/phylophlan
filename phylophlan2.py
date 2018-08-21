@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.21'
-__date__ = '13 July 2018'
+__version__ = '0.23'
+__date__ = '21 August 2018'
 
 
 import os
@@ -213,8 +213,7 @@ def read_params():
                          "the aligned markers and a summary table for the concatenated MSA. "
                          "This operation can take long time to finish"))
 
-    group = p.add_argument_group(title="Folder paths",
-                                 description="Parameters for setting the folders location")
+    group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER,
                        help="Path to the folder containing the input data")
     group.add_argument('--data_folder', type=str, default=None,
@@ -236,11 +235,9 @@ def read_params():
 
     group = p.add_argument_group(title="Filename extensions",
                                  description="Parameters for setting the extensions of the input files")
-    group.add_argument('--genome_extension', type=str,
-                       default=GENOME_EXTENSION,
+    group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION,
                        help="Set the extension for the genomes in your inputs")
-    group.add_argument('--proteome_extension', type=str,
-                       default=PROTEOME_EXTENSION,
+    group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION,
                        help="Set the extension for the proteomes in your inputs")
 
     p.add_argument('--verbose', action='store_true', default=False,
@@ -363,60 +360,47 @@ def check_args(args, command_line_arguments, verbose=True):
 
     # set pre-config params
     trim = None
-    submat = None
+    submat = 'pfasum60'
     subsample = None
     scoring_function = None
     fragmentary_threshold = None
     not_variant_threshold = None
+    remove_fragmentary_entries = True
 
     if args.diversity == 'low':
-        if args.accurate:
-            trim = 'gappy'
-            remove_fragmentary_entries = True
-            fragmentary_threshold = 0.85
+        # accurate
+        trim = 'gappy'
+        fragmentary_threshold = 0.85
 
         if args.fast:
-            trim = 'gappy'
-            submat = 'pfasum60'
             subsample = 'onehundred'
             scoring_function = 'trident'
-            remove_fragmentary_entries = True
-            fragmentary_threshold = 0.85
 
     if args.diversity == 'medium':
+        scoring_function = 'trident'
+
         if args.accurate:
             trim = 'gappy'
-            submat = 'pfasum60'
             subsample = 'fifty'
-            scoring_function = 'trident'
-            remove_fragmentary_entries = True
             fragmentary_threshold = 0.85
 
         if args.fast:
             trim = 'greedy'
-            submat = 'pfasum60'
             subsample = 'twentyfive'
-            scoring_function = 'trident'
-            remove_fragmentary_entries = True
             fragmentary_threshold = 0.75
             not_variant_threshold = 0.99
 
     if args.diversity == 'high':
+        trim = 'greedy'
+        scoring_function = 'trident'
+
         if args.accurate:
-            trim = 'greedy'
-            submat = 'pfasum60'
             subsample = 'twentyfive'
-            scoring_function = 'trident'
-            remove_fragmentary_entries = True
             fragmentary_threshold = 0.75
             not_variant_threshold = 0.97
 
         if args.fast:
-            trim = 'greedy'
-            submat = 'pfasum60'
             subsample = 'phylophlan'
-            scoring_function = 'trident'
-            remove_fragmentary_entries = True
             fragmentary_threshold = 0.65
             not_variant_threshold = 0.95
 
@@ -613,11 +597,15 @@ def check_and_create_folder(folder, try_local=False, create=False, exit=False, v
         return None
 
     if create:
-        if verbose:
-            info('Creating folder "{}"\n'.format(f))
+        if not os.path.isdir(f):
+            os.mkdir(folder, mode=0o775)
 
-        os.mkdir(f, mode=0o775)
-        return f
+            if verbose:
+                info('Creating folder "{}"\n'.format(folder))
+        elif verbose:
+            info('Folder "{}" exists\n'.format(folder))
+
+        return folder
 
 
 def check_dependencies(configs, nproc, verbose=False):
@@ -646,7 +634,7 @@ def check_dependencies(configs, nproc, verbose=False):
                               stderr=sb.DEVNULL, env=cmd['env'])
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('program not installed or not present in system path\n'
+                error('program not installed or not present in the system path\n'
                       '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])),
                       init_new_line=True, exit=True)
 
@@ -1199,8 +1187,7 @@ def check_input_proteomes_rec(x):
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while checking\n    {}'.format('\n    '.join([str(a) for a in x])),
-                  init_new_line=True)
+            error('error while checking\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -1208,15 +1195,7 @@ def check_input_proteomes_rec(x):
 
 def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
-
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
     commands = [(inp, os.path.join(output_folder, os.path.basename(inp)))
                 for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
 
@@ -1272,14 +1251,7 @@ def clean_input_proteomes_rec(x):
 def gene_markers_identification(configs, key, inputs, output_folder, database_name,
                                 database, min_num_proteins, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp, inp_fol in inputs.items():
         out = os.path.splitext(inp)[0] + '.b6o.bkp'
@@ -1461,14 +1433,7 @@ def largest_cluster(f):
 def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_num_markers,
                             frameshifts=False, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for f in glob.iglob(os.path.join(input_folder, '*.b6o')):
         f_clean = os.path.basename(f).replace('.b6o', extension)
@@ -1567,14 +1532,7 @@ def gene_markers_extraction_rec(x):
 
 def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_len_protein, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for f in glob.iglob(os.path.join(input_folder, '*' + in_extension)):
         out = os.path.join(output_folder,
@@ -1638,16 +1596,9 @@ def fake_proteome_rec(x):
 
 def inputs2markers(input_folder, output_folder, min_num_entries, extension, verbose=False):
     markers2inputs = {}
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    else:
-        if verbose:
-            info('Folder "{}" exists\n'.format(output_folder))
-
+    if os.path.isdir(output_folder):
         for f in glob.iglob(os.path.join(output_folder, '*' + extension)):
             info('Inputs already translated into markers\n')
             return
@@ -1674,14 +1625,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
 
 def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_folder, '*' + extension)):
         out = os.path.splitext(os.path.basename(inp))[0] + '.aln'
@@ -1771,14 +1715,7 @@ def is_msa_empty(msa, path=None):
 
 def trim_gappy(configs, key, inputt, output_folder, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     if os.path.isdir(inputt):
         for inp in glob.iglob(os.path.join(inputt, '*.aln')):
@@ -1872,14 +1809,7 @@ def trim_gappy_rec(x):
 
 def trim_not_variant(inputt, output_folder, not_variant_threshold, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     if os.path.isdir(inputt):
         for inp in glob.iglob(os.path.join(inputt, '*.aln')):
@@ -1954,7 +1884,7 @@ def trim_not_variant_rec(x):
                     info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
             elif verbose:
                     info('"{}" discarded because no cloumns retained while removing not '
-                         'variant sites (thr: {})'.format(inp, thr))
+                         'variant sites (thr: {})\n'.format(inp, thr))
         except Exception as e:
             terminating.set()
             remove_file(out)
@@ -1982,13 +1912,7 @@ def remove_fragmentary_entries(input_folder, data_folder, output_folder,
 
         return frag_entries
 
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         out = os.path.join(output_folder, os.path.basename(inp))
@@ -2122,13 +2046,7 @@ def subsample(input_folder, output_folder, positions_function, scoring_function,
         if verbose:
             info('Substitution matrix "{}" loaded\n'.format(submat))
 
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         out = os.path.join(output_folder, os.path.basename(inp))
@@ -2411,14 +2329,7 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
 
 def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_folder, '*.aln')):
         marker, _ = os.path.splitext(os.path.basename(inp))
@@ -2517,13 +2428,7 @@ def resolve_polytomies(inputt, output, nproc=1, verbose=False):
             commands.append((inputt, output))
 
     elif os.path.isdir(inputt):
-        if not os.path.isdir(output):
-            if verbose:
-                info('Creating folder "{}"\n'.format(output))
-
-            os.mkdir(output)
-        elif verbose:
-            info('Folder "{}" exists\n'.format(output))
+        check_and_create_folder(output, create=True, verbose=verbose)
 
         for inp in glob.iglob(os.path.join(inputt, '*.tre')):
             out = os.path.basename(inp)
@@ -2570,14 +2475,7 @@ def resolve_polytomies_rec(x):
 def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_folder,
                      nproc=1, verbose=False):
     commands = []
-
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_alns, '*.aln')):
         marker, _ = os.path.splitext(os.path.basename(inp))
@@ -2782,14 +2680,7 @@ def compute_dists(s1, s2):
 
 
 def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
-    if not os.path.isdir(output_folder):
-        if verbose:
-            info('Creating folder "{}"\n'.format(output_folder))
-
-        os.mkdir(output_folder)
-    elif verbose:
-        info('Folder "{}" exists\n'.format(output_folder))
-
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
     commands = [(inp, output_folder, os.path.splitext(os.path.basename(inp))[0], verbose)
                 for inp in glob.iglob(os.path.join(input_folder, "*.aln"))
                 if not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.tsv'))]
@@ -3196,8 +3087,7 @@ def phylophlan2():
     args = read_params()
 
     if args.verbose:
-        info('PhyloPhlAn version {} ({})\nCommand line: {}\n'
-             .format(__version__, __date__, ' '.join(sys.argv)))
+        info('\nPhyloPhlAn version {} ({})\n\nCommand line: {}\n\n'.format(__version__, __date__, ' '.join(sys.argv)))
 
     project_name = check_args(args, sys.argv, verbose=args.verbose)
 
@@ -3210,12 +3100,10 @@ def phylophlan2():
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
-    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder,
-                           verbose=args.verbose)
+    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder, verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
-    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder,
-                                           args.db_type, configs, 'db_dna', 'db_aa',
-                                           verbose=args.verbose)
+    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type, configs,
+                                           'db_dna', 'db_aa', verbose=args.verbose)
     if not args.db_type:
         args.db_type = db_type
 
