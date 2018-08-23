@@ -3117,5 +3117,5 @@ if __name__ == '__main__':
     t0 = time.time()
     phylophlan2()
     t1 = time.time()
-    info('Total elapsed time {}s\n'.format(int(t1 - t0)))
+    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
