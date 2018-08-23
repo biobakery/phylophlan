@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.07'
-__date__ = '13 July 2018'
+__version__ = '0.08'
+__date__ = '21 August 2018'
 
 
 import sys
@@ -154,6 +154,9 @@ def check_params(args, verbose=False):
 
         if verbose:
             info('Output folder not specified, setting to "{}"\n'.format(args.output))
+
+    if verbose:
+        info('Arguments: {}\n'.format(vars(args)))
 
 
 def byte_to_megabyte(byte):
@@ -360,8 +363,13 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
         SeqIO.write(seqs, f, "fasta")
 
 
-if __name__ == '__main__':
+def phylophlan_setup_database():
     args = read_params()
+
+    if args.verbose:
+        info('\nphylophlan_setup_database.py version {} ({})\n\nCommand line: {}\n\n'
+             .format(__version__, __date__, ' '.join(sys.argv)))
+
     check_params(args, verbose=args.verbose)
     create_folder(args.output, verbose=args.verbose)
 
@@ -382,3 +390,11 @@ if __name__ == '__main__':
     create_database(args.db_name, args.input, args.input_extension,
                     os.path.join(args.output, args.db_name + args.output_extension),
                     args.overwrite, verbose=args.verbose)
+
+
+if __name__ == '__main__':
+    t0 = time.time()
+    phylophlan_setup_database()
+    t1 = time.time()
+    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
+    sys.exit(0)

@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.06'
-__date__ = '13 July 2018'
+__version__ = '0.07'
+__date__ = '21 August 2018'
 
 
 import sys
@@ -99,6 +99,9 @@ def check_params(args, verbose=False):
 
     if args.output_file_extension.endswith('.'):
         args.output_file_extension = args.output_file_extension[:-1]
+
+    if verbose:
+        info('Arguments: {}\n'.format(vars(args)))
 
 
 def create_folder(output, verbose=False):
@@ -224,7 +227,7 @@ def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_r
     core_genomes = {}
     metadata = None
 
-    download(GB_ASSEMBLY_URL, gb_assembly_file, verbose=args.verbose)
+    download(GB_ASSEMBLY_URL, gb_assembly_file, verbose=verbose)
 
     # load GenBank assembly summary
     gb_assembly_summary = dict([(r.strip().split('\t')[0],
@@ -266,9 +269,14 @@ def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_r
                 error('no URL found for "{}"'.format(genome))
 
 
-if __name__ == '__main__':
+def phylophlan_get_reference():
     taxa2genomes_file_latest = None
     args = read_params()
+
+    if args.verbose:
+        info('\nphylophlan_get_reference.py version {} ({})\n\nCommand line: {}\n\n'
+             .format(__version__, __date__, ' '.join(sys.argv)))
+
     check_params(args, verbose=args.verbose)
     download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, verbose=args.verbose)
 
@@ -287,3 +295,11 @@ if __name__ == '__main__':
     create_folder(os.path.join(args.output), verbose=args.verbose)
     get_reference_genomes(args.genbank_mapping, taxa2genomes_file_latest, args.get, args.how_many,
                           args.output_file_extension, args.output, verbose=args.verbose)
+
+
+if __name__ == '__main__':
+    t0 = time.time()
+    phylophlan_get_reference()
+    t1 = time.time()
+    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
+    sys.exit(0)

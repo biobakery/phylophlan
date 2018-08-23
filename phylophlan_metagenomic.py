@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.01'
-__date__ = '21 August 2018'
+__version__ = '0.02'
+__date__ = '22 August 2018'
 
 
 import sys
@@ -129,6 +129,9 @@ def check_params(args, verbose=False):
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
 
+    if verbose:
+        info('Arguments: {}\n'.format(vars(args)))
+
 
 def check_dependencies(verbose=False):
     if verbose:
@@ -235,22 +238,21 @@ def initt(terminating_):
     terminating = terminating_
 
 
-def sketching(input_folder, input_extension, output_folder, nproc=1, verbose=False):
+def sketching_dists_filter(input_folder, input_extension, output_prefix, database, threshold, nproc=1, verbose=False):
     commands = []
 
     for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
-        o = os.path.join(output_folder, os.path.splitext(os.path.basename(i))[0])
-
-        if not os.path.isfile(o + '.msh'):
-            commands.append((i, o, verbose))
+        out = os.path.splitext(os.path.basename(i))[0]
+        commands.append((i, os.path.join(output_prefix + "_sketches", out),
+                         os.path.join(output_prefix + "_dists", out + ".tsv"), database, threshold, verbose))
 
     if commands:
-        info('Sketching {} inputs\n'.format(len(commands)))
         terminating = mp.Event()
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            info()
             try:
-                [_ for _ in pool.imap_unordered(sketching_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(sketching_dists_filter_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('sketching crashed', init_new_line=True, exit=True)
@@ -258,91 +260,65 @@ def sketching(input_folder, input_extension, output_folder, nproc=1, verbose=Fal
         info('Inputs already sketched\n')
 
 
-def sketching_rec(x):
+def sketching_dists_filter_rec(x):
     if not terminating.is_set():
         try:
-            t0 = time.time()
-            inpf, outf, verbose = x
-            info('Sketching "{}"\n'.format(inpf))
-            cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', outf, inpf]
+            inp_bin, out_sketch, out_dist, db, thr, verbose = x
 
-            try:
-                sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-            except Exception as e:
-                terminating.set()
-                remove_file(outf, verbose=verbose)
-                error(str(e), init_new_line=True)
-                error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                raise
-
-            t1 = time.time()
-            info('"{}.msh" generated in {}s\n'.format(outf, int(t1 - t0)))
-        except Exception as e:
-            terminating.set()
-            error(str(e), init_new_line=True)
-            error('error while sketching\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
-            raise
-    else:
-        terminating.set()
-
-
-def dists(input_folder, output_folder, database, threshold, nproc=1, verbose=False):
-    commands = []
-
-    for i in glob.iglob(os.path.join(input_folder, '*.msh')):
-        o = os.path.join(output_folder, os.path.splitext(os.path.basename(i))[0] + '.tsv')
-
-        if not os.path.isfile(o):
-            commands.append((i, o, database, threshold, verbose))
-
-    if commands:
-        info('Computing distances on {} inputs\n'.format(len(commands)))
-        terminating = mp.Event()
-
-        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
-            try:
-                [_ for _ in pool.imap_unordered(dists_rec, commands, chunksize=1)]
-            except Exception as e:
-                error(str(e), init_new_line=True)
-                error('dists crashed', init_new_line=True, exit=True)
-    else:
-        info('Distances already computed\n')
-
-
-def dists_rec(x):
-    if not terminating.is_set():
-        try:
-            t0 = time.time()
-            inpf, outf, db, thr, verbose = x
-
-            if not os.path.isfile(outf + ".orig"):
-                info('Computing distance for "{}"\n'.format(inpf))
-                cmd = ['mash', 'dist', db, inpf]
+            # sketching
+            if not os.path.isfile(out_sketch + ".msh"):
+                t0 = time.time()
+                info('Sketching "{}"\n'.format(inp_bin))
+                cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
 
                 try:
-                    sb.check_call(cmd, stdout=open(outf + ".orig", 'w'), stderr=sb.DEVNULL)
+                    sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
                 except Exception as e:
                     terminating.set()
-                    remove_file(outf, verbose=verbose)
+                    remove_file(out_sketch + ".msh", verbose=verbose)
                     error(str(e), init_new_line=True)
                     error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                     raise
 
                 t1 = time.time()
-                info('"{}.orig" generated in {}s\n'.format(outf, int(t1 - t0)))
+                info('"{}.msh" generated in {}s\n'.format(out_sketch, int(t1 - t0)))
 
-            if not os.path.isfile(outf):
-                with open(outf + ".orig") as fin, open(outf, 'w') as fout:
+            # dist
+            if not os.path.isfile(out_dist + ".orig"):
+                t0 = time.time()
+                info('Computing distance for "{}"\n'.format(out_sketch + ".msh"))
+                cmd = ['mash', 'dist', db, out_sketch + ".msh"]
+
+                try:
+                    sb.check_call(cmd, stdout=open(out_dist + ".orig", 'w'), stderr=sb.DEVNULL)
+                except Exception as e:
+                    terminating.set()
+                    remove_file(out_dist + ".orig", verbose=verbose)
+                    error(str(e), init_new_line=True)
+                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                    raise
+
+                t1 = time.time()
+                info('"{}.orig" generated in {}s\n'.format(out_dist, int(t1 - t0)))
+
+            # filter
+            if not os.path.isfile(out_dist):
+                t0 = time.time()
+                info('Filtering "{}"'.format(out_dist + ".orig"))
+                with open(out_dist + ".orig") as fin, open(out_dist, 'w') as fout:
                     for r in fin:
-                        # database-ID, input-ID, mash-distance, p-value, #-shared-hashes
-                        rc = r.strip().split('\t')
+                        rc = r.strip().split('\t')  # database-ID, input-ID, mash-distance, p-value, #-shared-hashes
 
                         if float(rc[2]) <= thr:
                             fout.write(rc[0] + '\n')
+
+                t1 = time.time()
+                info('"{}" generated in {}s\n'.format(out_dist, int(t1 - t0)))
+
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while dists\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while sketching\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -358,13 +334,13 @@ def phylophlan_metagenomic():
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
     download(os.path.join(DOWNLOAD_URL, DATABASE_FILE), args.database, verbose=args.verbose)
-    sketching(args.input, args.input_extension, args.output_prefix + "_sketches", nproc=args.nproc, verbose=args.verbose)
-    dists(args.output_prefix + "_sketches", args.output_prefix + "_dists", args.database, args.threshold, nproc=args.nproc, verbose=args.verbose)
+    sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, args.threshold,
+                           nproc=args.nproc, verbose=args.verbose)
 
 
 if __name__ == '__main__':
     t0 = time.time()
     phylophlan_metagenomic()
     t1 = time.time()
-    info('Total elapsed time {}s\n'.format(int(t1 - t0)))
+    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)

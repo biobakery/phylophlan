@@ -5,13 +5,14 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.01'
-__date__ = '13 July 2018'
+__version__ = '0.02'
+__date__ = '21 August 2018'
 
 
 import os
 import sys
 import stat
+import time
 import argparse as ap
 import configparser as cp
 
@@ -107,7 +108,7 @@ def read_params():
     return p.parse_args()
 
 
-def check_params(args):
+def check_params(args, verbose=False):
     if (not args.map_dna) and (not args.map_aa):
         error('at least one of --map_dna and --map_aa must be specified', exit=True)
 
@@ -117,6 +118,9 @@ def check_params(args):
     if (args.db_type == 'n') and (args.map_dna == 'diamond'):
         error('Incompatible choices.\n    Please, select "blastn" instead in --map_dna, as there is no "diamond" '
               'option for aligning against a nucleotide reference database', exit=True)
+
+    if verbose:
+        info('Arguments: {}\n'.format(vars(args)))
 
 
 def find_executable(exe, rollback=False):
@@ -134,13 +138,14 @@ def find_executable(exe, rollback=False):
                 e = os.path.realpath(os.path.join(d, f))
 
                 if (os.path.exists(e) and (not os.path.isdir(e)) and bool(os.stat(e)[stat.ST_MODE] & stat.S_IXUSR)):
-                    if exe.lower() in e.lower():
+                    if exe.lower() == f.lower():
                         return (f, True if not rollback else False)
 
     if rollback:
         find_executable(rollback, rollback=True)
 
-    error('could not find "{}" executable in your PATH environment variable', exit=True)
+    error('could not find "{}{} executable in your PATH environment variable'
+          .format(exe, '" (or "{}")'.format(rollback) if rollback else '"'), exit=True)
 
 
 # AVAILABLE OPTIONS:
@@ -160,9 +165,14 @@ def find_executable(exe, rollback=False):
 #              syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
 
 
-if __name__ == '__main__':
+def phylophlan_write_config_file():
     args = read_params()
-    check_params(args)
+
+    if args.verbose:
+        info('\nphylophlan_write_config_file.py version {} ({})\n\nCommand line: {}\n\n'
+             .format(__version__, __date__, ' '.join(sys.argv)))
+
+    check_params(args, verbose=args.verbose)
     progs = {}
 
     # setting the program for building the nucleotides DB
@@ -316,7 +326,7 @@ if __name__ == '__main__':
     # setting gene_tree1
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
-            exe, _ = find_executable('FastTree-2.1.9-SSE3', rollback='fasttree')
+            exe, _ = find_executable('FastTree', rollback='fasttree')
             gene_tree1 = {'program_name': exe,
                           'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
@@ -382,7 +392,7 @@ if __name__ == '__main__':
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}
     elif 'fasttree' in args.tree1:
-        exe, rb = find_executable('FastTreeMP-2.1.9-SSE3', rollback='fasttree')
+        exe, rb = find_executable('FastTreeMP', rollback='fasttree')
         tree1 = {'program_name': exe,
                  'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                  'output': '-out',
@@ -452,4 +462,10 @@ if __name__ == '__main__':
     with open(args.output, 'w') as f:
         config.write(f)
 
+
+if __name__ == '__main__':
+    t0 = time.time()
+    phylophlan_write_config_file()
+    t1 = time.time()
+    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
