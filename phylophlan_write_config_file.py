@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.02'
-__date__ = '21 August 2018'
+__version__ = '0.03'
+__date__ = '27 September 2018'
 
 
 import os
@@ -283,6 +283,14 @@ def phylophlan_write_config_file():
                'environment': 'TMPDIR=/local-storage',
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
+
+        for fld in ['/local-storage', '/tmp']:
+            if os.path.isdir(fld) and bool(os.stat(fld)[stat.ST_MODE] & stat.S_IWUSR):
+                if 'environment' in msa:
+                    break
+
+                msa['environment'] = 'TMPDIR={}'.format(fld)
+                break
     elif 'opal' in args.msa:
         exe, _ = find_executable('opal')
         msa = {'program_name': exe,
