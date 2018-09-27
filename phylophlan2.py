@@ -1354,8 +1354,7 @@ def gene_markers_selection_rec(x):
                 t1 = time.time()
                 info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
             else:
-                info('Not enough markers mapped ({}/{}) in "{}"\n'
-                     .format(len(matches), min_num_proteins, inp))
+                info('Not enough markers mapped ({}/{}) in "{}"\n'.format(len(matches), min_num_proteins, inp))
         except Exception as e:
             terminating.set()
             remove_file(out)
