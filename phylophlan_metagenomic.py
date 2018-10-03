@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.02'
-__date__ = '22 August 2018'
+__version__ = '0.03'
+__date__ = '2 October 2018'
 
 
 import sys
@@ -17,6 +17,7 @@ from urllib.request import urlretrieve
 import time
 import subprocess as sb
 import multiprocessing as mp
+import bz2
 
 
 if sys.version_info[0] < 3:
@@ -25,7 +26,8 @@ if sys.version_info[0] < 3:
 
 THRESHOLD = 0.1
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
-DATABASE_FILE = "db_sgbs_16332_k21_s10000.msh"
+MAPPING_FILE = "db_sgbs_4930_sgb2taxa.tsv.bz2"
+DATABASE_FILE = "db_sgbs_4930_k21_s10000.msh"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -73,6 +75,8 @@ def read_params():
                          "the input fodler will be used"))
     p.add_argument('-d', '--database', type=str, default=DATABASE_FILE,
                    help="Specify the name of the database, if not found locally will be automatically downloaded")
+    p.add_argument('-m', '--mapping', type=str, default=MAPPING_FILE,
+                   help="Specify the name of the mapping file, if not found locally will be automatically downloaded")
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))
@@ -125,6 +129,7 @@ def check_params(args, verbose=False):
             error('"{}" folder not found, neither in "{}"'.format(args.database_folder, os.path.dirname(os.path.abspath(__file__))), exit=True)
 
     args.database = os.path.join(args.database_folder, args.database)
+    args.mapping = os.path.join(args.database_folder, args.mapping)
 
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
@@ -240,30 +245,39 @@ def initt(terminating_):
 
 def sketching_dists_filter(input_folder, input_extension, output_prefix, database, threshold, nproc=1, verbose=False):
     commands = []
+    out_filter_fld = os.path.join(output_prefix + "_filter_{}".format(threshold))
+
+    if not os.path.exists(out_filter_fld):
+        create_folder(out_filter_fld, verbose=verbose)
 
     for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
         out = os.path.splitext(os.path.basename(i))[0]
-        commands.append((i, os.path.join(output_prefix + "_sketches", out),
-                         os.path.join(output_prefix + "_dists", out + ".tsv"), database, threshold, verbose))
+        out_sketch = os.path.join(output_prefix + "_sketches", out)
+        out_dist = os.path.join(output_prefix + "_dists", out + ".tsv")
+        out_filter = os.path.join(out_filter_fld, out + ".tsv")
+
+        if os.path.isfile(out_sketch + ".msh") and os.path.isfile(out_dist) and os.path.isfile(out_filter):
+            continue
+
+        commands.append((i, out_sketch, out_dist, out_filter, database, threshold, verbose))
 
     if commands:
         terminating = mp.Event()
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
-            info()
             try:
                 [_ for _ in pool.imap_unordered(sketching_dists_filter_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('sketching crashed', init_new_line=True, exit=True)
     else:
-        info('Inputs already sketched\n')
+        info('Inputs already sketched, dist, and filtered\n')
 
 
 def sketching_dists_filter_rec(x):
     if not terminating.is_set():
         try:
-            inp_bin, out_sketch, out_dist, db, thr, verbose = x
+            inp_bin, out_sketch, out_dist, out_filter, db, thr, verbose = x
 
             # sketching
             if not os.path.isfile(out_sketch + ".msh"):
@@ -284,28 +298,28 @@ def sketching_dists_filter_rec(x):
                 info('"{}.msh" generated in {}s\n'.format(out_sketch, int(t1 - t0)))
 
             # dist
-            if not os.path.isfile(out_dist + ".orig"):
+            if not os.path.isfile(out_dist):
                 t0 = time.time()
                 info('Computing distance for "{}"\n'.format(out_sketch + ".msh"))
                 cmd = ['mash', 'dist', db, out_sketch + ".msh"]
 
                 try:
-                    sb.check_call(cmd, stdout=open(out_dist + ".orig", 'w'), stderr=sb.DEVNULL)
+                    sb.check_call(cmd, stdout=open(out_dist, 'w'), stderr=sb.DEVNULL)
                 except Exception as e:
                     terminating.set()
-                    remove_file(out_dist + ".orig", verbose=verbose)
+                    remove_file(out_dist, verbose=verbose)
                     error(str(e), init_new_line=True)
                     error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                     raise
 
                 t1 = time.time()
-                info('"{}.orig" generated in {}s\n'.format(out_dist, int(t1 - t0)))
+                info('"{}" generated in {}s\n'.format(out_dist, int(t1 - t0)))
 
             # filter
-            if not os.path.isfile(out_dist):
+            if not os.path.isfile(out_filter):
                 t0 = time.time()
-                info('Filtering "{}"'.format(out_dist + ".orig"))
-                with open(out_dist + ".orig") as fin, open(out_dist, 'w') as fout:
+                info('Filtering "{}"\n'.format(out_dist))
+                with open(out_dist) as fin, open(out_filter, 'w') as fout:
                     for r in fin:
                         rc = r.strip().split('\t')  # database-ID, input-ID, mash-distance, p-value, #-shared-hashes
 
@@ -313,12 +327,12 @@ def sketching_dists_filter_rec(x):
                             fout.write(rc[0] + '\n')
 
                 t1 = time.time()
-                info('"{}" generated in {}s\n'.format(out_dist, int(t1 - t0)))
+                info('"{}" generated in {}s\n'.format(out_filter, int(t1 - t0)))
 
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while sketching\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while sketching disting filtering\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -328,19 +342,42 @@ def phylophlan_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('\nphylophlan_metagenomic.py version {} ({})\n\nCommand line: {}\n\n'
-             .format(__version__, __date__, ' '.join(sys.argv)))
+        info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
     download(os.path.join(DOWNLOAD_URL, DATABASE_FILE), args.database, verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, MAPPING_FILE), args.mapping, verbose=args.verbose)
     sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, args.threshold,
                            nproc=args.nproc, verbose=args.verbose)
 
+    # load mapping file
+    sgb2taxa = dict([r.strip().split('\t') for r in bz2.open(args.mapping, 'rt')])
+    taxa2bin = {}
+
+    for b in glob.iglob(args.output_prefix + '_filter_{}/*.tsv'.format(args.threshold)):
+        bc = b.replace(args.output_prefix + '_filter_{}/'.format(args.threshold), '').replace('.tsv', '')
+
+        for taxa in set([sgb2taxa[r.strip()] for r in open(b)]):
+            if taxa in taxa2bin:
+                taxa2bin[taxa].append(bc)
+            else:
+                taxa2bin[taxa] = [bc]
+
+    with open(args.output_prefix + '_filter_{}.tsv'.format(args.threshold), 'w') as f:
+        info('taxnomy\tnum_bin\tbin_list_tab_separated\n', init_new_line=True)  # header
+        f.write('taxnomy\tnum_bin\tbin_list_tab_separated\n')  # header
+
+        for taxa, bins in taxa2bin.items():
+            info('{}\t{}\t{}\n'.format(taxa, len(bins), '\t'.join(bins)))
+            f.write('{}\t{}\t{}\n'.format(taxa, len(bins), '\t'.join(bins)))
+
+    info('Results saved to "{}_filter_{}.tsv"\n'.format(args.output_prefix, args.threshold), init_new_line=True)
 
 if __name__ == '__main__':
     t0 = time.time()
     phylophlan_metagenomic()
     t1 = time.time()
-    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
+    info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)
