@@ -274,8 +274,8 @@ def phylophlan_get_reference():
     args = read_params()
 
     if args.verbose:
-        info('\nphylophlan_get_reference.py version {} ({})\n\nCommand line: {}\n\n'
-             .format(__version__, __date__, ' '.join(sys.argv)))
+        info('nphylophlan_get_reference.py version {} ({})\n'.format(__version__, __date__))
+        info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
     download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, verbose=args.verbose)
@@ -301,5 +301,5 @@ if __name__ == '__main__':
     t0 = time.time()
     phylophlan_get_reference()
     t1 = time.time()
-    info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
+    info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)
