@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.03'
-__date__ = '27 September 2018'
+__version__ = '0.05'
+__date__ = '25 October 2018'
 
 
 import os
@@ -169,7 +169,7 @@ def phylophlan_write_config_file():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_write_config_file.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -280,7 +280,6 @@ def phylophlan_write_config_file():
         exe, _ = find_executable('mafft')
         msa = {'program_name': exe,
                'params': '--quiet --anysymbol --auto',
-               'environment': 'TMPDIR=/local-storage',
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
 
