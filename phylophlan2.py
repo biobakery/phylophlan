@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.23'
-__date__ = '21 August 2018'
+__version__ = '0.24'
+__date__ = '25 October 2018'
 
 
 import os
@@ -2307,8 +2307,7 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
                     alignment_length = len(seq_record.seq)
 
                 elif alignment_length != len(seq_record.seq):
-                    error('wrong alignment length ({} != {})... Something is wrong'
-                          .format(alignment_length, len(seq_record.seq)))
+                    error('wrong alignment length ({} != {})... Something is wrong'.format(alignment_length, len(seq_record.seq)))
 
             current_inputs = set(current_inputs)
 
@@ -2317,8 +2316,7 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
 
         with open(output_file, 'w') as f:
             # discard inputs with only gaps in alignment (RAxML gives error)
-            SeqIO.write([v for _, v in inputs2alignments.items() if gap_cost(v.seq, norm=True) < 1],
-                        f, "fasta")
+            SeqIO.write([v for _, v in inputs2alignments.items() if gap_cost(v.seq, norm=True) < 1], f, "fasta")
 
         t1 = time.time()
         info('Alignments concatenated "{}" in {}s\n'.format(output_file, int(t1 - t0)))
