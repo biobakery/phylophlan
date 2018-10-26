@@ -2,8 +2,8 @@
 
 
 # supermatrix_nt.cfg
-phylophlan_write_config_file.py -o supermatrix_nt.cfg \
 # ./phylophlan_write_config_file.py -o supermatrix_nt.cfg \
+phylophlan_write_config_file.py -o supermatrix_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -14,8 +14,8 @@ phylophlan_write_config_file.py -o supermatrix_nt.cfg \
     --overwrite \
     --verbose
 # supertree_nt.cfg
-phylophlan_write_config_file.py -o supertree_nt.cfg \
 # ./phylophlan_write_config_file.py -o supertree_nt.cfg \
+phylophlan_write_config_file.py -o supertree_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -27,8 +27,8 @@ phylophlan_write_config_file.py -o supertree_nt.cfg \
     --overwrite \
     --verbose
 # supermatrix_aa.cfg
-phylophlan_write_config_file.py -o supermatrix_aa.cfg \
 # ./phylophlan_write_config_file.py -o supermatrix_aa.cfg \
+phylophlan_write_config_file.py -o supermatrix_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -40,8 +40,8 @@ phylophlan_write_config_file.py -o supermatrix_aa.cfg \
     --overwrite \
     --verbose
 # supertree_aa.cfg
-phylophlan_write_config_file.py -o supertree_aa.cfg \
 # ./phylophlan_write_config_file.py -o supertree_aa.cfg \
+phylophlan_write_config_file.py -o supertree_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
