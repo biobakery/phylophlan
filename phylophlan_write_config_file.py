@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.05'
-__date__ = '25 October 2018'
+__version__ = '0.06'
+__date__ = '1 November 2018'
 
 
 import os
@@ -127,7 +127,7 @@ def find_executable(exe, rollback=False):
     current_env = os.environ.copy()
 
     if 'PATH' in current_env:
-        for d in current_env['PATH'].split(':'):
+        for d in current_env['PATH'].split(os.pathsep):
             if not os.path.exists(d):
                 continue
 
@@ -139,13 +139,12 @@ def find_executable(exe, rollback=False):
 
                 if (os.path.exists(e) and (not os.path.isdir(e)) and bool(os.stat(e)[stat.ST_MODE] & stat.S_IXUSR)):
                     if exe.lower() == f.lower():
-                        return (f, True if not rollback else False)
+                        return (f, True if rollback is None else False)
 
     if rollback:
-        find_executable(rollback, rollback=True)
+        find_executable(rollback, rollback=None)
 
-    error('could not find "{}{} executable in your PATH environment variable'
-          .format(exe, '" (or "{}")'.format(rollback) if rollback else '"'), exit=True)
+    error('could not find "{}" ("{}") executable in your PATH environment variable'.format(exe, rollback), exit=True)
 
 
 # AVAILABLE OPTIONS:
