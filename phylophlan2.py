@@ -630,12 +630,12 @@ def check_dependencies(configs, nproc, verbose=False):
                 out_f = open(cmd['stdout'], 'w')
 
             try:
-                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f,
-                              stderr=sb.DEVNULL, env=cmd['env'])
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('program not installed or not present in the system path\n'
-                      '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a]) for a in ['command_line', 'stdin', 'stdout', 'env']])),
+                      '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a])
+                                                     for a in ['command_line', 'stdin', 'stdout', 'env']])),
                       init_new_line=True, exit=True)
 
             if cmd['stdin']:
@@ -695,12 +695,11 @@ def config_list(config_folder, exit=False, exit_value=0):
          exit=exit, exit_value=exit_value)
 
 
-def compose_command(params, check=False, sub_mod=None, input_file=None, database=None,
-                    output_path=None, output_file=None, nproc=1):
+def compose_command(params, check=False, sub_mod=None, input_file=None, database=None, output_path=None, output_file=None, nproc=1):
     program_name = None
     stdin = None
     stdout = None
-    environment = None
+    environment = os.environ.copy()
     r_output_path = None
     r_output_file = None
     command_line = params['command_line']
@@ -709,8 +708,7 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
         command_line = command_line.replace('#program_name#', params['program_name'])
         program_name = params['program_name']
     else:
-        error('something wrong... either "program_name" or '
-              '"program_name_parallel" should be present!', exit=True)
+        error('something wrong... "program_name" not found!', exit=True)
 
     if check:
         command_line = program_name
@@ -722,16 +720,13 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
             command_line = command_line.replace('#params#', params['params'])
 
         if 'threads' in params:
-            command_line = command_line.replace('#threads#',
-                                                '{} {}'.format(params['threads'], nproc))
+            command_line = command_line.replace('#threads#', '{} {}'.format(params['threads'], nproc))
 
         if output_path:
             r_output_path = output_path
 
             if 'output_path' in params:
-                command_line = command_line.replace('#output_path#',
-                                                    '{} {}'.format(params['output_path'],
-                                                                   output_path))
+                command_line = command_line.replace('#output_path#', '{} {}'.format(params['output_path'], output_path))
             else:
                 output_file = os.path.join(output_path, output_file)
 
@@ -757,8 +752,7 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
                 command_line = command_line.replace('#input#', inp)
 
         if database and ('database' in params):
-            command_line = command_line.replace('#database#',
-                                                '{} {}'.format(params['database'], database))
+            command_line = command_line.replace('#database#', '{} {}'.format(params['database'], database))
 
         if output_file:
             out = output_file
@@ -776,24 +770,17 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
 
         if 'environment' in params:
             new_environment = dict([(var.strip(), val.strip())
-                                    for var, val in [a.strip().split('=')
-                                                     for a in
-                                                     params['environment'].split(',')]])
-            environment = os.environ.copy()
+                                    for var, val in [a.strip().split('=') for a in params['environment'].split(',')]])
             environment.update(new_environment)
 
     # find string sourrunded with " and make them as one string
     quotes = [j for j, e in enumerate(command_line) if e == '"']
 
     for s, e in zip(quotes[0::2], quotes[1::2]):
-        command_line = command_line.replace(command_line[s + 1:e],
-                                            command_line[s + 1:e].replace(' ', '#'))
+        command_line = command_line.replace(command_line[s + 1:e], command_line[s + 1:e].replace(' ', '#'))
 
-    return {'command_line': [str(a).replace('#', ' ') for a in
-                             re.sub(' +', ' ', command_line.replace('"', '')).split(' ')
-                             if a],
-            'stdin': stdin, 'stdout': stdout, 'env': environment,
-            'output_path': r_output_path, 'output_file': r_output_file}
+    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a],
+            'stdin': stdin, 'stdout': stdout, 'env': environment, 'output_path': r_output_path, 'output_file': r_output_file}
 
 
 def remove_file(filename, path=None, verbose=False):
@@ -1534,8 +1521,7 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for f in glob.iglob(os.path.join(input_folder, '*' + in_extension)):
-        out = os.path.join(output_folder,
-                           os.path.splitext(os.path.basename(f))[0] + out_extension)
+        out = os.path.join(output_folder, os.path.splitext(os.path.basename(f))[0] + out_extension)
 
         if not os.path.isfile(out):
             commands.append((f, out, min_len_protein))
@@ -1618,8 +1604,7 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
             with open(os.path.join(output_folder, marker + extension), 'w') as f:
                 SeqIO.write(sequences, f, 'fasta')
         elif verbose:
-            info('"{}" discarded, not enough inputs ({}/{})\n'
-                 .format(marker, len(sequences), min_num_entries))
+            info('"{}" discarded, not enough inputs ({}/{})\n'.format(marker, len(sequences), min_num_entries))
 
 
 def msas(configs, key, input_folder, extension, output_folder, nproc=1, verbose=False):
@@ -2830,7 +2815,6 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                           args.min_len_protein, nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
             input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
-            inp_f = out_f
 
     if args.db_type == 'a':
         faa = load_input_files(args.input_folder, inp_bz2, args.proteome_extension, verbose=args.verbose)
@@ -2857,6 +2841,10 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                 gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension,
                                         args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
+
+    # check if inputs is empty
+    if not (len(input_faa) + len(input_fna)):
+        error('no inputs found, please check your params and inputs file extensions', exit=True)
 
     out_f = os.path.join(args.data_folder, 'markers')
     inputs2markers(inp_f, out_f, args.min_num_entries,
@@ -3100,8 +3088,8 @@ def phylophlan2():
     check_dependencies(configs, args.nproc, verbose=args.verbose)
     download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder, verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
-    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type, configs,
-                                           'db_dna', 'db_aa', verbose=args.verbose)
+    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
+                                            configs, 'db_dna', 'db_aa', verbose=args.verbose)
     if not args.db_type:
         args.db_type = db_type
 
