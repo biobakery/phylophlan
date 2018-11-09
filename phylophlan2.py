@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.24'
-__date__ = '25 October 2018'
+__version__ = '0.25'
+__date__ = '9 November 2018'
 
 
 import os
@@ -784,20 +784,21 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
 
 
 def remove_file(filename, path=None, verbose=False):
-    to_remove = ''
+    to_remove = None
 
     if os.path.isfile(filename):
         to_remove = filename
     elif os.path.isfile(os.path.join(path, filename)):
         to_remove = os.path.join(path, filename)
 
-    if os.path.isfile(to_remove):
-        if verbose:
-            info('Removing "{}"\n'.format(to_remove))
+    if to_remove:
+        if os.path.isfile(to_remove):
+            if verbose:
+                info('Removing "{}"\n'.format(to_remove))
 
-        os.remove(to_remove)
-    elif verbose:
-        error('cannot remove "{}", file not found'.format(to_remove))
+            os.remove(to_remove)
+        elif verbose:
+            error('cannot remove "{}", file not found'.format(to_remove))
 
 
 def remove_files(file_list, path=None, verbose=False):
@@ -1267,8 +1268,7 @@ def gene_markers_identification_rec(x):
             t0 = time.time()
             params, inp, db, out_fld, out, min_num_proteins, verbose = x
             info('Mapping "{}"\n'.format(inp))
-            cmd = compose_command(params, input_file=inp, database=db, output_path=out_fld,
-                                  output_file=out)
+            cmd = compose_command(params, input_file=inp, database=db, output_path=out_fld, output_file=out)
             inp_f = None
             out_f = sb.DEVNULL
 
@@ -1279,8 +1279,7 @@ def gene_markers_identification_rec(x):
                 out_f = open(cmd['stdout'], 'w')
 
             try:
-                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f,
-                              stderr=sb.DEVNULL, env=cmd['env'])
+                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
             except Exception as e:
                 terminating.set()
                 remove_file(cmd['output_file'], path=cmd['output_path'], verbose=verbose)
@@ -2454,15 +2453,14 @@ def resolve_polytomies_rec(x):
         terminating.set()
 
 
-def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_folder,
-                     nproc=1, verbose=False):
+def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_folder, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
     for inp in glob.iglob(os.path.join(input_alns, '*.aln')):
         marker, _ = os.path.splitext(os.path.basename(inp))
-        starting_tree = input_trees + marker + '.tre'
         out = marker + '.tre'
+        starting_tree = os.path.join(input_trees, out)
         model = sub_mod[marker]
 
         if os.path.isfile(starting_tree):
@@ -2471,11 +2469,9 @@ def refine_gene_tree(configs, key, sub_mod, input_alns, input_trees, output_fold
                (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.' + out))) and \
                (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.' + out))) and \
                (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.' + out))):
-                commands.append((configs[key], model, inp, starting_tree,
-                                 os.path.abspath(output_folder), out))
+                commands.append((configs[key], model, inp, starting_tree, os.path.abspath(output_folder), out))
         else:
-            error('starting tree "{}" not found in "{}", built from "{}"'
-                  .format(starting_tree, input_trees, inp))
+            error('starting tree "{}" not found in "{}", built from "{}"'.format(starting_tree, input_trees, inp))
 
     if commands:
         info('Refining {} gene trees\n'.format(len(commands)))
@@ -2811,8 +2807,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
         if args.db_type == 'a':
             out_f = os.path.join(args.data_folder, 'fake_proteomes')
-            fake_proteome(inp_f, out_f, args.genome_extension, args.proteome_extension,
-                          args.min_len_protein, nproc=args.nproc, verbose=args.verbose)
+            fake_proteome(inp_f, out_f, args.genome_extension, args.proteome_extension, args.min_len_protein,
+                          nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
             input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
@@ -2838,8 +2834,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                                             args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                 gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
                 out_f = os.path.join(args.data_folder, 'markers_aa')
-                gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension,
-                                        args.min_num_markers, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension, args.min_num_markers,
+                                        nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
 
     # check if inputs is empty
@@ -2851,8 +2847,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                    args.proteome_extension if args.db_type == 'a' else args.genome_extension, verbose=args.verbose)
     inp_f = out_f
     out_f = os.path.join(args.data_folder, 'msas')
-    msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a' else args.genome_extension,
-         out_f, nproc=args.nproc, verbose=args.verbose)
+    msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a' else args.genome_extension, out_f,
+         nproc=args.nproc, verbose=args.verbose)
     inp_f = out_f
 
     if args.mutation_rates:
@@ -2966,8 +2962,7 @@ class ReportHook():
                 estimated_minutes = int(estimated_time / 60.0)
                 estimated_seconds = estimated_time - estimated_minutes * 60.0
                 status += ("{:3.2f} %  {:5.2f} MB/sec {:2.0f} min {:2.0f} sec "
-                           .format(percent_downloaded, byte_to_megabyte(download_rate),
-                                   estimated_minutes, estimated_seconds))
+                           .format(percent_downloaded, byte_to_megabyte(download_rate), estimated_minutes, estimated_seconds))
 
             status += "        \r"
             info(status)
@@ -3012,8 +3007,7 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
 
     # check the directory permissions
     if not os.access(folder, os.W_OK):
-        error('database directory "{}" is not writeable, please modify the permissions'
-              .format(folder), exit=True)
+        error('database directory "{}" is not writeable, please modify the permissions'.format(folder), exit=True)
 
     # download database
     tar_file = os.path.join(folder, db_name + ".tar")
@@ -3052,9 +3046,8 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
 
     # compare checksums
     if md5_tar != md5_md5:
-        error('MD5 checksums do not correspond, if this happens again, please remove the '
-              'database files in "{}" and re-run PhyloPhlAn2 so they will be re-downloaded'
-              .format(folder), exit=True)
+        error('MD5 checksums do not correspond, if this happens again, please remove the database files '
+              'in "{}" and re-run PhyloPhlAn2 so they will be re-downloaded'.format(folder), exit=True)
 
     # untar
     if verbose:
@@ -3089,7 +3082,7 @@ def phylophlan2():
     download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder, verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
     db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
-                                            configs, 'db_dna', 'db_aa', verbose=args.verbose)
+                                           configs, 'db_dna', 'db_aa', verbose=args.verbose)
     if not args.db_type:
         args.db_type = db_type
 
