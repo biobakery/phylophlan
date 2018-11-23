@@ -2790,7 +2790,7 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
 
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = None
-    input_faa = None
+    input_faa = {}
     inp_bz2 = os.path.join(args.data_folder, 'uncompressed')
     input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension, verbose=args.verbose)
 
