@@ -1503,7 +1503,7 @@ def gene_markers_extraction_rec(x):
                 info('"{}" generated in {}s\n'.format(out_file, int(t1 - t0)))
             else:
                 info('Not enough markers ({}/{}) found in "{}"\n'
-                     .format(len(out_file_seq), min_num_markers, b6o_file))
+                     .format(len_out_file_seq, min_num_markers, b6o_file))
         except Exception as e:
             terminating.set()
             remove_file(out_file)

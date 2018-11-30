@@ -193,6 +193,7 @@ def retrieve_refseq_url(gcx_id):
     for ff in files:
         if (folder + '_genomic.fna.gz') == ff:
             url = 'https://' + '/'.join([refseq_base_ftp_url, refseq_genomes_url, gcx_url, folder, ff])
+            break
 
     return url
 
