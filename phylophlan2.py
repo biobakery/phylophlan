@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.25'
-__date__ = '9 November 2018'
+__version__ = '0.26'
+__date__ = '1 January 2019'
 
 
 import os
@@ -100,8 +100,11 @@ def read_params():
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
-                       help="Build a phylogenetic tree using only genomes and/or proteomes provided by the user")
-    group.add_argument('-c', '--clean', metavar='PROJECT_NAME', type=str, default=None,
+                       help="")
+    group.add_argument('-o', '--output', type=str, default=None,
+                       help=("Output folder name, otherwise it will be the name of the input folder concatenated with "
+                             "the name of the database used"))
+    group.add_argument('-c', '--clean', type=str, default=None,
                        help="Clean the output and partial data produced for the specified project")
 
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use.")
@@ -326,19 +329,22 @@ def check_args(args, command_line_arguments, verbose=True):
     if input_folder_setted:
         args.input_folder = os.path.join(args.input_folder, project_name)
 
-    args.output_folder = os.path.join(args.output_folder, project_name + '_' + args.database)
+    if not args.output:
+        args.output = os.path.join(args.output_folder, project_name + '_' + args.database)
+    elif args.output_folder:
+        args.output = os.path.join(args.output_folder, args.output)
 
     if not args.data_folder:
-        args.data_folder = os.path.join(args.output_folder, 'tmp')
+        args.data_folder = os.path.join(args.output, 'tmp')
 
     if args.clean:
         check_and_create_folder(args.data_folder, exit=True, verbose=verbose)
-        check_and_create_folder(args.output_folder, exit=True, verbose=verbose)
+        check_and_create_folder(args.output, exit=True, verbose=verbose)
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
     args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=True, verbose=verbose)
-    check_and_create_folder(args.output_folder, create=True, exit=True, verbose=verbose)
+    check_and_create_folder(args.output, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
     if not args.genome_extension.startswith('.'):
@@ -2852,8 +2858,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     inp_f = out_f
 
     if args.mutation_rates:
-        mr_out_d = os.path.join(args.output_folder, 'mutation_rates')
-        mr_out_f = os.path.join(args.output_folder, 'mutation_rates.tsv')
+        mr_out_d = os.path.join(args.output, 'mutation_rates')
+        mr_out_f = os.path.join(args.output, 'mutation_rates.tsv')
         mutation_rates(inp_f, mr_out_d, nproc=args.nproc, verbose=args.verbose)
         aggregate_mutation_rates(mr_out_d, mr_out_f, verbose=args.verbose)
 
@@ -2910,21 +2916,20 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         if not all_inputs:
             all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
 
-        out_f = os.path.join(args.output_folder, project_name + '_concatenated.aln')
+        out_f = os.path.join(args.output, project_name + '_concatenated.aln')
         concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
 
     out_f = project_name + '.tre'
-    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output_folder), out_f, nproc=args.nproc, verbose=args.verbose)
+    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output), out_f, nproc=args.nproc, verbose=args.verbose)
 
     if 'tree2' in configs:
         outt = project_name + '_resolved.tre'
-        resolve_polytomies(os.path.join(args.output_folder, out_f), os.path.join(args.output_folder, outt),
-                           nproc=args.nproc, verbose=args.verbose)
-        out_f = os.path.join(args.output_folder, outt)
+        resolve_polytomies(os.path.join(args.output, out_f), os.path.join(args.output, outt), nproc=args.nproc, verbose=args.verbose)
+        out_f = os.path.join(args.output, outt)
 
-        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output_folder),
-                         project_name + '_refined.tre', nproc=args.nproc, verbose=args.verbose)
+        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output), project_name + '_refined.tre',
+                         nproc=args.nproc, verbose=args.verbose)
 
 
 def byte_to_megabyte(byte):
@@ -3074,7 +3079,7 @@ def phylophlan2():
         clean_all(args.databases_folder, verbose=args.verbose)
 
     if args.clean:
-        clean_project(args.data_folder, args.output_folder, verbose=args.verbose)
+        clean_project(args.data_folder, args.output, verbose=args.verbose)
 
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
