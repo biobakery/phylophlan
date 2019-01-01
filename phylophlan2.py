@@ -163,12 +163,11 @@ def read_params():
                          '"not_variant" will remove columns that have at least one '
                          'nucleotide/amino acid appearing above a certain threshold (see '
                          '"--not_variant_threshold" parameter); "greedy" performs both '
-                         '"gappy" and "not_variant". Default is "None", no trimming will '
-                         'be performed'))
+                         '"gappy" and "not_variant"; "None", no trimming will be performed'))
     p.add_argument('--not_variant_threshold', type=float,
                    default=NOT_VARIANT_THRESHOLD,
                    help=('Specify the value used to consider a column not variant when '
-                         '"--trim not_variant" is specified. Default is 0.95'))
+                         '"--trim not_variant" is specified'))
     p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES,
                    help=('Specify which function to use to compute the number of positions '
                          'to retain from single marker MSAs for the concatenated MSA. '
@@ -178,7 +177,7 @@ def read_params():
                          'the top 700; "fivehundred" return the top 500; "threehundred" '
                          'return the top 300; "onehundred" return the top 100 positions; '
                          '"fifty" return the top 50 positions; "twentyfive" return the top '
-                         '25 positions; None, the complete alignment will be used'))
+                         '25 positions; "None", the complete alignment will be used'))
     p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION,
                    help=('Define the amount of unknowns ("X" and "-") allowed in each '
                          'column of the MSA of the markers'))
@@ -1297,6 +1296,7 @@ def gene_markers_identification_rec(x):
             info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
         except Exception as e:
             terminating.set()
+            remove_file(out, out_fld, verbose=verbose)
             error(str(e), init_new_line=True)
             error('error while mapping\n    {}'.format('\n    '.join([str(a) for a in x])),
                   init_new_line=True)
