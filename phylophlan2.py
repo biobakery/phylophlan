@@ -101,12 +101,12 @@ def read_params():
     group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
                        help="")
-    group.add_argument('-o', '--output', type=str, default=None,
-                       help=("Output folder name, otherwise it will be the name of the input folder concatenated with "
-                             "the name of the database used"))
     group.add_argument('-c', '--clean', type=str, default=None,
                        help="Clean the output and partial data produced for the specified project")
 
+    p.add_argument('-o', '--output', type=str, default=None,
+                   help=("Output folder name, otherwise it will be the name of the input folder concatenated with "
+                         "the name of the database used"))
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use.")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help=('Specify the type of the database of markers, where "n" stands '
