@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.07'
-__date__ = '21 August 2018'
+__version__ = '0.08'
+__date__ = '7 January 2019'
 
 
 import sys
@@ -275,7 +275,7 @@ def phylophlan_get_reference():
     args = read_params()
 
     if args.verbose:
-        info('nphylophlan_get_reference.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_get_reference.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
