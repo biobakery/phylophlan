@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.03'
-__date__ = '2 October 2018'
+__version__ = '0.04'
+__date__ = '13 February 2019'
 
 
 import sys
@@ -18,16 +18,17 @@ import time
 import subprocess as sb
 import multiprocessing as mp
 import bz2
+import hashlib
 
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
-THRESHOLD = 0.1
+THRESHOLD = 0.05
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
 MAPPING_FILE = "db_sgbs_4930_sgb2taxa.tsv.bz2"
-DATABASE_FILE = "db_sgbs_4930_k21_s10000.msh"
+DATABASE_FILE = "db_sgbs_4930_k21_s10000"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -72,7 +73,7 @@ def read_params():
                    help="Input folder containing the metagnomic bins to be indexed")
     p.add_argument('-o', '--output_prefix', type=str, default=None,
                    help=("Prefix used for the output folders: indexed bins, distance estimations. If not specified, "
-                         "the input fodler will be used"))
+                         "the input folder will be used"))
     p.add_argument('-d', '--database', type=str, default=DATABASE_FILE,
                    help="Specify the name of the database, if not found locally will be automatically downloaded")
     p.add_argument('-m', '--mapping', type=str, default=MAPPING_FILE,
@@ -297,6 +298,8 @@ def sketching_dists_filter_rec(x):
                 t1 = time.time()
                 info('"{}.msh" generated in {}s\n'.format(out_sketch, int(t1 - t0)))
 
+#######
+
             # dist
             if not os.path.isfile(out_dist):
                 t0 = time.time()
@@ -329,6 +332,8 @@ def sketching_dists_filter_rec(x):
                 t1 = time.time()
                 info('"{}" generated in {}s\n'.format(out_filter, int(t1 - t0)))
 
+#######
+
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -336,6 +341,38 @@ def sketching_dists_filter_rec(x):
             raise
     else:
         terminating.set()
+
+
+def check_md5(tar_file, md5_file):
+    md5_md5 = None
+    md5_tar = None
+
+    if os.path.isfile(md5_file):
+        with open(md5_file) as f:
+            for row in f:
+                md5_md5 = row.strip().split(' ')[0]
+    else:
+        error('file "{}" not found!\n'.format(md5_file))
+
+    # compute MD5 of .tar.bz2
+    if os.path.isfile(tar_file):
+        hash_md5 = hashlib.md5()
+
+        with open(tar_file, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+
+        md5_tar = hash_md5.hexdigest()[:32]
+    else:
+        error('file "{}" not found!\n'.format(tar_file))
+
+    if (md5_tar is None) or (md5_md5 is None):
+        error("MD5 checksums not found, something went wrong!", exit=True)
+
+    # compare checksums
+    if md5_tar != md5_md5:
+        error("MD5 checksums do not correspond! If this happens again, you should remove the database files and "
+                 "rerun MetaPhlAn2 so they are re-downloaded", exit=True)
 
 
 def phylophlan_metagenomic():
@@ -347,7 +384,33 @@ def phylophlan_metagenomic():
 
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, DATABASE_FILE), args.database, verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.tar.bz2'), args.database + '.tar.bz2', verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.md5'), args.database + '.md5', verbose=args.verbose)
+    check_md5(args.database + '.tar.bz2', args.database + '.md5')
+
+    # untar
+    try:
+        tarfile_handle = tarfile.open(tar_file)
+        tarfile_handle.extractall(path=folder)
+        tarfile_handle.close()
+    except EnvironmentError:
+        sys.stderr.write("Warning: Unable to extract {}.\n".format(tar_file))
+
+    # uncompress sequences
+    bz2_file = os.path.join(folder, "mpa_" + download_file_name + ".fna.bz2")
+    fna_file = os.path.join(folder, "mpa_" + download_file_name + ".fna")
+
+    if not os.path.isfile(fna_file):
+        sys.stderr.write('\n\nDecompressing {} into {}\n'.format(bz2_file, fna_file))
+
+        with open(fna_file, 'wb') as fna_h, bz2.BZ2File(bz2_file, 'rb') as bz2_h:
+            for data in iter(lambda: bz2_h.read(100 * 1024), b''):
+                fna_h.write(data)
+
+
+
+#######
+
     download(os.path.join(DOWNLOAD_URL, MAPPING_FILE), args.mapping, verbose=args.verbose)
     sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, args.threshold,
                            nproc=args.nproc, verbose=args.verbose)
@@ -366,8 +429,8 @@ def phylophlan_metagenomic():
                 taxa2bin[taxa] = [bc]
 
     with open(args.output_prefix + '_filter_{}.tsv'.format(args.threshold), 'w') as f:
-        info('taxnomy\tnum_bin\tbin_list_tab_separated\n', init_new_line=True)  # header
-        f.write('taxnomy\tnum_bin\tbin_list_tab_separated\n')  # header
+        info('#taxnomy\tnum_bins\tbins_list_tab_separated\n', init_new_line=True)  # header
+        f.write('#taxnomy\tnum_bin\tbins_list_tab_separated\n')  # header
 
         for taxa, bins in taxa2bin.items():
             info('{}\t{}\t{}\n'.format(taxa, len(bins), '\t'.join(bins)))
