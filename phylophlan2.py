@@ -116,15 +116,12 @@ def read_params():
                    help=('The configuration file to load, four ready-to-use configuration '
                          'files can be generated using the "write_default_configs.sh" '
                          'script present in the "configs" folder'))
-
-    group = p.add_mutually_exclusive_group()
-    group.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES,
+    p.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES, required=True,
                        help=('Specify the "diversity" of phylogeny to build in order to '
                              'automatically adjust some parameters. Values can be: '
                              '"low": for genus-/species-/strain-level phylogenies; '
                              '"medium": for class-/order-level phylogenies; '
                              '"high": for tree-of-life size phylogenies'))
-    group.add_argument('--meta', action='store_true', default=False, help="")  # to implement!!!
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--accurate', action='store_true', default=False,
@@ -290,9 +287,6 @@ def check_args(args, command_line_arguments, verbose=True):
         error('-d/--database must be specified')
         database_list(args.databases_folder, exit=True)
 
-    if not args.diversity and not args.meta:  # --diversity or --meta must be specified
-        error('--diversity or --meta must be specified', exit=True)
-
     input_folder_setted = False
 
     if args.input:
@@ -409,12 +403,8 @@ def check_args(args, command_line_arguments, verbose=True):
             fragmentary_threshold = 0.65
             not_variant_threshold = 0.95
 
-    if args.meta:  # params for phylogenetic placement of metagenomic contigs
-        pass
-
     if verbose:
-        info('"{}" preset\n'.format('meta' if args.meta else
-                                    '{}-{}'.format(args.diversity,
+        info('"{}" preset\n'.format('{}-{}'.format(args.diversity,
                                                    'accurate' if args.accurate else 'fast' if args.fast else 'none')))
 
     # check substitution model
@@ -3091,10 +3081,7 @@ def phylophlan2():
     if not args.db_type:
         args.db_type = db_type
 
-    if not args.meta:  # standard phylogeny reconstruction
-        standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
-    else:  # metagenomic application
-        pass
+    standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa)
 
 
 if __name__ == '__main__':
