@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.04'
-__date__ = '13 February 2019'
+__version__ = '0.05'
+__date__ = '28 February 2019'
 
 
 import sys
@@ -19,14 +19,17 @@ import subprocess as sb
 import multiprocessing as mp
 import bz2
 import hashlib
+import numpy as np
+import tarfile
+import datetime
 
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
-THRESHOLD = 0.05
-DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
+HOW_MANY = "10"
+DOWNLOAD_URL = ""
 MAPPING_FILE = "db_sgbs_4930_sgb2taxa.tsv.bz2"
 DATABASE_FILE = "db_sgbs_4930_k21_s10000"
 DATABASE_FOLDER = 'phylophlan_databases/'
@@ -81,13 +84,14 @@ def read_params():
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))
-    p.add_argument('-t', '--threshold', type=float, choices=[Range(0.0, 1.0)], default=THRESHOLD,
-                   help="Used to determine the closest hits from the distance estimation")
-
+    p.add_argument('-n', '--how_many', type=str, default=HOW_MANY,
+                   help='Specify the number of SGBs to report in the output; "all" is a special value to report all the SGBs')
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use")
     p.add_argument('--database_folder', type=str, default=DATABASE_FOLDER,
                    help="Path to the folder that contains the database file")
-
+    p.add_argument('--only_input', action='store_true', default=False,
+                   help="If specified")
+    p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrites the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
@@ -127,7 +131,21 @@ def check_params(args, verbose=False):
             if verbose:
                 info('Setting --database_folder to "{}"\n'.format(args.database_folder))
         else:
-            error('"{}" folder not found, neither in "{}"'.format(args.database_folder, os.path.dirname(os.path.abspath(__file__))), exit=True)
+            error('"{}" folder not found, neither in "{}"'.format(args.database_folder, os.path.dirname(os.path.abspath(__file__))),
+                  exit=True)
+
+    if args.how_many != 'all':
+        try:
+            how_many = int(args.how_many)
+        except Exception as e:
+            if verbose:
+                info('Unrecognized value "{}", setting -n/--how_many to default value "{}"'.format(args.how_many, HOW_MANY))
+
+            args.how_many = HOW_MANY
+
+        args.how_many = how_many
+    else:
+        args.how_many = -1
 
     args.database = os.path.join(args.database_folder, args.database)
     args.mapping = os.path.join(args.database_folder, args.mapping)
@@ -244,23 +262,14 @@ def initt(terminating_):
     terminating = terminating_
 
 
-def sketching_dists_filter(input_folder, input_extension, output_prefix, database, threshold, nproc=1, verbose=False):
+def sketching_dists_filter(input_folder, input_extension, output_prefix, database, nproc=1, verbose=False):
     commands = []
-    out_filter_fld = os.path.join(output_prefix + "_filter_{}".format(threshold))
-
-    if not os.path.exists(out_filter_fld):
-        create_folder(out_filter_fld, verbose=verbose)
 
     for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
         out = os.path.splitext(os.path.basename(i))[0]
         out_sketch = os.path.join(output_prefix + "_sketches", out)
-        out_dist = os.path.join(output_prefix + "_dists", out + ".tsv")
-        out_filter = os.path.join(out_filter_fld, out + ".tsv")
-
-        if os.path.isfile(out_sketch + ".msh") and os.path.isfile(out_dist) and os.path.isfile(out_filter):
-            continue
-
-        commands.append((i, out_sketch, out_dist, out_filter, database, threshold, verbose))
+        out_dist = os.path.join(output_prefix + "_dists", out)
+        commands.append((i, out_sketch, out_dist, database, verbose))
 
     if commands:
         terminating = mp.Event()
@@ -272,18 +281,20 @@ def sketching_dists_filter(input_folder, input_extension, output_prefix, databas
                 error(str(e), init_new_line=True)
                 error('sketching crashed', init_new_line=True, exit=True)
     else:
-        info('Inputs already sketched, dist, and filtered\n')
+        info('No inputs found!\n')
 
 
 def sketching_dists_filter_rec(x):
     if not terminating.is_set():
         try:
-            inp_bin, out_sketch, out_dist, out_filter, db, thr, verbose = x
+            inp_bin, out_sketch, dist_fld, db, verbose = x
 
-            # sketching
-            if not os.path.isfile(out_sketch + ".msh"):
+            if verbose:
                 t0 = time.time()
-                info('Sketching "{}"\n'.format(inp_bin))
+                info('Analyzing "{}"\n'.format(inp_bin))
+
+            # sketch
+            if not os.path.isfile(out_sketch + ".msh"):
                 cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
 
                 try:
@@ -295,45 +306,28 @@ def sketching_dists_filter_rec(x):
                     error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                     raise
 
-                t1 = time.time()
-                info('"{}.msh" generated in {}s\n'.format(out_sketch, int(t1 - t0)))
-
-#######
-
             # dist
-            if not os.path.isfile(out_dist):
-                t0 = time.time()
-                info('Computing distance for "{}"\n'.format(out_sketch + ".msh"))
-                cmd = ['mash', 'dist', db, out_sketch + ".msh"]
+            for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
+                dist_file = os.path.join(dist_fld, os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
 
-                try:
-                    sb.check_call(cmd, stdout=open(out_dist, 'w'), stderr=sb.DEVNULL)
-                except Exception as e:
-                    terminating.set()
-                    remove_file(out_dist, verbose=verbose)
-                    error(str(e), init_new_line=True)
-                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                    raise
+                if not os.path.isdir(dist_fld):
+                    create_folder(dist_fld)
 
+                if not os.path.isfile(dist_file):
+                    cmd = ['mash', 'dist', sgb_msh_idx, out_sketch + ".msh"]
+
+                    try:
+                        sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
+                    except Exception as e:
+                        terminating.set()
+                        remove_file(dist_file, verbose=verbose)
+                        error(str(e), init_new_line=True)
+                        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                        raise
+
+            if verbose:
                 t1 = time.time()
-                info('"{}" generated in {}s\n'.format(out_dist, int(t1 - t0)))
-
-            # filter
-            if not os.path.isfile(out_filter):
-                t0 = time.time()
-                info('Filtering "{}"\n'.format(out_dist))
-                with open(out_dist) as fin, open(out_filter, 'w') as fout:
-                    for r in fin:
-                        rc = r.strip().split('\t')  # database-ID, input-ID, mash-distance, p-value, #-shared-hashes
-
-                        if float(rc[2]) <= thr:
-                            fout.write(rc[0] + '\n')
-
-                t1 = time.time()
-                info('"{}" generated in {}s\n'.format(out_filter, int(t1 - t0)))
-
-#######
-
+                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -343,7 +337,7 @@ def sketching_dists_filter_rec(x):
         terminating.set()
 
 
-def check_md5(tar_file, md5_file):
+def check_md5(tar_file, md5_file, verbose=False):
     md5_md5 = None
     md5_tar = None
 
@@ -354,7 +348,7 @@ def check_md5(tar_file, md5_file):
     else:
         error('file "{}" not found!\n'.format(md5_file))
 
-    # compute MD5 of .tar.bz2
+    # compute MD5 of .tar
     if os.path.isfile(tar_file):
         hash_md5 = hashlib.md5()
 
@@ -372,7 +366,54 @@ def check_md5(tar_file, md5_file):
     # compare checksums
     if md5_tar != md5_md5:
         error("MD5 checksums do not correspond! If this happens again, you should remove the database files and "
-                 "rerun MetaPhlAn2 so they are re-downloaded", exit=True)
+              "rerun MetaPhlAn2 so they are re-downloaded", exit=True)
+
+
+def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
+    # untar
+    try:
+        tarfile_handle = tarfile.open(tar_file)
+        tarfile_handle.extractall(path=folder)
+        tarfile_handle.close()
+    except EnvironmentError:
+        error('Warning: Unable to extract "{}".\n'.format(tar_file))
+
+    # uncompress mash indexes
+    commands = [(os.path.join(folder, f), os.path.join(folder, f.replace('.bz2', '')), verbose)
+                for f in os.listdir(folder)
+                if not os.path.isfile(os.path.join(folder, f.replace('.bz2', '')))]
+
+    if commands:
+        if verbose:
+            info('Decompressing {} mash indexes\n'.format(len(commands)))
+
+        terminating = mp.Event()
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(decompress_rec, commands, chunksize=1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('untar_and_decompress crashed', init_new_line=True, exit=True)
+    else:
+        info('Mash indexes already decompressed\n')
+
+
+def decompress_rec(x):
+    if not terminating.is_set():
+        try:
+            bz2_file, msh_file, verbose = x
+
+            with open(msh_file, 'wb') as msh_h, bz2.BZ2File(bz2_file, 'rb') as bz2_h:
+                for data in iter(lambda: bz2_h.read(100 * 1024), b''):
+                    msh_h.write(data)
+        except Exception as e:
+            terminating.set()
+            error(str(e), init_new_line=True)
+            error('error while decompress_rec\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
+    else:
+        terminating.set()
 
 
 def phylophlan_metagenomic():
@@ -384,59 +425,51 @@ def phylophlan_metagenomic():
 
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.tar.bz2'), args.database + '.tar.bz2', verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.md5'), args.database + '.md5', verbose=args.verbose)
-    check_md5(args.database + '.tar.bz2', args.database + '.md5')
 
-    # untar
-    try:
-        tarfile_handle = tarfile.open(tar_file)
-        tarfile_handle.extractall(path=folder)
-        tarfile_handle.close()
-    except EnvironmentError:
-        sys.stderr.write("Warning: Unable to extract {}.\n".format(tar_file))
+    # if mashing vs. the SGBs
+    if not args.only_input:
+        download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.tar'), args.database + '.tar', verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.md5'), args.database + '.md5', verbose=args.verbose)
+        check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
+        untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, MAPPING_FILE), args.mapping, verbose=args.verbose)
+    else:  # mashing inputs against themselves
+        pass
 
-    # uncompress sequences
-    bz2_file = os.path.join(folder, "mpa_" + download_file_name + ".fna.bz2")
-    fna_file = os.path.join(folder, "mpa_" + download_file_name + ".fna")
+    sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
 
-    if not os.path.isfile(fna_file):
-        sys.stderr.write('\n\nDecompressing {} into {}\n'.format(bz2_file, fna_file))
+    # SGBs mapping file
+    sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
 
-        with open(fna_file, 'wb') as fna_h, bz2.BZ2File(bz2_file, 'rb') as bz2_h:
-            for data in iter(lambda: bz2_h.read(100 * 1024), b''):
-                fna_h.write(data)
+    # output
+    binn_2_sgb = {}
+    dists_folder = args.output_prefix + "_dists"
 
+    for binn in os.listdir(dists_folder):
+        binn_2_sgb[binn] = []
+        binn_folder = os.path.join(dists_folder, binn)
 
+        for sgb in os.listdir(binn_folder):
+            avg_dist = np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))])
+            binn_2_sgb[binn].append((sgb.replace('.tsv', ''), avg_dist))
 
-#######
+    output_file = args.output_prefix + '.tsv'
 
-    download(os.path.join(DOWNLOAD_URL, MAPPING_FILE), args.mapping, verbose=args.verbose)
-    sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, args.threshold,
-                           nproc=args.nproc, verbose=args.verbose)
+    if os.path.isfile(output_file) and (not args.overwrite):
+        timestamp = str(datetime.datetime.today().strftime('%Y%m%d%H%M%S'))
+        output_file = args.output_prefix + '_' + timestamp + '.tsv'
 
-    # load mapping file
-    sgb2taxa = dict([r.strip().split('\t') for r in bz2.open(args.mapping, 'rt')])
-    taxa2bin = {}
+    with open(output_file, 'w') as f:
+        f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many if args.how_many != -1 else len(sgb_dists)) + '\n')
 
-    for b in glob.iglob(args.output_prefix + '_filter_{}/*.tsv'.format(args.threshold)):
-        bc = b.replace(args.output_prefix + '_filter_{}/'.format(args.threshold), '').replace('.tsv', '')
+        for binn, sgb_dists in binn_2_sgb.items():
+            f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
+                                                                 i[0],
+                                                                 sgb_2_info[i[0]][3],
+                                                                 i[1])
+                                        for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
 
-        for taxa in set([sgb2taxa[r.strip()] for r in open(b)]):
-            if taxa in taxa2bin:
-                taxa2bin[taxa].append(bc)
-            else:
-                taxa2bin[taxa] = [bc]
-
-    with open(args.output_prefix + '_filter_{}.tsv'.format(args.threshold), 'w') as f:
-        info('#taxnomy\tnum_bins\tbins_list_tab_separated\n', init_new_line=True)  # header
-        f.write('#taxnomy\tnum_bin\tbins_list_tab_separated\n')  # header
-
-        for taxa, bins in taxa2bin.items():
-            info('{}\t{}\t{}\n'.format(taxa, len(bins), '\t'.join(bins)))
-            f.write('{}\t{}\t{}\n'.format(taxa, len(bins), '\t'.join(bins)))
-
-    info('Results saved to "{}_filter_{}.tsv"\n'.format(args.output_prefix, args.threshold), init_new_line=True)
+    info('Results saved to "{}"'.format(output_file), init_new_line=True)
 
 
 if __name__ == '__main__':
