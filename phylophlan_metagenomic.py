@@ -57,18 +57,6 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
         sys.exit(exit_value)
 
 
-class Range(object):
-    def __init__(self, start, end):
-        self.start = start
-        self.end = end
-
-    def __eq__(self, other):
-        return self.start <= other <= self.end
-
-    def __repr__(self):
-        return "({},{})".format(self.start, self.end)
-
-
 def read_params():
     p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
@@ -154,12 +142,12 @@ def check_params(args, verbose=False):
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
 
     if verbose:
-        info('Arguments: {}\n'.format(vars(args)))
+        info('Arguments: {}\n'.format(vars(args)), init_new_line=True)
 
 
 def check_dependencies(verbose=False):
     if verbose:
-        info('Checking "mash"\n')
+        info('Checking "mash"\n', init_new_line=True)
 
     try:
         sb.check_call(['mash'], stdout=sb.DEVNULL, stderr=sb.DEVNULL)
