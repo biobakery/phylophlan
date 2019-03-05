@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.26'
-__date__ = '1 January 2019'
+__version__ = '0.27'
+__date__ = '5 March 2019'
 
 
 import os
@@ -625,7 +625,24 @@ def check_dependencies(configs, nproc, verbose=False):
                 out_f = open(cmd['stdout'], 'w')
 
             try:
-                sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
+                if 'diamond' in cmd['command_line']:
+                    stdout = sb.check_output(cmd['command_line'], env=cmd['env'])
+                    wrong = False
+
+                    # diamond before version 0.8.30 is not able to map with the blastx algorithm as they are missing
+                    # the --max-hsps param. According to the changelog:
+                    # 0.8.31 (1 Jan 2017) - removed --single-domain option and replaced by --max-hsps
+                    # phylophlan-users@googlegroups.com, subject: "phylophlan.fna is empty"
+                    for a, b in zip(stdout.decode().strip().split(' ')[-1].split('.'), [0, 8, 31]):
+                        if a != str(b):
+                        wrong = wrong or (int(a) < b)
+                        break
+
+                    if wrong:
+                        error('the "{}" of diamond is not supported, please update it to at least version 0.8.31'.format(stdout),
+                              init_new_line=True, exit=True)
+                else:
+                    sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('program not installed or not present in the system path\n'
