@@ -132,8 +132,6 @@ def check_params(args, verbose=False):
             args.how_many = HOW_MANY
 
         args.how_many = how_many
-    else:
-        args.how_many = -1
 
     args.database = os.path.join(args.database_folder, args.database)
     args.mapping = os.path.join(args.database_folder, args.mapping)
@@ -424,6 +422,9 @@ def phylophlan_metagenomic():
     else:  # mashing inputs against themselves
         pass
 
+    if args.how_many == 'all':
+        args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
+
     sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
 
     # SGBs mapping file
@@ -448,7 +449,7 @@ def phylophlan_metagenomic():
         output_file = args.output_prefix + '_' + timestamp + '.tsv'
 
     with open(output_file, 'w') as f:
-        f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many if args.how_many != -1 else len(sgb_dists)) + '\n')
+        f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
 
         for binn, sgb_dists in binn_2_sgb.items():
             f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
