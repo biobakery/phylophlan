@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.06'
-__date__ = '5 March 2019'
+__version__ = '0.07'
+__date__ = '6 March 2019'
 
 
 import sys
@@ -141,6 +141,8 @@ def check_params(args, verbose=False):
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)), init_new_line=True)
+
+    return (args.database, args.mapping)
 
 
 def check_dependencies(verbose=False):
@@ -357,12 +359,18 @@ def check_md5(tar_file, md5_file, verbose=False):
 
 def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
     # untar
-    try:
-        tarfile_handle = tarfile.open(tar_file)
-        tarfile_handle.extractall(path=folder)
-        tarfile_handle.close()
-    except EnvironmentError:
-        error('Warning: Unable to extract "{}".\n'.format(tar_file))
+    if not os.path.isdir(folder):
+        try:
+            if verbose:
+                info('Untar {} mash database\n'.format(tar_file))
+
+            tarfile_handle = tarfile.open(tar_file)
+            tarfile_handle.extractall(path=folder)
+            tarfile_handle.close()
+        except EnvironmentError:
+            error('Warning: Unable to extract "{}".\n'.format(tar_file))
+    elif verbose:
+        info('Mash database already untarred\n')
 
     # uncompress mash indexes
     commands = [(os.path.join(folder, f), os.path.join(folder, f.replace('.bz2', '')), verbose)
@@ -381,7 +389,7 @@ def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('untar_and_decompress crashed', init_new_line=True, exit=True)
-    else:
+    elif verbose:
         info('Mash indexes already decompressed\n')
 
 
@@ -409,16 +417,16 @@ def phylophlan_metagenomic():
         info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
-    check_params(args, verbose=args.verbose)
+    db, mapp = check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
 
     # if mashing vs. the SGBs
     if not args.only_input:
-        download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.tar'), args.database + '.tar', verbose=args.verbose)
-        download(os.path.join(DOWNLOAD_URL, DATABASE_FILE + '.md5'), args.database + '.md5', verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, db + '.tar'), args.database + '.tar', verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, db + '.md5'), args.database + '.md5', verbose=args.verbose)
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
-        download(os.path.join(DOWNLOAD_URL, MAPPING_FILE), args.mapping, verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, mapp), args.mapping, verbose=args.verbose)
     else:  # mashing inputs against themselves
         pass
 
@@ -427,20 +435,24 @@ def phylophlan_metagenomic():
 
     sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
 
-    # SGBs mapping file
-    sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
+    # # SGBs mapping file
+    # if args.verbose:
+    #     info('Loading SGB mapping file\n')
+
+    # sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
 
     # output
-    binn_2_sgb = {}
+    if args.verbose:
+        info('Loading mash dist files\n')
+
     dists_folder = args.output_prefix + "_dists"
+    binn_2_sgb = dict([(b, None) for b in os.listdir(dists_folder)])
 
     for binn in os.listdir(dists_folder):
-        binn_2_sgb[binn] = []
         binn_folder = os.path.join(dists_folder, binn)
-
-        for sgb in os.listdir(binn_folder):
-            avg_dist = np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))])
-            binn_2_sgb[binn].append((sgb.replace('.tsv', ''), avg_dist))
+        binn_2_sgb[binn] = [(sgb.replace('.tsv', ''),
+                             np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))]))
+                            for sgb in os.listdir(binn_folder)]
 
     output_file = args.output_prefix + '.tsv'
 
@@ -448,22 +460,26 @@ def phylophlan_metagenomic():
         timestamp = str(datetime.datetime.today().strftime('%Y%m%d%H%M%S'))
         output_file = args.output_prefix + '_' + timestamp + '.tsv'
 
+    if args.verbose:
+        info('Writing output file\n')
+
     with open(output_file, 'w') as f:
         f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
 
         for binn, sgb_dists in binn_2_sgb.items():
-            f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
-                                                                 i[0],
-                                                                 sgb_2_info[i[0]][3],
-                                                                 i[1])
+            # f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
+            #                                                      i[0],
+            #                                                      sgb_2_info[i[0]][3],
+            #                                                      i[1])
+            #                             for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
+            f.write('\t'.join([binn] + ["SGB_{}:{}".format(i[0], i[1])
                                         for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
-
-    info('Results saved to "{}"'.format(output_file), init_new_line=True)
+    info('Results saved to "{}"\n'.format(output_file))
 
 
 if __name__ == '__main__':
     t0 = time.time()
     phylophlan_metagenomic()
     t1 = time.time()
-    info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
+    info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
