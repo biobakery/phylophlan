@@ -250,6 +250,62 @@ def initt(terminating_):
     terminating = terminating_
 
 
+def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
+    commands = []
+
+    for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
+        out = os.path.splitext(os.path.basename(i))[0]
+        out_sketch = os.path.join(output_prefix + "_sketches", out)
+        commands.append((i, out_sketch, verbose))
+
+    if commands:
+        terminating = mp.Event()
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(sketching_inputs_for_input_input_dist_rec, commands, chunksize=1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('sketching crashed', init_new_line=True, exit=True)
+    else:
+        info('No inputs found!\n')
+
+
+def sketching_inputs_for_input_input_dist_rec(x):
+    if not terminating.is_set():
+        try:
+            inp_bin, out_sketch, verbose = x
+
+            if verbose:
+                t0 = time.time()
+                info('Analyzing "{}"\n'.format(inp_bin))
+
+            # sketch
+            if not os.path.isfile(out_sketch + ".msh"):
+                cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
+
+                try:
+                    sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+                except Exception as e:
+                    terminating.set()
+                    remove_file(out_sketch + ".msh", verbose=verbose)
+                    error(str(e), init_new_line=True)
+                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                    raise
+
+            if verbose:
+                t1 = time.time()
+                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
+
+        except Exception as e:
+            terminating.set()
+            error(str(e), init_new_line=True)
+            error('error while sketching disting filtering\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
+    else:
+        terminating.set()
+
+
 def sketching_dists_filter(input_folder, input_extension, output_prefix, database, nproc=1, verbose=False):
     commands = []
 
@@ -428,7 +484,8 @@ def phylophlan_metagenomic():
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
         download(os.path.join(DOWNLOAD_URL, mapp), args.mapping, verbose=args.verbose)
     else:  # mashing inputs against themselves
-        pass
+        sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
+        args.database = args.output_prefix + '_sketches'
 
     if args.how_many == 'all':
         args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
