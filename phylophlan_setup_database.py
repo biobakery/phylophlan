@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.08'
-__date__ = '21 August 2018'
+__version__ = '0.09'
+__date__ = '8 March 2019'
 
 
 import sys
@@ -108,7 +108,7 @@ def check_params(args, verbose=False):
 
             if verbose:
                 info('Setting output folder "{}"\n'.format(args.output))
-        elif not args.output.endswith(args.get_core_proteins):
+        elif os.path.isdir(args.output) and (not args.output.endswith(args.get_core_proteins)):
             args.output = os.path.join(args.output, args.get_core_proteins)
 
             if verbose:
