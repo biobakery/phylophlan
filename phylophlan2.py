@@ -159,7 +159,7 @@ def read_params():
     p.add_argument('--trim', default=None, choices=TRIM_CHOICES,
                    help=('Specify which type of trimming to perform: "gappy" will perform '
                          'what specified in the "trim" section of the configuration file '
-                         'to remove gappy columns (suggested, trimal --gappyout); '
+                         'to remove gappy columns (suggested, trimal -gappyout); '
                          '"not_variant" will remove columns that have at least one '
                          'nucleotide/amino acid appearing above a certain threshold (see '
                          '"--not_variant_threshold" parameter); "greedy" performs both '
