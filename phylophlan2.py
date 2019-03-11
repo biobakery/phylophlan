@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.27'
-__date__ = '5 March 2019'
+__version__ = '0.28'
+__date__ = '11 March 2019'
 
 
 import os
@@ -18,6 +18,7 @@ import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
 from Bio import SeqIO  # Biopython requires NumPy
+from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from Bio import AlignIO
@@ -818,8 +819,7 @@ def remove_files(file_list, path=None, verbose=False):
         remove_file(f, path=path, verbose=verbose)
 
 
-def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
-                  verbose=False):
+def init_database(database, databases_folder, db_type, params, key_dna, key_aa, verbose=False):
     db_dna, db_aa = None, None
 
     if not db_type:
@@ -831,12 +831,14 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa,
         d = None
 
         if os.path.isfile(fna) or os.path.isfile(fna_bz2):
-            d = Counter([len(set(r.seq)) for r in SeqIO.parse(fna if os.path.isfile(fna) else bz2.open(fna_bz2, 'rt'), "fasta")])
+            d = Counter([len(set(seq))
+                         for _, seq in SimpleFastaParser(open(fna) if os.path.isfile(fna) else bz2.open(fna_bz2, 'rt'), "fasta")])
         elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
-            d = Counter([len(set(r.seq)) for r in SeqIO.parse(faa if os.path.isfile(faa) else bz2.open(faa_bz2, 'rt'), "fasta")])
+            d = Counter([len(set(seq))
+                         for _, seq in SimpleFastaParser(open(faa) if os.path.isfile(faa) else bz2.open(faa_bz2, 'rt'), "fasta")])
         elif os.path.isdir(folder):
-            d = Counter([len(set(r.seq))
-                         for f in glob.iglob(folder) for r in SeqIO.parse(f if os.path.isfile(f) else bz2.open(f, 'rt'), "fasta")])
+            d = Counter([len(set(seq)) for f in glob.iglob(folder)
+                                       for _, seq in SimpleFastaParser(open(f) if os.path.isfile(f) else bz2.open(f, 'rt'), "fasta")])
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to "
                   "automatically detect the input database file(s)", exit=True)
@@ -1098,9 +1100,9 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 file_clean = os.path.splitext(os.path.basename(f))[0]
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
-                    with open(os.path.join(tmp_folder, file_clean), 'w') as g:
-                        with bz2.open(f, 'rt') as h:
-                            SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
+                    with open(os.path.join(tmp_folder, file_clean), 'w') as g, bz2.open(f, 'rt') as h:
+                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(open(h))),
+                                    g, "fasta")
                 elif verbose:
                     info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
@@ -1114,9 +1116,9 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
                 file_clean = os.path.splitext(os.path.basename(f))[0]
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
-                    with open(os.path.join(tmp_folder, file_clean), 'w') as g:
-                        with gzip.open(f, 'rt') as h:
-                            SeqIO.write(SeqIO.parse(h, "fasta"), g, "fasta")
+                    with open(os.path.join(tmp_folder, file_clean), 'w') as g, gzip.open(f, 'rt') as h:
+                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(open(h))),
+                                    g, "fasta")
                 elif verbose:
                     info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
@@ -1175,7 +1177,7 @@ def check_input_proteomes_rec(x):
         try:
             inp, min_len_protein, min_num_proteins, verbose = x
             info('Checking "{}"\n'.format(inp))
-            num_proteins = len([0 for seq_record in SeqIO.parse(inp, "fasta") if len(seq_record) >= min_len_protein])
+            num_proteins = len([1 for _, seq in SimpleFastaParser(open(inp)) if len(seq) >= min_len_protein])
 
             if num_proteins >= min_num_proteins:
                 return inp
@@ -1228,9 +1230,9 @@ def clean_input_proteomes_rec(x):
             # J = "Xle"; Leucine (L) or Isoleucine (I), used in mass-spec (NMR)
             # U = "Sec"; Selenocysteine
             # O = "Pyl"; Pyrrolysine
-            output = (SeqRecord(Seq(str(seq_record.seq).replace('B', 'X').replace('Z', 'X').replace('J', 'X').replace('U', 'X').replace('O', 'X')),
+            output = (SeqRecord(Seq(e[1].replace('B', 'X').replace('Z', 'X').replace('J', 'X').replace('U', 'X').replace('O', 'X')),
                                 id='{}_{}'.format(inp_clean, counter), description='')
-                      for counter, seq_record in enumerate(SeqIO.parse(inp, "fasta")) if seq_record.seq)
+                      for counter, e in enumerate(SimpleFastaParser(open(inp))) if e[1])
 
             with open(out, 'w') as f:
                 SeqIO.write(output, f, "fasta")
@@ -1481,30 +1483,30 @@ def gene_markers_extraction_rec(x):
 
                 contig2marker2b6o[contig][marker] = (start, end, rev)
 
-            for seq_record in SeqIO.parse(src_file, "fasta"):
-                if seq_record.id in contig2marker2b6o:
-                    for marker in contig2marker2b6o[seq_record.id]:
-                        s, e, rev = contig2marker2b6o[seq_record.id][marker]
-                        idd = '{}_{}:'.format(seq_record.id, marker)
-                        seq = seq_record.seq[s - 1:e]
+            for record in SimpleFastaParser(open(src_file)):
+                fid = record[0].split(' ')[0]
 
-                        if rev:
-                            idd += 'c'
-                            seq = seq.reverse_complement()
+                if fid not in contig2marker2b6o:
+                    continue
 
-                        out_file_seq.append(SeqRecord(seq, id='{}{}-{}'.format(idd, s, e), description=''))
+                for marker in contig2marker2b6o[fid]:
+                    s, e, rev = contig2marker2b6o[fid][marker]
+                    idd = '{}_{}:'.format(fid, marker)
+                    seq = record[1][s - 1:e]
 
-                        if frameshifts:
-                            if not rev:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s:e], id='{}{}-{}'.format(idd, s + 1, e),
-                                                              description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s + 1:e], id='{}{}-{}'.format(idd, s + 2, e),
-                                                              description=''))
-                            else:
-                                out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 1].reverse_complement(),
-                                                              id='{}{}-{}'.format(idd, s, e - 1), description=''))
-                                out_file_seq.append(SeqRecord(seq_record.seq[s - 1:e - 2].reverse_complement(),
-                                                              id='{}{}-{}'.format(idd, s, e - 2), description=''))
+                    if rev:
+                        idd += 'c'
+                        seq = seq.reverse_complement()
+
+                    out_file_seq.append(SeqRecord(seq, id='{}{}-{}'.format(idd, s, e), description=''))
+
+                    if frameshifts:
+                        if not rev:
+                            out_file_seq.append(SeqRecord(record[1][s:e], id='{}{}-{}'.format(idd, s + 1, e), description=''))
+                            out_file_seq.append(SeqRecord(record[1][s + 1:e], id='{}{}-{}'.format(idd, s + 2, e), description=''))
+                        else:
+                            out_file_seq.append(SeqRecord(record[1][s - 1:e - 1].reverse_complement(), id='{}{}-{}'.format(idd, s, e - 1), description=''))
+                            out_file_seq.append(SeqRecord(record[1][s - 1:e - 2].reverse_complement(), id='{}{}-{}'.format(idd, s, e - 2), description=''))
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
@@ -1560,9 +1562,9 @@ def fake_proteome_rec(x):
             proteome = []
             info('Generating "{}"\n'.format(inp))
 
-            for record in SeqIO.parse(inp, 'fasta'):
-                seq = record.seq
-                s, e = record.id.split(':')[-1].split('-')
+            for idd, seq in SimpleFastaParser(open(inp)):
+                idd = idd.split(' ')[0]
+                s, e = idd.split(':')[-1].split('-')
 
                 if s.startswith('c'):
                     s = s[1:]
@@ -1573,7 +1575,7 @@ def fake_proteome_rec(x):
                 seq_t = Seq.translate(seq, to_stop=True)
 
                 if len(seq_t) >= min_len_protein:
-                    proteome.append(SeqRecord(seq_t, id=record.id, description=''))
+                    proteome.append(SeqRecord(seq_t, id=idd, description=''))
 
             with open(out, 'w') as f:
                 SeqIO.write(proteome, f, 'fasta')
@@ -1603,13 +1605,13 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
     for f in glob.iglob(os.path.join(input_folder, '*' + extension)):
         inp, _ = os.path.splitext(os.path.basename(f))
 
-        for seq_record in SeqIO.parse(f, "fasta"):
-            marker = seq_record.id.split(':')[0].split('_')[-1]
+        for idd, seq in SimpleFastaParser(open(f)):
+            marker = idd.split(' ').split(':')[0].split('_')[-1]
 
             if marker in markers2inputs:
-                markers2inputs[marker].append(SeqRecord(seq_record.seq, id=inp, description=''))
+                markers2inputs[marker].append(SeqRecord(seq, id=inp, description=''))
             else:
-                markers2inputs[marker] = [SeqRecord(seq_record.seq, id=inp, description='')]
+                markers2inputs[marker] = [SeqRecord(seq, id=inp, description='')]
 
     for marker, sequences in markers2inputs.items():
         if len(sequences) >= min_num_entries:
@@ -2296,15 +2298,15 @@ def concatenate(all_inputs, input_folder, output_file, sort=False, verbose=False
             alignment_length = None
             current_inputs = []
 
-            for seq_record in SeqIO.parse(a, "fasta"):
-                current_inputs.append(seq_record.id)
-                inputs2alignments[seq_record.id].seq += seq_record.seq
+            for fid, seq in SimpleFastaParser(open(a)):
+                idd = fid.split(' ')[0]
+                current_inputs.append(idd)
+                inputs2alignments[idd].seq += seq
 
                 if not alignment_length:
-                    alignment_length = len(seq_record.seq)
-
-                elif alignment_length != len(seq_record.seq):
-                    error('wrong alignment length ({} != {})... Something is wrong'.format(alignment_length, len(seq_record.seq)))
+                    alignment_length = len(seq)
+                elif alignment_length != len(seq):
+                    error('wrong alignment length ({} != {})... Something is wrong'.format(alignment_length, len(seq)))
 
             current_inputs = set(current_inputs)
 
