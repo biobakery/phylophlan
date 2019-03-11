@@ -635,8 +635,8 @@ def check_dependencies(configs, nproc, verbose=False):
                     # phylophlan-users@googlegroups.com, subject: "phylophlan.fna is empty"
                     for a, b in zip(stdout.decode().strip().split(' ')[-1].split('.'), [0, 8, 31]):
                         if a != str(b):
-                        	wrong = wrong or (int(a) < b)
-                        	break
+                            wrong = wrong or (int(a) < b)
+                            break
 
                     if wrong:
                         error('the "{}" of diamond is not supported, please update it to at least version 0.8.31'.format(stdout),
