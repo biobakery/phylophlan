@@ -159,7 +159,7 @@ def read_params():
     p.add_argument('--trim', default=None, choices=TRIM_CHOICES,
                    help=('Specify which type of trimming to perform: "gappy" will perform '
                          'what specified in the "trim" section of the configuration file '
-                         'to remove gappy columns (suggested, trimal -gappyout); '
+                         'to remove gappy columns (suggested, trimal --gappyout); '
                          '"not_variant" will remove columns that have at least one '
                          'nucleotide/amino acid appearing above a certain threshold (see '
                          '"--not_variant_threshold" parameter); "greedy" performs both '
@@ -635,8 +635,8 @@ def check_dependencies(configs, nproc, verbose=False):
                     # phylophlan-users@googlegroups.com, subject: "phylophlan.fna is empty"
                     for a, b in zip(stdout.decode().strip().split(' ')[-1].split('.'), [0, 8, 31]):
                         if a != str(b):
-                        wrong = wrong or (int(a) < b)
-                        break
+                        	wrong = wrong or (int(a) < b)
+                        	break
 
                     if wrong:
                         error('the "{}" of diamond is not supported, please update it to at least version 0.8.31'.format(stdout),
