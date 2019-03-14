@@ -74,12 +74,13 @@ def read_params():
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))
     p.add_argument('-n', '--how_many', type=str, default=HOW_MANY,
-                   help='Specify the number of SGBs to report in the output; "all" is a special value to report all the SGBs')
+                   help=('Specify the number of SGBs to report in the output; "all" is a special value to report all the SGBs; '
+                         ' this param is not used when "--only_input" is specified'))
     p.add_argument('--nproc', type=int, default=1, help="The number of CPUs to use")
     p.add_argument('--database_folder', type=str, default=DATABASE_FOLDER,
                    help="Path to the folder that contains the database file")
     p.add_argument('--only_input', action='store_true', default=False,
-                   help="If specified")
+                   help="If specified provides a distance matrix between only the input genomes provided")
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrites the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
@@ -138,6 +139,7 @@ def check_params(args, verbose=False):
     args.mapping = os.path.join(args.database_folder, args.mapping)
 
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
+    create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
 
     if verbose:
@@ -256,7 +258,7 @@ def sketching(input_folder, input_extension, output_prefix, nproc=1, verbose=Fal
 
     for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
         out = os.path.splitext(os.path.basename(i))[0]
-        out_sketch = os.path.join(output_prefix + "_sketches", out)
+        out_sketch = os.path.join(output_prefix + "_sketches/inputs", out)
         commands.append((i, out_sketch, verbose))
 
     if commands:
@@ -278,7 +280,7 @@ def sketching_rec(x):
 
             if verbose:
                 t0 = time.time()
-                info('Analysing "{}"\n'.format(inp_bin))
+                info('Sketching "{}"\n'.format(inp_bin))
 
             if not os.path.isfile(out_sketch + ".msh"):
                 cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
@@ -294,7 +296,7 @@ def sketching_rec(x):
 
             if verbose:
                 t1 = time.time()
-                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
+                info('Sketch for "{}" computed in {}s\n'.format(inp_bin, int(t1 - t0)))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -304,17 +306,19 @@ def sketching_rec(x):
         terminating.set()
 
 
-def pasting(output_prefix, verbose=False):
+def pasting(output_prefix, prj_name, verbose=False):
+    outf = output_prefix + "_sketches/" + prj_name + "_paste"
+
     if verbose:
         t0 = time.time()
         info('Pasting inputs\n')
 
-    if os.path.isfile(output_prefix + "_paste.msh"):
+    if os.path.isfile('{}.msh'.format(outf)):
         if verbose:
-            info('"{}" already exists\n'.format(output_prefix + "_paste.msh", init_new_line=True))
+            info('"{}.msh" already exists\n'.format(outf), init_new_line=True)
         return
 
-    cmd = ['mash', 'paste', output_prefix + "_paste"] + glob.glob(output_prefix + "_sketches/*.msh")
+    cmd = ['mash', 'paste', outf] + glob.glob(output_prefix + "_sketches/inputs/*.msh")
 
     try:
         sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
@@ -328,9 +332,9 @@ def pasting(output_prefix, verbose=False):
         info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
 
 
-def disting(output_prefix, db, nproc=10, verbose=False):
+def disting(output_prefix, prj_name, db, nproc=10, verbose=False):
     commands = []
-    inpt = output_prefix + "_paste.msh"
+    inpt = output_prefix + "_sketches/" + prj_name + "_paste.msh"
 
     for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
         dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
@@ -355,11 +359,15 @@ def disting_rec(x):
             pasted_bins, sgb_msh_idx, dist_file, verbose = x
 
             if not os.path.isfile(dist_file):
-               cmd = ['mash', 'dist', sgb_msh_idx, pasted_bins]
+                if verbose:
+                    t0 = time.time()
+                    info('Disting "{}"\n'.format(pasted_bins))
 
-               try:
+                cmd = ['mash', 'dist', sgb_msh_idx, pasted_bins]
+
+                try:
                    sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
-               except Exception as e:
+                except Exception as e:
                    terminating.set()
                    remove_file(dist_file, verbose=verbose)
                    error(str(e), init_new_line=True)
@@ -368,13 +376,13 @@ def disting_rec(x):
 
                 if verbose:
                     t1 = time.time()
-                    info('Analysis for "{}" completed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+                    info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
             elif verbose:
                 info('"{}" already present\n'.format(dist_file))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while sketching disting filtering\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while disting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -504,14 +512,12 @@ def phylophlan_metagenomic():
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
         download(os.path.join(DOWNLOAD_URL, mapp), args.mapping, verbose=args.verbose)
     else:  # mashing inputs against themselves
-        sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
+        sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix,
+                                              nproc=args.nproc, verbose=args.verbose)
         args.database = args.output_prefix + '_sketches'
 
-    if args.how_many == 'all':
-        args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
-
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
-    pasting(args.output_prefix, verbose=args.verbose)
+    pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
@@ -520,7 +526,7 @@ def phylophlan_metagenomic():
         output_file = output_file.replace(".tsv", "_" + timestamp + ".tsv")
 
     if not args.only_input:  # if mashing vs. the SGBs
-        disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
+        disting(args.output_prefix, os.path.basename(args.output_prefix), args.database, nproc=args.nproc, verbose=args.verbose)
 
         # # SGBs mapping file
         # if args.verbose:
@@ -531,7 +537,7 @@ def phylophlan_metagenomic():
         if args.verbose:
             info('Loading mash dist files\n')
 
-        sketches_folder = args.output_prefix + "_sketches"
+        sketches_folder = args.output_prefix + "_sketches/inputs"
         dists_folder = args.output_prefix + "_dists"
         binn_2_sgb = dict([(b.replace('.msh', ''), []) for b in os.listdir(sketches_folder)])
 
@@ -539,17 +545,21 @@ def phylophlan_metagenomic():
             sgbid = sgb.replace('.tsv', '')
             binn_2_dists = {}
 
-            with open(sgb) as f:
+            with open(os.path.join(dists_folder, sgb)) as f:
                 for r in f:
-                    binn = os.path.splitext(os.path.basename(r[1]))[0]
+                    rc = r.strip().split('\t')
+                    binn = os.path.splitext(os.path.basename(rc[1]))[0]
 
                     if binn in binn_2_dists:
-                        binn_2_dists[binn].append(float(r[2]))
+                        binn_2_dists[binn].append(float(rc[2]))
                     else:
-                        binn_2_dists[binn] = [float(r[2])]
+                        binn_2_dists[binn] = [float(rc[2])]
 
             for binn, dists in binn_2_dists.items():
                 binn_2_sgb[binn].append((sgbid, np.mean(dists)))
+
+        if args.how_many == 'all':
+            args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
         with open(output_file, 'w') as f:
             f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
