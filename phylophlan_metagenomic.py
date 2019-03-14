@@ -4,10 +4,10 @@
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
-              'Nicola Segata (nicola.segata@unitn.it), '
-              'Paolo Manghi (paolo.manghi@unitn.it)')
-__version__ = '0.08'
-__date__ = '12 March 2019'
+              'Paolo Manghi (paolo.manghi@unitn.it), '
+              'Nicola Segata (nicola.segata@unitn.it)')
+__version__ = '0.09'
+__date__ = '14 March 2019'
 
 
 import sys
@@ -251,63 +251,6 @@ def initt(terminating_):
     terminating = terminating_
 
 
-#def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
-#    commands = []
-#
-#    for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
-#        out = os.path.splitext(os.path.basename(i))[0]
-#        out_sketch = os.path.join(output_prefix + "_sketches", out)
-#        commands.append((i, out_sketch, verbose))
-#
-#    if commands:
-#        terminating = mp.Event()
-#
-#        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
-#            try:
-#                [_ for _ in pool.imap_unordered(sketching_inputs_for_input_input_dist_rec, commands, chunksize=1)]
-#            except Exception as e:
- #               error(str(e), init_new_line=True)
- #               error('sketching crashed', init_new_line=True, exit=True)
- #   else:
- #       info('No inputs found!\n')
-
-
-
-#def sketching_inputs_for_input_input_dist_rec(x):
-#    if not terminating.is_set():
-#        try:
- #           inp_bin, out_sketch, verbose = x
-#
-#            if verbose:
-#                t0 = time.time()
-#                info('Analyzing "{}"\n'.format(inp_bin))
-#
-#            # sketch
-#            if not os.path.isfile(out_sketch + ".msh"):
-#               cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
-#
-#                try:
-#                    sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-#                except Exception as e:
-#                    terminating.set()
-#                    remove_file(out_sketch + ".msh", verbose=verbose)
-#                    error(str(e), init_new_line=True)
-#                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-#                    raise
-#
-#            if verbose:
-#                t1 = time.time()
-#                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
-#
-#        except Exception as e:
-#            terminating.set()
-#            error(str(e), init_new_line=True)
-#            error('error while sketching_inputs_for_input_input_dist_rec\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
-#            raise
-#    else:
-#        terminating.set()
-
-
 def sketching(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
     commands = []
 
@@ -332,11 +275,14 @@ def sketching_rec(x):
     if not terminating.is_set():
         try:
             inp_bin, out_sketch, verbose = x
+
             if verbose:
                 t0 = time.time()
                 info('Analysing "{}"\n'.format(inp_bin))
+
             if not os.path.isfile(out_sketch + ".msh"):
                 cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
+
                 try:
                     sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
                 except Exception as e:
@@ -345,13 +291,14 @@ def sketching_rec(x):
                     error(str(e), init_new_line=True)
                     error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                     raise
+
             if verbose:
                 t1 = time.time()
                 info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
-            error('error while sketching disting filtering\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            error('error while sketching\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
             raise
     else:
         terminating.set()
@@ -368,6 +315,7 @@ def pasting(output_prefix, verbose=False):
         return
 
     cmd = ['mash', 'paste', output_prefix + "_paste"] + glob.glob(output_prefix + "_sketches/*.msh")
+
     try:
         sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
     except Exception as e:
@@ -381,8 +329,7 @@ def pasting(output_prefix, verbose=False):
 
 
 def disting(output_prefix, db, nproc=10, verbose=False):
-
-    commands = [] 
+    commands = []
     inpt = output_prefix + "_paste.msh"
 
     for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
@@ -391,6 +338,7 @@ def disting(output_prefix, db, nproc=10, verbose=False):
 
     if commands:
         terminating = mp.Event()
+
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
                 [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
@@ -398,20 +346,17 @@ def disting(output_prefix, db, nproc=10, verbose=False):
                 error(str(e), init_new_line=True)
                 error('disting crashed', init_new_line=True, exit=True)
     else:
-        info('Database not detected!\n')
+        info('Mash dist already computed!\n')
 
 
 def disting_rec(x):
     if not terminating.is_set():
         try:
             pasted_bins, sgb_msh_idx, dist_file, verbose = x
-            #dist_file = os.path.join(dist_fld, os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
- 
-            #if not os.path.isdir(dist_file):
-            #    create_folder(dist_fld)
 
             if not os.path.isfile(dist_file):
                cmd = ['mash', 'dist', sgb_msh_idx, pasted_bins]
+
                try:
                    sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
                except Exception as e:
@@ -421,10 +366,11 @@ def disting_rec(x):
                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                    raise
 
-            if verbose:
-                t1 = time.time()
-                info('Analysis for "{}" completed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
-
+                if verbose:
+                    t1 = time.time()
+                    info('Analysis for "{}" completed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+            elif verbose:
+                info('"{}" already present\n'.format(dist_file))
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -435,14 +381,13 @@ def disting_rec(x):
 
 
 def disting_input_vs_input(output_prefix, output_file, verbose=False):
-    commands = []
     inpt = output_prefix + "_paste.msh"
+    cmd = ['mash', 'dist', inpt, inpt, '-t']
 
     if verbose:
         t0 = time.time()
         info('Disting inputs in input vs input mode\n')
 
-    cmd = ['mash', 'dist', inpt, inpt, '-t'] 
     try:
         sb.check_call(cmd, stdout=open(output_file, 'w'), stderr=sb.DEVNULL)
     except Exception as e:
@@ -454,7 +399,7 @@ def disting_input_vs_input(output_prefix, output_file, verbose=False):
 
     if verbose:
         t1 = time.time()
-        info('Analysis for "{}" file completed in {}s\n'.format(inpt, int(t1 - t0)))
+        info('Inputs vs. inputs distances "{}" completed in {}s\n'.format(output_file, int(t1 - t0)))
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -552,8 +497,7 @@ def phylophlan_metagenomic():
     db, mapp = check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
 
-    # if mashing vs. the SGBs
-    if not args.only_input:
+    if not args.only_input:  # if mashing vs. the SGBs
         download(os.path.join(DOWNLOAD_URL, db + '.tar'), args.database + '.tar', verbose=args.verbose)
         download(os.path.join(DOWNLOAD_URL, db + '.md5'), args.database + '.md5', verbose=args.verbose)
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
@@ -563,19 +507,19 @@ def phylophlan_metagenomic():
         sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
         args.database = args.output_prefix + '_sketches'
 
-        if args.how_many == 'all':
-            args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
+    if args.how_many == 'all':
+        args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, verbose=args.verbose)
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
-    def add_timestamp(otpf):
+    if os.path.isfile(output_file) and (not args.overwrite):
         timestamp = str(datetime.datetime.today().strftime('%Y%m%d%H%M%S'))
-        return otpf.replace(".tsv", "_" + timestamp + ".tsv")
- 
-    if not args.only_input:
+        output_file = output_file.replace(".tsv", "_" + timestamp + ".tsv")
+
+    if not args.only_input:  # if mashing vs. the SGBs
         disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
 
         # # SGBs mapping file
@@ -586,37 +530,26 @@ def phylophlan_metagenomic():
 
         if args.verbose:
             info('Loading mash dist files\n')
-   
+
         sketches_folder = args.output_prefix + "_sketches"
-        dists_folder = args.output_prefix + "_dists"    
+        dists_folder = args.output_prefix + "_dists"
+        binn_2_sgb = dict([(b.replace('.msh', ''), []) for b in os.listdir(sketches_folder)])
 
-        def avg_mash_dist_from_each_binn_to_the_sgb(dist_file):
-            with open(dist_file, 'r') as dts_f:
-                dists_from_sgb = [line.rstrip().split() for line in dts_f.readlines()]
-            return dict([(os.path.splitext(os.path.basename(inpt))[0]\
-                , np.mean([float(dist[2]) for dist in dists_from_sgb if dist[1]==inpt])) \
-                for inpt in set([i[1] for i in dists_from_sgb])])
+        for sgb in os.listdir(dists_folder):
+            sgbid = sgb.replace('.tsv', '')
+            binn_2_dists = {}
 
-        binn_2_sgb = dict([(b.replace('.msh', ''), None) for b in os.listdir(sketches_folder)])
+            with open(sgb) as f:
+                for r in f:
+                    binn = os.path.splitext(os.path.basename(r[1]))[0]
 
-        sgb_dists_from_each_binn = dict([(os.path.basename(sgb_dist_file).replace(".tsv", ""), \
-            avg_mash_dist_from_each_binn_to_the_sgb(sgb_dist_file)) for sgb_dist_file in glob.glob(dists_folder + "/*")])
-    
-        for binn in os.listdir(sketches_folder):
-            binn_2_sgb[binn.replace(".msh", "")] = [(sgb.replace(".tsv", ""), sgb_dists_from_each_binn[sgb.replace(".tsv", "")][binn.replace(".msh", "")]) \
-            for sgb in os.listdir(dists_folder)]
-       
-        #for binn in os.listdir(dists_folder):
-        #    binn_folder = os.path.join(dists_folder, binn)
-        #    binn_2_sgb[binn] = [(sgb.replace('.tsv', ''),
-        #                         np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))]))
-        #                        for sgb in os.listdir(binn_folder)]
+                    if binn in binn_2_dists:
+                        binn_2_dists[binn].append(float(r[2]))
+                    else:
+                        binn_2_dists[binn] = [float(r[2])]
 
-        if os.path.isfile(output_file) and (not args.overwrite):
-            output_file = add_timestamp(output_file)
-
-        if args.verbose:
-            info('Writing output file\n')
+            for binn, dists in binn_2_dists.items():
+                binn_2_sgb[binn].append((sgbid, np.mean(dists)))
 
         with open(output_file, 'w') as f:
             f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
@@ -630,17 +563,10 @@ def phylophlan_metagenomic():
                 f.write('\t'.join([binn] + ["SGB_{}:{}".format(i[0], i[1])
                                         for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
 
-    else: ## input vs. input mode        
-        if os.path.isfile(output_file) and (not args.overwrite):
-            output_file = add_timestamp(output_file)        
-
-        disting_input_vs_input(args.output_prefix, output_file, verbose=args.verbose) 
+    else:  # input vs. input mode
+        disting_input_vs_input(args.output_prefix, output_file, verbose=args.verbose)
 
     info('Results saved to "{}"\n'.format(output_file))
-        
-
-
-                
 
 
 if __name__ == '__main__':
@@ -649,5 +575,3 @@ if __name__ == '__main__':
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
-
-
