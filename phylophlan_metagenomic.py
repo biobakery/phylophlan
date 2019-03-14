@@ -4,9 +4,10 @@
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
-              'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.07'
-__date__ = '6 March 2019'
+              'Nicola Segata (nicola.segata@unitn.it), '
+              'Paolo Manghi (paolo.manghi@unitn.it)')
+__version__ = '0.08'
+__date__ = '12 March 2019'
 
 
 import sys
@@ -250,7 +251,64 @@ def initt(terminating_):
     terminating = terminating_
 
 
-def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
+#def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
+#    commands = []
+#
+#    for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
+#        out = os.path.splitext(os.path.basename(i))[0]
+#        out_sketch = os.path.join(output_prefix + "_sketches", out)
+#        commands.append((i, out_sketch, verbose))
+#
+#    if commands:
+#        terminating = mp.Event()
+#
+#        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+#            try:
+#                [_ for _ in pool.imap_unordered(sketching_inputs_for_input_input_dist_rec, commands, chunksize=1)]
+#            except Exception as e:
+ #               error(str(e), init_new_line=True)
+ #               error('sketching crashed', init_new_line=True, exit=True)
+ #   else:
+ #       info('No inputs found!\n')
+
+
+
+#def sketching_inputs_for_input_input_dist_rec(x):
+#    if not terminating.is_set():
+#        try:
+ #           inp_bin, out_sketch, verbose = x
+#
+#            if verbose:
+#                t0 = time.time()
+#                info('Analyzing "{}"\n'.format(inp_bin))
+#
+#            # sketch
+#            if not os.path.isfile(out_sketch + ".msh"):
+#               cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
+#
+#                try:
+#                    sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+#                except Exception as e:
+#                    terminating.set()
+#                    remove_file(out_sketch + ".msh", verbose=verbose)
+#                    error(str(e), init_new_line=True)
+#                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+#                    raise
+#
+#            if verbose:
+#                t1 = time.time()
+#                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
+#
+#        except Exception as e:
+#            terminating.set()
+#            error(str(e), init_new_line=True)
+#            error('error while sketching_inputs_for_input_input_dist_rec\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+#            raise
+#    else:
+#        terminating.set()
+
+
+def sketching(input_folder, input_extension, output_prefix, nproc=1, verbose=False):
     commands = []
 
     for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
@@ -260,10 +318,9 @@ def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_
 
     if commands:
         terminating = mp.Event()
-
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(sketching_inputs_for_input_input_dist_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(sketching_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
                 error('sketching crashed', init_new_line=True, exit=True)
@@ -271,19 +328,15 @@ def sketching_inputs_for_input_input_dist(input_folder, input_extension, output_
         info('No inputs found!\n')
 
 
-def sketching_inputs_for_input_input_dist_rec(x):
+def sketching_rec(x):
     if not terminating.is_set():
         try:
             inp_bin, out_sketch, verbose = x
-
             if verbose:
                 t0 = time.time()
-                info('Analyzing "{}"\n'.format(inp_bin))
-
-            # sketch
+                info('Analysing "{}"\n'.format(inp_bin))
             if not os.path.isfile(out_sketch + ".msh"):
                 cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
-
                 try:
                     sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
                 except Exception as e:
@@ -292,11 +345,9 @@ def sketching_inputs_for_input_input_dist_rec(x):
                     error(str(e), init_new_line=True)
                     error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                     raise
-
             if verbose:
                 t1 = time.time()
                 info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
-
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -306,72 +357,74 @@ def sketching_inputs_for_input_input_dist_rec(x):
         terminating.set()
 
 
-def sketching_dists_filter(input_folder, input_extension, output_prefix, database, nproc=1, verbose=False):
-    commands = []
+def pasting(output_prefix, verbose=False):
+    if verbose:
+        t0 = time.time()
+        info('Pasting inputs\n')
 
-    for i in glob.iglob(os.path.join(input_folder, '*' + input_extension)):
-        out = os.path.splitext(os.path.basename(i))[0]
-        out_sketch = os.path.join(output_prefix + "_sketches", out)
-        out_dist = os.path.join(output_prefix + "_dists", out)
-        commands.append((i, out_sketch, out_dist, database, verbose))
+    if os.path.isfile(output_prefix + "_paste.msh"):
+        if verbose:
+            info('"{}" already exists\n'.format(output_prefix + "_paste.msh", init_new_line=True))
+        return
+
+    cmd = ['mash', 'paste', output_prefix + "_paste"] + glob.glob(output_prefix + "_sketches/*.msh")
+    try:
+        sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+    except Exception as e:
+        error(str(e), init_new_line=True)
+        error('cannot execute command\n {}'.format(' '.join(cmd), init_new_line=True))
+        raise
+
+    if verbose:
+        t1 = time.time()
+        info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
+
+
+def disting(output_prefix, db, nproc=10, verbose=False):
+
+    commands = [] 
+    inpt = output_prefix + "_paste.msh"
+
+    for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
+        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
+        commands.append((inpt, sgb_msh_idx, dist_file, verbose))
 
     if commands:
         terminating = mp.Event()
-
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(sketching_dists_filter_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('sketching crashed', init_new_line=True, exit=True)
+                error('disting crashed', init_new_line=True, exit=True)
     else:
-        info('No inputs found!\n')
+        info('Database not detected!\n')
 
 
-def sketching_dists_filter_rec(x):
+def disting_rec(x):
     if not terminating.is_set():
         try:
-            inp_bin, out_sketch, dist_fld, db, verbose = x
+            pasted_bins, sgb_msh_idx, dist_file, verbose = x
+            #dist_file = os.path.join(dist_fld, os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
+ 
+            #if not os.path.isdir(dist_file):
+            #    create_folder(dist_fld)
 
-            if verbose:
-                t0 = time.time()
-                info('Analyzing "{}"\n'.format(inp_bin))
-
-            # sketch
-            if not os.path.isfile(out_sketch + ".msh"):
-                cmd = ['mash', 'sketch', '-k', '21', '-s', '10000', '-o', out_sketch, inp_bin]
-
-                try:
-                    sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-                except Exception as e:
-                    terminating.set()
-                    remove_file(out_sketch + ".msh", verbose=verbose)
-                    error(str(e), init_new_line=True)
-                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                    raise
-
-            # dist
-            for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
-                dist_file = os.path.join(dist_fld, os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
-
-                if not os.path.isdir(dist_fld):
-                    create_folder(dist_fld)
-
-                if not os.path.isfile(dist_file):
-                    cmd = ['mash', 'dist', sgb_msh_idx, out_sketch + ".msh"]
-
-                    try:
-                        sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
-                    except Exception as e:
-                        terminating.set()
-                        remove_file(dist_file, verbose=verbose)
-                        error(str(e), init_new_line=True)
-                        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                        raise
+            if not os.path.isfile(dist_file):
+               cmd = ['mash', 'dist', sgb_msh_idx, pasted_bins]
+               try:
+                   sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
+               except Exception as e:
+                   terminating.set()
+                   remove_file(dist_file, verbose=verbose)
+                   error(str(e), init_new_line=True)
+                   error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                   raise
 
             if verbose:
                 t1 = time.time()
-                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
+                info('Analysis for "{}" completed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -379,6 +432,29 @@ def sketching_dists_filter_rec(x):
             raise
     else:
         terminating.set()
+
+
+def disting_input_vs_input(output_prefix, output_file, verbose=False):
+    commands = []
+    inpt = output_prefix + "_paste.msh"
+
+    if verbose:
+        t0 = time.time()
+        info('Disting inputs in input vs input mode\n')
+
+    cmd = ['mash', 'dist', inpt, inpt, '-t'] 
+    try:
+        sb.check_call(cmd, stdout=open(output_file, 'w'), stderr=sb.DEVNULL)
+    except Exception as e:
+        terminating.set()
+        remove_file(output_file, verbose=verbose)
+        error(str(e), init_new_line=True)
+        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+        raise
+
+    if verbose:
+        t1 = time.time()
+        info('Analysis for "{}" file completed in {}s\n'.format(inpt, int(t1 - t0)))
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -487,51 +563,84 @@ def phylophlan_metagenomic():
         sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
         args.database = args.output_prefix + '_sketches'
 
-    if args.how_many == 'all':
-        args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
+        if args.how_many == 'all':
+            args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
-    sketching_dists_filter(args.input, args.input_extension, args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
+    sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
+    pasting(args.output_prefix, verbose=args.verbose)
 
-    # # SGBs mapping file
-    # if args.verbose:
-    #     info('Loading SGB mapping file\n')
+    output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
-    # sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
-
-    # output
-    if args.verbose:
-        info('Loading mash dist files\n')
-
-    dists_folder = args.output_prefix + "_dists"
-    binn_2_sgb = dict([(b, None) for b in os.listdir(dists_folder)])
-
-    for binn in os.listdir(dists_folder):
-        binn_folder = os.path.join(dists_folder, binn)
-        binn_2_sgb[binn] = [(sgb.replace('.tsv', ''),
-                             np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))]))
-                            for sgb in os.listdir(binn_folder)]
-
-    output_file = args.output_prefix + '.tsv'
-
-    if os.path.isfile(output_file) and (not args.overwrite):
+    def add_timestamp(otpf):
         timestamp = str(datetime.datetime.today().strftime('%Y%m%d%H%M%S'))
-        output_file = args.output_prefix + '_' + timestamp + '.tsv'
+        return otpf.replace(".tsv", "_" + timestamp + ".tsv")
+ 
+    if not args.only_input:
+        disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
 
-    if args.verbose:
-        info('Writing output file\n')
+        # # SGBs mapping file
+        # if args.verbose:
+        #     info('Loading SGB mapping file\n')
 
-    with open(output_file, 'w') as f:
-        f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
+        # sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
 
-        for binn, sgb_dists in binn_2_sgb.items():
-            # f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
-            #                                                      i[0],
-            #                                                      sgb_2_info[i[0]][3],
-            #                                                      i[1])
-            #                             for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
-            f.write('\t'.join([binn] + ["SGB_{}:{}".format(i[0], i[1])
+        if args.verbose:
+            info('Loading mash dist files\n')
+   
+        sketches_folder = args.output_prefix + "_sketches"
+        dists_folder = args.output_prefix + "_dists"    
+
+        def avg_mash_dist_from_each_binn_to_the_sgb(dist_file):
+            with open(dist_file, 'r') as dts_f:
+                dists_from_sgb = [line.rstrip().split() for line in dts_f.readlines()]
+            return dict([(os.path.splitext(os.path.basename(inpt))[0]\
+                , np.mean([float(dist[2]) for dist in dists_from_sgb if dist[1]==inpt])) \
+                for inpt in set([i[1] for i in dists_from_sgb])])
+
+        binn_2_sgb = dict([(b.replace('.msh', ''), None) for b in os.listdir(sketches_folder)])
+
+        sgb_dists_from_each_binn = dict([(os.path.basename(sgb_dist_file).replace(".tsv", ""), \
+            avg_mash_dist_from_each_binn_to_the_sgb(sgb_dist_file)) for sgb_dist_file in glob.glob(dists_folder + "/*")])
+    
+        for binn in os.listdir(sketches_folder):
+            binn_2_sgb[binn.replace(".msh", "")] = [(sgb.replace(".tsv", ""), sgb_dists_from_each_binn[sgb.replace(".tsv", "")][binn.replace(".msh", "")]) \
+            for sgb in os.listdir(dists_folder)]
+       
+        #for binn in os.listdir(dists_folder):
+        #    binn_folder = os.path.join(dists_folder, binn)
+        #    binn_2_sgb[binn] = [(sgb.replace('.tsv', ''),
+        #                         np.mean([float(r.strip().split('\t')[2]) for r in open(os.path.join(binn_folder, sgb))]))
+        #                        for sgb in os.listdir(binn_folder)]
+
+        if os.path.isfile(output_file) and (not args.overwrite):
+            output_file = add_timestamp(output_file)
+
+        if args.verbose:
+            info('Writing output file\n')
+
+        with open(output_file, 'w') as f:
+            f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
+
+            for binn, sgb_dists in binn_2_sgb.items():
+                # f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
+                #                                                      i[0],
+                #                                                      sgb_2_info[i[0]][3],
+                #                                                      i[1])
+                #                             for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
+                f.write('\t'.join([binn] + ["SGB_{}:{}".format(i[0], i[1])
                                         for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
+
+    else: ## input vs. input mode        
+        if os.path.isfile(output_file) and (not args.overwrite):
+            output_file = add_timestamp(output_file)        
+
+        disting_input_vs_input(args.output_prefix, output_file, verbose=args.verbose) 
+
     info('Results saved to "{}"\n'.format(output_file))
+        
+
+
+                
 
 
 if __name__ == '__main__':
@@ -540,3 +649,5 @@ if __name__ == '__main__':
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
+
+
