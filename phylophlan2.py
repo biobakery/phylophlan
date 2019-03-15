@@ -3,10 +3,11 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
+              'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.28'
-__date__ = '11 March 2019'
+__version__ = '0.29'
+__date__ = '15 March 2019'
 
 
 import os
@@ -1101,8 +1102,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g, bz2.open(f, 'rt') as h:
-                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(open(h))),
-                                    g, "fasta")
+                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(h)), g, "fasta")
                 elif verbose:
                     info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 
@@ -1117,8 +1117,7 @@ def load_input_files(input_folder, tmp_folder, extension, verbose=False):
 
                 if not os.path.isfile(os.path.join(tmp_folder, file_clean)):
                     with open(os.path.join(tmp_folder, file_clean), 'w') as g, gzip.open(f, 'rt') as h:
-                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(open(h))),
-                                    g, "fasta")
+                        SeqIO.write((SeqRecord(Seq(seq), id=header.split(' ')[0]) for header, seq in SimpleFastaParser(h)), g, "fasta")
                 elif verbose:
                     info('File "{}" already decompressed\n'.format(os.path.join(tmp_folder, file_clean)))
 

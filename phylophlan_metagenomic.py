@@ -31,8 +31,8 @@ if sys.version_info[0] < 3:
 
 HOW_MANY = "10"
 DOWNLOAD_URL = ""
-MAPPING_FILE = "db_sgbs_4930_sgb2taxa.tsv.bz2"
-DATABASE_FILE = "db_sgbs_4930_k21_s10000"
+MAPPING_FILE = "SGB.Jan19.txt.bz2"
+DATABASE_FILE = "SGB.Jan19"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -583,11 +583,11 @@ def phylophlan_metagenomic():
     if not args.only_input:  # if mashing vs. the SGBs
         disting(args.output_prefix, os.path.basename(args.output_prefix), args.database, nproc=args.nproc, verbose=args.verbose)
 
-        # # SGBs mapping file
-        # if args.verbose:
-        #     info('Loading SGB mapping file\n')
+        # SGBs mapping file
+        if args.verbose:
+            info('Loading SGB mapping file\n')
 
-        # sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
+        sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
 
         if args.verbose:
             info('Loading mash dist files\n')
@@ -617,16 +617,15 @@ def phylophlan_metagenomic():
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
         with open(output_file, 'w') as f:
-            f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid(taxa_level):avg_dist'] * args.how_many) + '\n')
+            f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
             for binn, sgb_dists in binn_2_sgb.items():
-                # f.write('\t'.join([binn] + ["{}SGB_{}({}):{}".format('u' if sgb_2_info[i[0]][2].upper() == 'YES' else 'k',
-                #                                                      i[0],
-                #                                                      sgb_2_info[i[0]][3],
-                #                                                      i[1])
-                #                             for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
-                f.write('\t'.join([binn] + ["SGB_{}:{}".format(i[0], i[1])
-                                        for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
+                f.write('\t'.join([binn] + ["{}SGB_{}:{}:{}:{}".format('u' if sgb_2_info[i[0]][4].upper() == 'YES' else 'k',
+                                                                       i[0],
+                                                                       sgb_2_info[i[0]][5],
+                                                                       sgb_2_info[i[0]][6],
+                                                                       i[1])
+                                            for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
 
     else:  # input vs. input mode
         disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file, nproc=args.nproc, verbose=args.verbose)
