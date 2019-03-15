@@ -1037,7 +1037,7 @@ def make_database(command, fasta, markers, db_folder, db, label, output_exts=[],
 
 
 def clean_all(databases_folder, verbose=False):
-    for f in glob.iglob(os.path.join(databases_folder, '*.udb')):
+    for f in glob.glob(os.path.join(databases_folder, '*.udb')) + glob.glob(os.path.join(databases_folder, '*.dmnd')):
         if verbose:
             info('Removing "{}"\n'.format(f))
 
@@ -1051,13 +1051,9 @@ def clean_all(databases_folder, verbose=False):
             os.remove(f_clean + '.faa')
 
     for database in os.listdir(databases_folder):
-        for f in glob.iglob(os.path.join(databases_folder, database, database + '.faa')):
-            if verbose:
-                info('Removing "{}"\n'.format(f))
-
-            os.remove(f)
-
-        for f in glob.iglob(os.path.join(databases_folder, database, database + '.udb')):
+        for f in (glob.glob(os.path.join(databases_folder, database, database + '.faa')) +
+                  glob.glob(os.path.join(databases_folder, database, database + '.udb')) +
+                  glob.glob(os.path.join(databases_folder, database, database + '.dmnd'))):
             if verbose:
                 info('Removing "{}"\n'.format(f))
 
