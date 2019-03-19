@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.29'
-__date__ = '15 March 2019'
+__version__ = '0.30'
+__date__ = '19 March 2019'
 
 
 import os
@@ -833,13 +833,14 @@ def init_database(database, databases_folder, db_type, params, key_dna, key_aa, 
 
         if os.path.isfile(fna) or os.path.isfile(fna_bz2):
             d = Counter([len(set(seq))
-                         for _, seq in SimpleFastaParser(open(fna) if os.path.isfile(fna) else bz2.open(fna_bz2, 'rt'), "fasta")])
+                         for _, seq in SimpleFastaParser(open(fna) if os.path.isfile(fna) else bz2.open(fna_bz2, 'rt'))])
         elif os.path.isfile(faa) or os.path.isfile(faa_bz2):
             d = Counter([len(set(seq))
-                         for _, seq in SimpleFastaParser(open(faa) if os.path.isfile(faa) else bz2.open(faa_bz2, 'rt'), "fasta")])
+                         for _, seq in SimpleFastaParser(open(faa) if os.path.isfile(faa) else bz2.open(faa_bz2, 'rt'))])
         elif os.path.isdir(folder):
-            d = Counter([len(set(seq)) for f in glob.iglob(folder)
-                                       for _, seq in SimpleFastaParser(open(f) if os.path.isfile(f) else bz2.open(f, 'rt'), "fasta")])
+            d = Counter([len(set(seq))
+                         for f in glob.iglob(os.path.join(folder, '*'))
+                         for _, seq in SimpleFastaParser(bz2.open(f, 'rt') if f.endswith('.bz2') else open(f))])
         else:
             error("-t (or --db_type) wasn't specified and I wasn't able to "
                   "automatically detect the input database file(s)", exit=True)
@@ -1470,8 +1471,7 @@ def gene_markers_extraction_rec(x):
                 rev = bool(int(row[4]))
 
                 if (contig in contig2marker2b6o) and (marker in contig2marker2b6o[contig]):
-                    error('contig: {} and marker: {} already present into contig2marker2b6o'
-                          .format(contig, marker))
+                    error('contig: {} and marker: {} already present into contig2marker2b6o'.format(contig, marker))
 
                 if contig not in contig2marker2b6o:
                     contig2marker2b6o[contig] = {}
@@ -1487,7 +1487,7 @@ def gene_markers_extraction_rec(x):
                 for marker in contig2marker2b6o[fid]:
                     s, e, rev = contig2marker2b6o[fid][marker]
                     idd = '{}_{}:'.format(fid, marker)
-                    seq = record[1][s - 1:e]
+                    seq = Seq(record[1][s - 1:e])
 
                     if rev:
                         idd += 'c'
@@ -1497,11 +1497,11 @@ def gene_markers_extraction_rec(x):
 
                     if frameshifts:
                         if not rev:
-                            out_file_seq.append(SeqRecord(record[1][s:e], id='{}{}-{}'.format(idd, s + 1, e), description=''))
-                            out_file_seq.append(SeqRecord(record[1][s + 1:e], id='{}{}-{}'.format(idd, s + 2, e), description=''))
+                            out_file_seq.append(SeqRecord(Seq(record[1][s:e]), id='{}{}-{}'.format(idd, s + 1, e), description=''))
+                            out_file_seq.append(SeqRecord(Seq(record[1][s + 1:e]), id='{}{}-{}'.format(idd, s + 2, e), description=''))
                         else:
-                            out_file_seq.append(SeqRecord(record[1][s - 1:e - 1].reverse_complement(), id='{}{}-{}'.format(idd, s, e - 1), description=''))
-                            out_file_seq.append(SeqRecord(record[1][s - 1:e - 2].reverse_complement(), id='{}{}-{}'.format(idd, s, e - 2), description=''))
+                            out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 1]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 1), description=''))
+                            out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 2]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 2), description=''))
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
@@ -1601,12 +1601,12 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
         inp, _ = os.path.splitext(os.path.basename(f))
 
         for idd, seq in SimpleFastaParser(open(f)):
-            marker = idd.split(' ').split(':')[0].split('_')[-1]
+            marker = idd.split(' ')[0].split(':')[0].split('_')[-1]
 
             if marker in markers2inputs:
-                markers2inputs[marker].append(SeqRecord(seq, id=inp, description=''))
+                markers2inputs[marker].append(SeqRecord(Seq(seq), id=inp, description=''))
             else:
-                markers2inputs[marker] = [SeqRecord(seq, id=inp, description='')]
+                markers2inputs[marker] = [SeqRecord(Seq(seq), id=inp, description='')]
 
     for marker, sequences in markers2inputs.items():
         if len(sequences) >= min_num_entries:

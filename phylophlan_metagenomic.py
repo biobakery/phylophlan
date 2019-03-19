@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.09'
-__date__ = '14 March 2019'
+__version__ = '0.10'
+__date__ = '18 March 2019'
 
 
 import sys
@@ -23,6 +23,7 @@ import hashlib
 import numpy as np
 import tarfile
 import datetime
+import bz2
 
 
 if sys.version_info[0] < 3:
@@ -363,25 +364,51 @@ def sketching_rec(x):
 
 
 def pasting(output_prefix, prj_name, verbose=False):
-    outf = output_prefix + "_sketches/" + prj_name + "_paste"
+    outf = output_prefix + "_sketches/" + prj_name + "_paste_{}"
+    inpf = output_prefix + "_sketches/{}_inputs_list_{{}}.txt".format(prj_name)
 
     if verbose:
         t0 = time.time()
         info('Pasting inputs\n')
 
-    if os.path.isfile('{}.msh'.format(outf)):
+    # mash paste crashes with >70k
+    istart = 0
+    iend = 50000
+    step = 50000
+    chunk = 1
+    msh_idx = glob.glob(output_prefix + "_sketches/inputs/*.msh")
+
+    while iend <= len(msh_idx):
+        with open(inpf.format(chunk), 'w') as f:
+            f.write('\n'.join(msh_idx[istart:iend]) + '\n')
+
+        if iend == len(msh_idx):
+            break
+
+        istart = iend
+        iend = min(iend + step, len(msh_idx))
+        chunk += 1
+
+    for inpc in glob.iglob(output_prefix + "_sketches/{}_inputs_list_*.txt".format(prj_name)):
+        chunk = int(inpc[::-1].split('.')[1].split('_')[0][::-1])
+        outc = outf.format(chunk)
+
+        if os.path.isfile('{}.msh'.format(outc)):
+            if verbose:
+                info('"{}.msh" already exists\n'.format(outc))
+            continue
+
         if verbose:
-            info('"{}.msh" already exists\n'.format(outf), init_new_line=True)
-        return
+            info('Pasting "{}.msh"\n'.format(outc))
 
-    cmd = ['mash', 'paste', outf] + glob.glob(output_prefix + "_sketches/inputs/*.msh")
+        cmd = ['mash', 'paste', '-l', outc, inpc]
 
-    try:
-        sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
-    except Exception as e:
-        error(str(e), init_new_line=True)
-        error('cannot execute command\n {}'.format(' '.join(cmd), init_new_line=True))
-        raise
+        try:
+            sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+        except Exception as e:
+            error(str(e), init_new_line=True)
+            error('cannot execute command\n {}'.format(' '.join(cmd), init_new_line=True))
+            raise
 
     if verbose:
         t1 = time.time()
@@ -390,11 +417,11 @@ def pasting(output_prefix, prj_name, verbose=False):
 
 def disting(output_prefix, prj_name, db, nproc=10, verbose=False):
     commands = []
-    inpt = output_prefix + "_sketches/" + prj_name + "_paste.msh"
+    inps = glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh")
 
     for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
-        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
-        commands.append((inpt, sgb_msh_idx, dist_file, verbose))
+        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv.bz2'))
+        commands.append((inps, sgb_msh_idx, dist_file, verbose))
 
     if commands:
         terminating = mp.Event()
@@ -415,24 +442,30 @@ def disting_rec(x):
             pasted_bins, sgb_msh_idx, dist_file, verbose = x
 
             if not os.path.isfile(dist_file):
-                if verbose:
-                    t0 = time.time()
-                    info('Disting "{}"\n'.format(pasted_bins))
+                bz2_out = bz2.open(dist_file, 'wb')
 
-                cmd = ['mash', 'dist', sgb_msh_idx, pasted_bins]
+                for msh_idx in pasted_bins:
+                    if verbose:
+                        t0 = time.time()
+                        info('Disting "{}"\n'.format(msh_idx))
 
-                try:
-                   sb.check_call(cmd, stdout=open(dist_file, 'w'), stderr=sb.DEVNULL)
-                except Exception as e:
-                   terminating.set()
-                   remove_file(dist_file, verbose=verbose)
-                   error(str(e), init_new_line=True)
-                   error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                   raise
+                    cmd = ['mash', 'dist', sgb_msh_idx, msh_idx]
 
-                if verbose:
-                    t1 = time.time()
-                    info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+                    try:
+                       sb.check_call(cmd, stdout=bz2_out, stderr=sb.DEVNULL)
+                    except Exception as e:
+                       terminating.set()
+                       bz2_out.close()
+                       remove_file(dist_file, verbose=verbose)
+                       error(str(e), init_new_line=True)
+                       error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                       raise
+
+                    if verbose:
+                        t1 = time.time()
+                        info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+
+                bz2_out.close()
             elif verbose:
                 info('"{}" already present\n'.format(dist_file))
         except Exception as e:
@@ -597,10 +630,10 @@ def phylophlan_metagenomic():
         binn_2_sgb = dict([(b.replace('.msh', ''), []) for b in os.listdir(sketches_folder)])
 
         for sgb in os.listdir(dists_folder):
-            sgbid = sgb.replace('.tsv', '')
+            sgbid = sgb.replace('.tsv.bz2', '')
             binn_2_dists = {}
 
-            with open(os.path.join(dists_folder, sgb)) as f:
+            with bz2.open(os.path.join(dists_folder, sgb), 'rt') as f:
                 for r in f:
                     rc = r.strip().split('\t')
                     binn = os.path.splitext(os.path.basename(rc[1]))[0]

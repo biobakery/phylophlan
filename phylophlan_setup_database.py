@@ -1,12 +1,12 @@
-#!/usr/bin/env python3
+aleria#!/usr/bin/env python3
 
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.09'
-__date__ = '8 March 2019'
+__version__ = '0.10'
+__date__ = '19 March 2019'
 
 
 import sys
@@ -326,7 +326,7 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
                  .format(len(not_mapped_again), nd_out))
 
         with open(nd_out, 'w') as f:
-            f.write('\n'.join(not_mapped_again))
+            f.write('\n'.join(not_mapped_again) + '\n')
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
