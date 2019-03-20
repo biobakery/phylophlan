@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.10'
-__date__ = '18 March 2019'
+__version__ = '0.11'
+__date__ = '20 March 2019'
 
 
 import sys
@@ -82,6 +82,12 @@ def read_params():
                    help="Path to the folder that contains the database file")
     p.add_argument('--only_input', action='store_true', default=False,
                    help="If specified provides a distance matrix between only the input genomes provided")
+    p.add_argument('--add_ggb', action='store_true', default=False,
+                   help=("If specified adds GGB assignments. If specified with --add_fgb -n/--how_many will be set to 1 and will "
+                         "be add a column that reports the closest reference genome"))
+    p.add_argument('--add_fgb', action='store_true', default=False,
+                   help=("If specified adds FGB assignments. If specified with --add_ggb -n/--how_many will be set to 1 and will "
+                         "be add a column that reports the closest reference genome"))
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrites the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
@@ -142,6 +148,12 @@ def check_params(args, verbose=False):
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
+
+    if args.add_ggb and args.add_fgb:
+        args.how_many = 1
+
+        if verbose:
+            info('Both --add_ggb and --add_fgb specified, setting -n/--how_many to "{}"'.format(args.how_many))
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)), init_new_line=True)
@@ -444,11 +456,11 @@ def disting_rec(x):
             if not os.path.isfile(dist_file):
                 bz2_out = bz2.open(dist_file, 'wb')
 
-                for msh_idx in pasted_bins:
-                    if verbose:
-                        t0 = time.time()
-                        info('Disting "{}"\n'.format(msh_idx))
+                if verbose:
+                    t0 = time.time()
+                    info('Disting "{}"\n'.format(sgb_msh_idx))
 
+                for msh_idx in pasted_bins:
                     cmd = ['mash', 'dist', sgb_msh_idx, msh_idx]
 
                     try:
@@ -461,9 +473,9 @@ def disting_rec(x):
                        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                        raise
 
-                    if verbose:
-                        t1 = time.time()
-                        info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
+                if verbose:
+                    t1 = time.time()
+                    info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
 
                 bz2_out.close()
             elif verbose:
@@ -620,7 +632,26 @@ def phylophlan_metagenomic():
         if args.verbose:
             info('Loading SGB mapping file\n')
 
-        sgb_2_info = dict([(r.strip().split('\t')[0], r.strip().split('\t')[1:]) for r in bz2.open(args.mapping, 'rt')])
+        sgb_2_info = dict([(r.strip().split('\t')[1], r.strip().split('\t')[2:])
+                           for r in bz2.open(args.mapping, 'rt')
+                           if (r.strip().split('\t')[0] == 'SGB') and (not r.startswith('#'))])
+        ggb_2_info = None
+        fgb_2_info = None
+
+        if args.add_ggb:
+            if args.verbose:
+                info('Loading GGB mapping file\n')
+
+            ggb_2_info = dict([(r.strip().split('\t')[1], r.strip().split('\t')[2:])
+                               for r in bz2.open(args.mapping, 'rt')
+                               if (r.strip().split('\t')[0] == 'GGB') and (not r.startswith('#'))])
+        if args.add_fgb:
+            if args.verbose:
+                info('Loading FGB mapping file\n')
+
+            fgb_2_info = dict([(r.strip().split('\t')[1], r.strip().split('\t')[2:])
+                               for r in bz2.open(args.mapping, 'rt')
+                               if (r.strip().split('\t')[0] == 'GGB') and (not r.startswith('#'))])
 
         if args.verbose:
             info('Loading mash dist files\n')
@@ -628,6 +659,14 @@ def phylophlan_metagenomic():
         sketches_folder = args.output_prefix + "_sketches/inputs"
         dists_folder = args.output_prefix + "_dists"
         binn_2_sgb = dict([(b.replace('.msh', ''), []) for b in os.listdir(sketches_folder)])
+        binn_2_ggb = None
+        binn_2_fgb = None
+
+        if args.add_ggb:
+            binn_2_ggb = dict(binn_2_sgb)
+
+        if args.add_fgb:
+            binn_2_fgb = dict(binn_2_sgb)
 
         for sgb in os.listdir(dists_folder):
             sgbid = sgb.replace('.tsv.bz2', '')
@@ -646,19 +685,34 @@ def phylophlan_metagenomic():
             for binn, dists in binn_2_dists.items():
                 binn_2_sgb[binn].append((sgbid, np.mean(dists)))
 
+                if args.add_ggb:
+                    pass
+
+                if args.add_fgb:
+                    pass
+
         if args.how_many == 'all':
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
         with open(output_file, 'w') as f:
-            f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
+            if args.add_ggb and args.add_fgb:
+                f.write('\t'.join(['#input_bin',
+                                   '[u|k]_SGBid:taxa_level:taxonomy:avg_dist',
+                                   '[u|k]_GGBid:taxa_level:taxonomy:avg_dist',
+                                   '[u|k]_FGBid:taxa_level:taxonomy:avg_dist',
+                                   'reference_genome:avg_dist']) + '\n')
 
-            for binn, sgb_dists in binn_2_sgb.items():
-                f.write('\t'.join([binn] + ["{}SGB_{}:{}:{}:{}".format('u' if sgb_2_info[i[0]][4].upper() == 'YES' else 'k',
-                                                                       i[0],
-                                                                       sgb_2_info[i[0]][5],
-                                                                       sgb_2_info[i[0]][6],
-                                                                       i[1])
-                                            for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
+                f.write()
+            else:
+                f.write('\t'.join(['#input_bin'] + ['[u|k]_SGBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
+
+                for binn, sgb_dists in binn_2_sgb.items():
+                    f.write('\t'.join([binn] + ["{}SGB_{}:{}:{}:{}".format('u' if sgb_2_info[i[0]][4].upper() == 'YES' else 'k',
+                                                                           i[0],
+                                                                           sgb_2_info[i[0]][5],
+                                                                           sgb_2_info[i[0]][6],
+                                                                           i[1])
+                                                for i in sorted(sgb_dists, key=lambda x: x[1])[:args.how_many]]) + '\n')
 
     else:  # input vs. input mode
         disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file, nproc=args.nproc, verbose=args.verbose)
