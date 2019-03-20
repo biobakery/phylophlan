@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.30'
-__date__ = '19 March 2019'
+__version__ = '0.31'
+__date__ = '20 March 2019'
 
 
 import os
@@ -885,46 +885,41 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbos
         markers = None
     elif os.path.isfile(os.path.join(db_folder, database + '.faa.bz2')):
         markers = [os.path.join(db_folder, database + '.faa.bz2')]
-    # assumed to be a folder with a fasta file for each marker
-    elif os.path.isdir(db_folder):
+    elif os.path.isdir(db_folder):  # assumed to be a folder with a fasta file for each marker
         markers = glob.iglob(os.path.join(db_folder, '*.faa*'))
     else:  # what's that??
         error('database format ("{}", "{}", or "{}") not recognize'
-              .format(db_fasta, os.path.join(db_folder, database + '.faa.bz2'), db_folder),
-              exit=True)
+              .format(db_fasta, os.path.join(db_folder, database + '.faa.bz2'), db_folder), exit=True)
 
     if key_dna in params:
-        if 'diamond' in params[key_aa]['program_name']:
+        if 'diamond' in params[key_dna]['program_name']:
             db_dna = database + '.dmnd'
 
             if not os.path.isfile(os.path.join(db_folder, db_dna)):
-                make_database(params[key_aa], db_fasta, markers, db_folder,
-                              database, key_dna, output_exts=[''], verbose=verbose)
+                make_database(params[key_dna], db_fasta, markers, db_folder, database, key_dna, output_exts=[''], verbose=verbose)
 
                 if not os.path.isfile(os.path.join(db_folder, db_dna)):
                     error('database "{}" has not been created... something went wrong!'
                           .format(os.path.join(db_folder, db_dna)), exit=True)
             elif verbose:
-                info('"{}" database "{}" present\n'.format(key_aa, db_dna))
+                info('"{}" database "{}" present\n'.format(key_dna, db_dna))
             else:
                 db_dna = None
 
             db_dna = os.path.join(db_folder, db_dna)
     else:
-        info('[w] cannot create database "{}", section "{}" not present in configurations\n'
-             .format(database, key_dna))
+        db_dna = None
 
     if key_aa in params:
         if 'usearch' in params[key_aa]['program_name']:
             db_aa = os.path.join(db_folder, database + '.udb')
 
             if not os.path.isfile(db_aa):
-                make_database(params[key_aa], db_fasta, markers, db_folder,
-                              database + '.udb', key_aa, output_exts=[''], verbose=verbose)
+                make_database(params[key_aa], db_fasta, markers, db_folder, database + '.udb', key_aa,
+                              output_exts=[''], verbose=verbose)
 
                 if not os.path.isfile(db_aa):
-                    error('database "{}" has not been created... something went wrong!'
-                          .format(db_aa), exit=True)
+                    error('database "{}" has not been created... something went wrong!'.format(db_aa), exit=True)
             elif verbose:
                 info('"{}" database "{}" present\n'.format(key_aa, db_aa))
             else:
@@ -933,24 +928,19 @@ def init_database_aa(database, databases_folder, params, key_dna, key_aa, verbos
             db_aa = os.path.join(db_folder, database + '.dmnd')
 
             if not os.path.isfile(db_aa):
-                make_database(params[key_aa], db_fasta, markers, db_folder, database,
-                              key_aa, output_exts=[''], verbose=verbose)
+                make_database(params[key_aa], db_fasta, markers, db_folder, database, key_aa, output_exts=[''], verbose=verbose)
 
                 if not os.path.isfile(db_aa):
-                    error('database "{}" has not been created... something went wrong!'
-                          .format(db_aa), exit=True)
+                    error('database "{}" has not been created... something went wrong!'.format(db_aa), exit=True)
             elif verbose:
                 info('"{}" database "{}" present\n'.format(key_aa, db_aa))
 
             db_dna = db_aa  # if there are genomes the database is the same
         else:
             error('program "{}" not recognize'
-                  .format(params[key_aa]['program_name'] if 'program_name' in params[key_aa] else 'None'),
-                  exit=True)
+                  .format(params[key_aa]['program_name'] if 'program_name' in params[key_aa] else 'None'), exit=True)
     else:
         db_aa = None
-        info('[w] cannot create database "{}", section "{}" not present in configurations\n'
-             .format(database, key_aa))
 
     return (db_dna, db_aa)
 
@@ -992,8 +982,7 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa, verbos
                   .format(params[key_dna]['program_name'] if 'program_name' in params[key_dna] else 'None'), exit=True)
     else:
         db_dna = None
-        info('[w] cannot create database "{}", section "{}" not present in configurations\n'
-             .format(database, key_dna))
+        info('[w] cannot create database "{}", section "{}" not present in configurations\n'.format(database, key_dna))
 
     return (db_dna, db_aa)
 
