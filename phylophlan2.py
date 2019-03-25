@@ -1556,7 +1556,7 @@ def fake_proteome_rec(x):
                 while (len(seq) % 3) != 0:
                     seq = seq[:-1]
 
-                seq_t = Seq.translate(seq, to_stop=True)
+                seq_t = Seq.translate(Seq(seq), to_stop=True)
 
                 if len(seq_t) >= min_len_protein:
                     proteome.append(SeqRecord(seq_t, id=idd, description=''))
