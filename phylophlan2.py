@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.31'
-__date__ = '20 March 2019'
+__version__ = '0.32'
+__date__ = '27 March 2019'
 
 
 import os
@@ -213,6 +213,9 @@ def read_params():
                    help=("If specified will produced a mutation rates table for each of "
                          "the aligned markers and a summary table for the concatenated MSA. "
                          "This operation can take long time to finish"))
+    p.add_argument('--force_nucleotides', action='store_true', default=False,
+                   help=("If specified force PhyloPhlAn to use nucloetide sequences for the phylogenetic analysis,  "
+                         "even in the case of a database of amino acids"))
 
     group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folders location")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER,
@@ -1465,7 +1468,7 @@ def gene_markers_extraction_rec(x):
                 if contig not in contig2marker2b6o:
                     contig2marker2b6o[contig] = {}
 
-                contig2marker2b6o[contig][marker] = (start, end, rev)
+                contig2marker2b6o[contig][marker] = (end, start, rev) if rev else (start, end, rev)
 
             for record in SimpleFastaParser(open(src_file)):
                 fid = record[0].split(' ')[0]
@@ -2797,21 +2800,22 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         inp_f = os.path.join(args.data_folder, 'map_dna')
         gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna,
                                     args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-        gene_markers_selection(inp_f, largest_cluster if args.db_type == 'a' else best_hit,
+        gene_markers_selection(inp_f, largest_cluster if (args.db_type == 'a') and (not args.force_nucleotides) else best_hit,
                                args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.data_folder, 'markers_dna')
         gene_markers_extraction(input_fna, inp_f, out_f, args.genome_extension, args.min_num_markers,
-                                frameshifts=True if args.db_type == 'a' else False, nproc=args.nproc, verbose=args.verbose)
+                                frameshifts=True if (args.db_type == 'a') and (not args.force_nucleotides) else False,
+                                nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
-        if args.db_type == 'a':
+    if (args.db_type == 'a') and (not args.force_nucleotides):
+        if input_fna:
             out_f = os.path.join(args.data_folder, 'fake_proteomes')
             fake_proteome(inp_f, out_f, args.genome_extension, args.proteome_extension, args.min_len_protein,
                           nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
             input_faa = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
-    if args.db_type == 'a':
         faa = load_input_files(args.input_folder, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
         if input_faa:  # if duplicates input keep the ones from 'faa'
@@ -2843,11 +2847,13 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
     out_f = os.path.join(args.data_folder, 'markers')
     inputs2markers(inp_f, out_f, args.min_num_entries,
-                   args.proteome_extension if args.db_type == 'a' else args.genome_extension, verbose=args.verbose)
+                   args.proteome_extension if (args.db_type == 'a') and (not args.force_nucleotides) else args.genome_extension,
+                   verbose=args.verbose)
     inp_f = out_f
     out_f = os.path.join(args.data_folder, 'msas')
-    msas(configs, 'msa', inp_f, args.proteome_extension if args.db_type == 'a' else args.genome_extension, out_f,
-         nproc=args.nproc, verbose=args.verbose)
+    msas(configs, 'msa',
+         inp_f, args.proteome_extension if (args.db_type == 'a') and (not args.force_nucleotides) else args.genome_extension,
+         out_f, nproc=args.nproc, verbose=args.verbose)
     inp_f = out_f
 
     if args.mutation_rates:
