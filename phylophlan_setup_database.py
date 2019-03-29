@@ -1,4 +1,4 @@
-aleria#!/usr/bin/env python3
+#!/usr/bin/env python3
 
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '

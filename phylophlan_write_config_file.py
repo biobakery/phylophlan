@@ -3,10 +3,11 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
+              'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.06'
-__date__ = '1 November 2018'
+__version__ = '0.07'
+__date__ = '29 March 2019'
 
 
 import os
@@ -97,6 +98,9 @@ def read_params():
                          'phylogeny previously built with what specified in the "tree1" section'))
     p.add_argument('-a', '--absolute_path', action='store_true', default=False,
                    help="Write the absolute path to the executable instead of the executable name as find in the system path environment")
+    p.add_argument('--force_nucleotides', default=None, action='store_true',
+                   help=('If specified sets parameters for phylogenetic analysis softwares so that they use '
+                         'nucleotide sequences, even in the case of a database of amino acids'))   
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
@@ -295,7 +299,7 @@ def phylophlan_write_config_file():
                'params': '--quiet',
                'command_line': '#program_name# #params# #input# #output#'}
 
-        if args.db_type == 'a':
+        if (args.db_type == 'a' and (not args.force_nucleotides)):
             msa['params'] += ' --protein'
     elif 'upp' in args.msa:
         exe, _ = find_executable('upp', rollback='run-upp.sh', absolute=args.absolute_path)
@@ -307,7 +311,7 @@ def phylophlan_write_config_file():
                'version': '--version',
                'command_line': '#program_name# #params# #input# #output_path# #output#'}
 
-        if args.db_type == 'n':
+        if (args.db_type == 'n' or args.force_nucleotides):
             msa['params'] += ' -m dna',
         elif args.db_type == 'a':
             msa['model'] += ' -m amino'
@@ -336,7 +340,7 @@ def phylophlan_write_config_file():
                           'output': '-out',
                           'command_line': '#program_name# #params# #output# #input#'}
 
-            if args.db_type == 'n':
+            if (args.db_type == 'n' or args.force_nucleotides):
                 gene_tree1['params'] += ' -gtr -nt'
             elif args.db_type == 'a':
                 gene_tree1['params'] += ' -lg'
@@ -349,7 +353,7 @@ def phylophlan_write_config_file():
                           'output': '-n',
                           'version': '-v'}
 
-            if args.db_type == 'n':
+            if (args.db_type == 'n' or args.force_nucleotides):
                 gene_tree1['params'] += ' -m GTRCAT',
                 gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
             elif args.db_type == 'a':
@@ -370,7 +374,7 @@ def phylophlan_write_config_file():
                           'output': '-n',
                           'version': '-v'}
 
-            if args.db_type == 'n':
+            if (args.db_type == 'n' or args.force_nucleotides):
                 gene_tree2['params'] += '-p 1989 -m GTRCAT'
                 gene_tree2['command_line'] = '#program_name# #params# #database# #output_path# #input# #output#'
             elif args.db_type == 'a':
@@ -405,7 +409,7 @@ def phylophlan_write_config_file():
         if not rb:
             tree1['environment'] = 'OMP_NUM_THREADS=3'
 
-        if args.db_type == 'n':
+        if (args.db_type == 'n' or args.force_nucleotides):
             tree1['params'] += ' -gtr -nt'
         elif args.db_type == 'a':
             tree1['params'] += ' -lg'
@@ -422,7 +426,7 @@ def phylophlan_write_config_file():
         if not rb:
             tree1['threads'] = '-T'
 
-        if args.db_type == 'n':
+        if (args.db_type == 'n' or args.force_nucleotides):
             tree1['params'] += ' -m GTRCAT'
         elif args.db_type == 'a':
             tree1['params'] += ' -m PROTCATLG'
@@ -445,7 +449,7 @@ def phylophlan_write_config_file():
             if not rb:
                 tree2['threads'] = '-T'
 
-            if args.db_type == 'n':
+            if (args.db_type == 'n' or args.force_nucleotides):
                 tree2['params'] += ' -m GTRCAT'
             elif args.db_type == 'a':
                 tree2['params'] += ' -m PROTCATLG'
