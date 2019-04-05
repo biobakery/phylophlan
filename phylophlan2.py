@@ -1479,7 +1479,10 @@ def gene_markers_extraction_rec(x):
                 for marker in contig2marker2b6o[fid]:
                     s, e, rev = contig2marker2b6o[fid][marker]
                     idd = '{}_{}:'.format(fid, marker)
-                    seq = Seq(record[1][s - 1:e])
+                    seq = Seq(record[1][s - 1:e]) if (s - 1 >= 0) else None
+
+                    if not seq:  # skip empty sequences
+                        continue
 
                     if rev:
                         idd += 'c'
@@ -1489,11 +1492,17 @@ def gene_markers_extraction_rec(x):
 
                     if frameshifts:
                         if not rev:
-                            out_file_seq.append(SeqRecord(Seq(record[1][s:e]), id='{}{}-{}'.format(idd, s + 1, e), description=''))
-                            out_file_seq.append(SeqRecord(Seq(record[1][s + 1:e]), id='{}{}-{}'.format(idd, s + 2, e), description=''))
+                            if record[1][s:e]:  # skip empty sequences
+                                out_file_seq.append(SeqRecord(Seq(record[1][s:e]), id='{}{}-{}'.format(idd, s + 1, e), description=''))
+
+                            if record[1][s + 1:e]:  # skip empty sequences
+                                out_file_seq.append(SeqRecord(Seq(record[1][s + 1:e]), id='{}{}-{}'.format(idd, s + 2, e), description=''))
                         else:
-                            out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 1]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 1), description=''))
-                            out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 2]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 2), description=''))
+                            if (s - 1 >= 0) and (e - 1 >= 0) and (record[1][s - 1:e - 1]):  # skip empty sequences
+                                out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 1]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 1), description=''))
+
+                            if (s - 1 >= 0) and (e - 2 >= 0) and (record[1][s - 1:e - 2]):  # skip empty sequences
+                                out_file_seq.append(SeqRecord(Seq(record[1][s - 1:e - 2]).reverse_complement(), id='{}{}-{}'.format(idd, s, e - 2), description=''))
 
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
