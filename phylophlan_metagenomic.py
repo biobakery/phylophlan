@@ -33,8 +33,7 @@ if sys.version_info[0] < 3:
 
 HOW_MANY = "10"
 DOWNLOAD_URL = ""
-MAPPING_FILE = "SGB.Jan19.txt.bz2"
-DATABASE_FILE = "SGB.Jan19"
+SGB_RELEASE_FILE = "SGB.Jan19"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -68,9 +67,9 @@ def read_params():
     p.add_argument('-o', '--output_prefix', type=str, default=None,
                    help=("Prefix used for the output folders: indexed bins, distance estimations. If not specified, "
                          "the input folder will be used"))
-    p.add_argument('-d', '--database', type=str, default=DATABASE_FILE,
+    p.add_argument('-d', '--database', type=str, default=SGB_RELEASE_FILE,
                    help="Specify the name of the database, if not found locally will be automatically downloaded")
-    p.add_argument('-m', '--mapping', type=str, default=MAPPING_FILE,
+    p.add_argument('-m', '--mapping', type=str, default=SGB_RELEASE_FILE,
                    help="Specify the name of the mapping file, if not found locally will be automatically downloaded")
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
@@ -146,6 +145,9 @@ def check_params(args, verbose=False):
 
     args.database = os.path.join(args.database_folder, args.database)
     args.mapping = os.path.join(args.database_folder, args.mapping)
+
+    if not args.mapping.endswith('.txt.bz2'):
+        args.mapping += '.txt.bz2'
 
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
@@ -659,9 +661,6 @@ def phylophlan_metagenomic():
                                for r in bz2.open(args.mapping, 'rt')
                                if (r.strip().split('\t')[0] == 'FGB') and (not r.startswith('#'))])
 
-        if args.verbose:
-            info('Loading mash dist files\n')
-
         sketches_folder = args.output_prefix + "_sketches/inputs"
         dists_folder = args.output_prefix + "_dists"
         binn_2_sgb = dict([(b.replace('.msh', ''), dict()) for b in os.listdir(sketches_folder)])
@@ -669,6 +668,8 @@ def phylophlan_metagenomic():
         binn_2_fgb = None
         binn_2_refgen = None
         refgen_list = None
+        centroids_2_dist = None
+        centroids_list = None
 
         if args.add_ggb:
             binn_2_ggb = copy.deepcopy(binn_2_sgb)
@@ -677,59 +678,78 @@ def phylophlan_metagenomic():
             binn_2_fgb = copy.deepcopy(binn_2_sgb)
 
         if args.add_ggb and args.add_fgb:
+            if args.verbose:
+                info('Loading reference genomes list\n')
+
             binn_2_refgen = copy.deepcopy(binn_2_sgb)
             refgen_list = set(itertools.chain.from_iterable([x[3].strip().split(',')
                                                              for x in sgb_2_info.values()
                                                              if x[3].strip() != '-']))
+
+            if args.verbose:
+                info('Loading SGB centroids list\n')
+
+            centroids_2_dist = copy.deepcopy(binn_2_sgb)
+            centroids_list = set(itertools.chain.from_iterable([x[4].strip().split(',')
+                                                             for x in sgb_2_info.values()
+                                                             if x[4].strip() != '-']))
+
+        if args.verbose:
+            info('Loading mash dist files\n')
 
         for sgb in os.listdir(dists_folder):
             sgbid = sgb.replace('.tsv', '')
             binn_2_dists = {}
 
             with open(os.path.join(dists_folder, sgb), 'rt') as f:
-                try:
-                    for r in f:
-                        rc = r.strip().split('\t')
-                        binn = os.path.splitext(os.path.basename(rc[1]))[0]
+                for r in f:
+                    rc = r.strip().split('\t')
+                    binn = os.path.splitext(os.path.basename(rc[1]))[0]
 
-                        if binn in binn_2_dists:
-                            binn_2_dists[binn].append(float(rc[2]))
-                        else:
-                            binn_2_dists[binn] = [float(rc[2])]
+                    if binn in binn_2_dists:
+                        binn_2_dists[binn].append(float(rc[2]))
+                    else:
+                        binn_2_dists[binn] = [float(rc[2])]
 
-                        if args.add_ggb and args.add_fgb:
-                            sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
+                    if args.add_ggb and args.add_fgb:
+                        sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
 
-                            if sgb_member in refgen_list:
-                                binn_2_refgen[binn][sgb_member] = float(rc[2])
-                except:
-                    print()
-                    print(os.path.join(dists_folder, sgb))
-                    print()
-                    raise
+                        if sgb_member in refgen_list:
+                            binn_2_refgen[binn][sgb_member] = float(rc[2])
+
+                        if sgb_member in centroids_list:
+                            centroids_2_dist[binn][sgb_member] = float(rc[2])
 
             for binn, dists in binn_2_dists.items():
                 binn_2_sgb[binn][sgbid] = np.mean(dists)
 
         if args.add_ggb:
-            for ggb_id, info_list in ggb_2_info.items():
-                sgb_2_count = dict([(sgb_id, int(sgb_2_info[sgb_id][0]) + int(sgb_2_info[sgb_id][1]))
-                                    for sgb_id in [x.replace('SGB', '') for x in info_list[2].split(',')]])
-                tot_sgbs = sum(sgb_2_count.values())
+            if args.verbose:
+                info('Computing GGB average distances\n')
 
-                for binn in binn_2_sgb:
-                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id])
-                                                    for sgb_id, sgb_sum in sgb_2_count.items()])
+            for binn in binn_2_sgb:
+                for ggb_id, info_list in ggb_2_info.items():
+                    sgb_in_ggb = list(itertools.chain.from_iterable(
+                                          [sgb_2_info[s.replace('SGB', '')][4].strip().split(',')
+                                           for s in info_list[2].strip().split(',')
+                                           if info_list[2].strip() != '-']))
+                    binn_2_ggb[binn][ggb_id] = np.mean([centroids_2_dist[binn][c] for c in sgb_in_ggb])
 
         if args.add_fgb:
-            for fgb_id, info_list in fgb_2_info.items():
-                ggb_2_count = dict([(ggb_id, int(ggb_2_info[ggb_id][0]) + int(ggb_2_info[ggb_id][1]))
-                                    for ggb_id in [x.replace('GGB', '') for x in info_list[2].split(',')]])
-                tot_sgbs = sum(ggb_2_count.values())
+            if args.verbose:
+                info('Computing FGB average distances\n')
 
-                for binn in binn_2_ggb:
-                    binn_2_fgb[binn][fgb_id] = sum([((ggb_sum / tot_sgbs) * binn_2_ggb[binn][ggb_id])
-                                                    for ggb_id, ggb_sum in ggb_2_count.items()])
+            for binn in binn_2_sgb:
+                for fgb_id, info_list in fgb_2_info.items():
+                    sgb_in_fgb = []
+
+                    for g in info_list[2].strip().split(','):
+                        sgb_in_fgb += list(itertools.chain.from_iterable(
+                                               [sgb_2_info[s.replace('SGB', '')][4].strip().split(',')
+                                                for s in ggb_2_info[g.replace('GGB', '')][2].strip().split(',')
+                                                if ggb_2_info[g.replace('GGB', '')][2].strip() != '-']))
+
+                    binn_2_fgb[binn][fgb_id] = np.mean([centroids_2_dist[binn][c] for c in sgb_in_fgb])
 
         if args.how_many == 'all':
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
@@ -752,21 +772,21 @@ def phylophlan_metagenomic():
                     refgen, refgen_dist = sorted(binn_2_refgen[binn].items(), key=lambda x: x[1])[:args.how_many][0]
 
                     f.write('\t'.join([binn,
-                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id][4], sgb_id, sgb_2_info[sgb_id][5],
-                                                               sgb_2_info[sgb_id][6], sgb_dist),
-                                       "{}_{}:{}:{}:{}".format(ggb_2_info[ggb_id][4], ggb_id, ggb_2_info[ggb_id][5],
-                                                               ggb_2_info[ggb_id][6], ggb_dist),
-                                       "{}_{}:{}:{}:{}".format(fgb_2_info[fgb_id][4], fgb_id, fgb_2_info[fgb_id][5],
-                                                               fgb_2_info[fgb_id][6], fgb_dist),
+                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id][5], sgb_id, sgb_2_info[sgb_id][6],
+                                                               sgb_2_info[sgb_id][7], sgb_dist),
+                                       "{}_{}:{}:{}:{}".format(ggb_2_info[ggb_id][5], ggb_id, ggb_2_info[ggb_id][6],
+                                                               ggb_2_info[ggb_id][7], ggb_dist),
+                                       "{}_{}:{}:{}:{}".format(fgb_2_info[fgb_id][5], fgb_id, fgb_2_info[fgb_id][6],
+                                                               fgb_2_info[fgb_id][7], fgb_dist),
                                        "{}:{}".format(refgen, refgen_dist)]) + '\n')
             else:
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
                 for binn, sgb_dists in binn_2_sgb.items():
-                    f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][4],
+                    f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][5],
                                                                         i[0],
-                                                                        sgb_2_info[i[0]][5],
                                                                         sgb_2_info[i[0]][6],
+                                                                        sgb_2_info[i[0]][7],
                                                                         i[1])
                                                 for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
 
