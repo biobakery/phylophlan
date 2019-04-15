@@ -3079,7 +3079,7 @@ def phylophlan2():
 
     if args.verbose:
         info('PhyloPhlAn version {} ({})\n'.format(__version__, __date__))
-        info('Command line: {}\n'.format(' '.join(sys.argv)), init_new_line=True)
+        info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     project_name = check_args(args, sys.argv, verbose=args.verbose)
 
