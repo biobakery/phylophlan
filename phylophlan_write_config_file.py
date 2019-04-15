@@ -29,9 +29,9 @@ MAP_DNA_CHOICES = ['blastn', 'tblastn', 'diamond']
 MAP_AA_CHOICES = ['usearch', 'diamond']
 MSA_CHOICES = ['muscle', 'mafft', 'opal', 'upp']
 TRIM_CHOICES = ['trimal']
-GENE_TREE1_CHOICES = ['fasttree', 'raxml']
+GENE_TREE1_CHOICES = ['fasttree', 'raxml', 'iqtree']
 GENE_TREE2_CHOICES = ['raxml']
-TREE1_CHOICES = ['fasttree', 'raxml', 'astral', 'astrid']
+TREE1_CHOICES = ['fasttree', 'raxml', 'iqtree', 'astral', 'astrid']
 TREE2_CHOICES = ['raxml']
 
 
@@ -280,7 +280,7 @@ def phylophlan_write_config_file():
     elif 'mafft' in args.msa:
         exe, _ = find_executable('mafft', absolute=args.absolute_path)
         msa = {'program_name': exe,
-               'params': '--quiet --anysymbol --auto',
+               'params': '--quiet --anysymbol --thread 1 --auto',
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
 
@@ -359,6 +359,20 @@ def phylophlan_write_config_file():
             elif args.db_type == 'a':
                 gene_tree1['model'] = '-m'
                 gene_tree1['command_line'] = '#program_name# #model# #params# #output_path# #input# #output#'
+        elif 'iqtree' in args.gene_tree1:
+            exe, _ = find_executable('iqtree', absolute=args.absolute_path)
+            gene_tree1 = {'program_name': exe,
+                          'params': '-quiet -nt 1',
+                          'input': '-s',
+                          'output': '-pre',
+                          'version': '-version'}
+
+            if (args.db_type == 'n' or args.force_nucleotides):
+                gene_tree1['params'] += ' -m GTR',
+                gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
+            elif args.db_type == 'a':
+                gene_tree1['model'] = '-m'
+                gene_tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
 
         progs['gene_tree1'] = gene_tree1
 
@@ -430,6 +444,21 @@ def phylophlan_write_config_file():
             tree1['params'] += ' -m GTRCAT'
         elif args.db_type == 'a':
             tree1['params'] += ' -m PROTCATLG'
+
+    elif 'iqtree' in args.gene_tree1:
+        exe, _ = find_executable('iqtree', absolute=args.absolute_path)
+        gene_tree1 = {'program_name': exe,
+                      'params': '-quiet -nt AUTO',
+                      'input': '-s',
+                      'output': '-pre',
+                      'version': '-version'}
+
+        if (args.db_type == 'n' or args.force_nucleotides):
+            gene_tree1['params'] += ' -m GTR',
+            gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
+        elif args.db_type == 'a':
+            gene_tree1['params'] += ' -m LG',
+            gene_tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
 
     progs['tree1'] = tree1
 

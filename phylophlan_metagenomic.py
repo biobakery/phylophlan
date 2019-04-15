@@ -32,7 +32,7 @@ if sys.version_info[0] < 3:
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 HOW_MANY = "10"
-DOWNLOAD_URL = ""
+DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/phylophlan_metagenomic.txt"
 SGB_RELEASE_FILE = "SGB.Jan19"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
@@ -143,9 +143,6 @@ def check_params(args, verbose=False):
 
         args.how_many = how_many
 
-    args.database = os.path.join(args.database_folder, args.database)
-    args.mapping = os.path.join(args.database_folder, args.mapping)
-
     if not args.mapping.endswith('.txt.bz2'):
         args.mapping += '.txt.bz2'
 
@@ -161,8 +158,6 @@ def check_params(args, verbose=False):
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)), init_new_line=True)
-
-    return (args.database, args.mapping)
 
 
 def check_dependencies(verbose=False):
@@ -608,15 +603,26 @@ def phylophlan_metagenomic():
         info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
-    db, mapp = check_params(args, verbose=args.verbose)
+    check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
 
     if not args.only_input:  # if mashing vs. the SGBs
-        download(os.path.join(DOWNLOAD_URL, db + '.tar'), args.database + '.tar', verbose=args.verbose)
-        download(os.path.join(DOWNLOAD_URL, db + '.md5'), args.database + '.md5', verbose=args.verbose)
+        sgbs_url = os.path.basename(DOWNLOAD_URL)
+        download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
+        urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
+                if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
+
+        if len(urls) != 3:
+            error('invalid number of URLs in the downloaded file', exit=True)
+
+        for url, filename in urls:
+            download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
+
+        args.database = os.path.join(args.database_folder, args.database)
+        args.mapping = os.path.join(args.database_folder, args.mapping)
+
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
-        download(os.path.join(DOWNLOAD_URL, mapp), args.mapping, verbose=args.verbose)
     else:  # mashing inputs against themselves
         sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix,
                                               nproc=args.nproc, verbose=args.verbose)
@@ -639,6 +645,13 @@ def phylophlan_metagenomic():
         if args.verbose:
             info('Loading SGB mapping file\n')
 
+        metadata_rows = []
+
+        for r in bz2.open(args.mapping, 'rt'):
+            if r.startswith('#'):
+                metadata_rows.append(r.strip().split('\t'))
+
+        mdidx = dict([(m, i) for i, m in enumerate(metadata_rows[-1][2:])])
         sgb_2_info = dict([(r.strip().split('\t')[1], r.strip().split('\t')[2:])
                            for r in bz2.open(args.mapping, 'rt')
                            if (r.strip().split('\t')[0] == 'SGB') and (not r.startswith('#'))])
@@ -668,8 +681,6 @@ def phylophlan_metagenomic():
         binn_2_fgb = None
         binn_2_refgen = None
         refgen_list = None
-        centroids_2_dist = None
-        centroids_list = None
 
         if args.add_ggb:
             binn_2_ggb = copy.deepcopy(binn_2_sgb)
@@ -682,17 +693,9 @@ def phylophlan_metagenomic():
                 info('Loading reference genomes list\n')
 
             binn_2_refgen = copy.deepcopy(binn_2_sgb)
-            refgen_list = set(itertools.chain.from_iterable([x[3].strip().split(',')
+            refgen_list = set(itertools.chain.from_iterable([x[mdidx['List of reference genomes']].strip().split(',')
                                                              for x in sgb_2_info.values()
-                                                             if x[3].strip() != '-']))
-
-            if args.verbose:
-                info('Loading SGB centroids list\n')
-
-            centroids_2_dist = copy.deepcopy(binn_2_sgb)
-            centroids_list = set(itertools.chain.from_iterable([x[4].strip().split(',')
-                                                             for x in sgb_2_info.values()
-                                                             if x[4].strip() != '-']))
+                                                             if x[mdidx['List of reference genomes']].strip() != '-']))
 
         if args.verbose:
             info('Loading mash dist files\n')
@@ -717,39 +720,34 @@ def phylophlan_metagenomic():
                         if sgb_member in refgen_list:
                             binn_2_refgen[binn][sgb_member] = float(rc[2])
 
-                        if sgb_member in centroids_list:
-                            centroids_2_dist[binn][sgb_member] = float(rc[2])
-
             for binn, dists in binn_2_dists.items():
                 binn_2_sgb[binn][sgbid] = np.mean(dists)
 
         if args.add_ggb:
             if args.verbose:
-                info('Computing GGB average distances\n')
+                info('Computing GGB distances\n')
 
-            for binn in binn_2_sgb:
-                for ggb_id, info_list in ggb_2_info.items():
-                    sgb_in_ggb = list(itertools.chain.from_iterable(
-                                          [sgb_2_info[s.replace('SGB', '')][4].strip().split(',')
-                                           for s in info_list[2].strip().split(',')
-                                           if info_list[2].strip() != '-']))
-                    binn_2_ggb[binn][ggb_id] = np.mean([centroids_2_dist[binn][c] for c in sgb_in_ggb])
+            for ggb_id, info_list in ggb_2_info.items():
+                sgb_2_count = dict([(sgb_id, int(sgb_2_info[sgb_id][mdidx['Number of reconstructed genomes']]) + int(sgb_2_info[sgb_id][mdidx['Number of reference genomes']]))
+                                    for sgb_id in [x.replace('SGB', '') for x in info_list[mdidx['List of reconstructed genomes']].split(',')
+                                    if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
+                tot_sgbs = sum(sgb_2_count.values())
+
+                for binn in binn_2_sgb:
+                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id]) for sgb_id, sgb_sum in sgb_2_count.items()])
 
         if args.add_fgb:
             if args.verbose:
-                info('Computing FGB average distances\n')
+                info('Computing FGB distances\n')
 
-            for binn in binn_2_sgb:
-                for fgb_id, info_list in fgb_2_info.items():
-                    sgb_in_fgb = []
+            for fgb_id, info_list in fgb_2_info.items():
+                ggb_2_count = dict([(ggb_id, int(ggb_2_info[ggb_id][mdidx['Number of reconstructed genomes']]) + int(ggb_2_info[ggb_id][mdidx['Number of reference genomes']]))
+                                    for ggb_id in [x.replace('GGB', '') for x in info_list[mdidx['List of reconstructed genomes']].split(',')
+                                    if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
+                tot_sgbs = sum(ggb_2_count.values())
 
-                    for g in info_list[2].strip().split(','):
-                        sgb_in_fgb += list(itertools.chain.from_iterable(
-                                               [sgb_2_info[s.replace('SGB', '')][4].strip().split(',')
-                                                for s in ggb_2_info[g.replace('GGB', '')][2].strip().split(',')
-                                                if ggb_2_info[g.replace('GGB', '')][2].strip() != '-']))
-
-                    binn_2_fgb[binn][fgb_id] = np.mean([centroids_2_dist[binn][c] for c in sgb_in_fgb])
+                for binn in binn_2_ggb:
+                    binn_2_fgb[binn][fgb_id] = sum([((ggb_sum / tot_sgbs) * binn_2_ggb[binn][ggb_id]) for ggb_id, ggb_sum in ggb_2_count.items()])
 
         if args.how_many == 'all':
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
