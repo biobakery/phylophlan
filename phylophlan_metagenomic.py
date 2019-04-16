@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.13'
-__date__ = '25 March 2019'
+__version__ = '0.14'
+__date__ = '16 April 2019'
 
 
 import sys
@@ -293,7 +293,7 @@ def sketching_inputs_for_input_input_dist_rec(x):
 
             if verbose:
                 t0 = time.time()
-                info('Analyzing "{}"\n'.format(inp_bin))
+                info('Sketching "{}"\n'.format(inp_bin))
 
             # sketch
             if not os.path.isfile(out_sketch + ".msh"):
@@ -310,7 +310,7 @@ def sketching_inputs_for_input_input_dist_rec(x):
 
             if verbose:
                 t1 = time.time()
-                info('Analysis for "{}" completed in {}s\n'.format(inp_bin, int(t1 - t0)))
+                info('Sketch for "{}" computed in {}s\n'.format(inp_bin, int(t1 - t0)))
 
         except Exception as e:
             terminating.set()
@@ -491,24 +491,53 @@ def disting_rec(x):
 
 
 def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbose=False):
-    inpt = output_prefix + "_sketches/" + prj_name + "_paste.msh"
-    cmd = ['mash', 'dist', '-t', '-p', str(nproc), inpt, inpt]
+    commands = []
+    inps = sorted(glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"))
+    inps_combs = itertools.combinations_with_replacement(inps, r=2)
+    out_pre, out_ext = os.path.splitext(output_file)
 
-    if verbose:
-        t0 = time.time()
-        info('Disting inputs in input vs input mode\n')
+    for inp_a, inp_b in inps_combs:
+        a = inp_a.split('_')[-1].split('.')[0]
+        b = inp_b.split('_')[-1].split('.')[0]
+        out_f = '{}_{}vs{}{}'.format(out_pre, a, b, out_ext)
 
-    try:
-        sb.check_call(cmd, stdout=open(output_file, 'w'), stderr=sb.DEVNULL)
-    except Exception as e:
-        remove_file(output_file, verbose=verbose)
-        error(str(e), init_new_line=True)
-        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-        raise
+        if not os.path.isfile(out_f):
+            commands.append((inp_a, inp_b, out_f, verbose))
 
-    if verbose:
-        t1 = time.time()
-        info('Inputs vs. inputs distances "{}" completed in {}s\n'.format(output_file, int(t1 - t0)))
+    if commands:
+        terminating = mp.Event()
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(disting_input_vs_input_rec, commands, chunksize=1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('disting_input_vs_input crashed', init_new_line=True, exit=True)
+    else:
+        info('Disting input vs. input already computed!\n')
+
+
+def disting_input_vs_input_rec(x):
+    if not terminating.is_set():
+        try:
+            inp_a, inp_b, out_f, verbose = x
+            cmd = ['mash', 'dist', '-t', '-p', '1', inp_a, inp_b]
+
+            try:
+                sb.check_call(cmd, stdout=open(out_f, 'w'), stderr=sb.DEVNULL)
+            except Exception as e:
+                terminating.set()
+                remove_file(out_f, verbose=verbose)
+                error(str(e), init_new_line=True)
+                error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                raise
+        except Exception as e:
+            terminating.set()
+            error(str(e), init_new_line=True)
+            error('error while disting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
+    else:
+        terminating.set()
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -594,6 +623,17 @@ def decompress_rec(x):
             raise
     else:
         terminating.set()
+
+
+def merging(output_file, verbose=False):
+    out_pre, out_ext = os.path.splitext(output_file)
+
+    to_be_merged = glob.glob('{}_*vs*{}'.format(out_pre, out_ext))
+
+    if len(to_be_merged) == 1:
+        os.rename(to_be_merged[0], output_file)
+    else:
+        error('not yet implemented!', init_new_line=True, exit=True)
 
 
 def phylophlan_metagenomic():
@@ -789,8 +829,8 @@ def phylophlan_metagenomic():
                                                 for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
 
     else:  # input vs. input mode
-        disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file,
-                               nproc=args.nproc, verbose=args.verbose)
+        disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file, nproc=args.nproc, verbose=args.verbose)
+        merging(output_file, verbose=args.verbose)
 
     info('Results saved to "{}"\n'.format(output_file))
 
