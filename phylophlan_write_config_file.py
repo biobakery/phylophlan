@@ -445,20 +445,20 @@ def phylophlan_write_config_file():
         elif args.db_type == 'a':
             tree1['params'] += ' -m PROTCATLG'
 
-    elif 'iqtree' in args.gene_tree1:
+    elif 'iqtree' in args.tree1:
         exe, _ = find_executable('iqtree', absolute=args.absolute_path)
-        gene_tree1 = {'program_name': exe,
-                      'params': '-quiet -nt AUTO',
-                      'input': '-s',
-                      'output': '-pre',
-                      'version': '-version'}
+        tree1 = {'program_name': exe,
+                 'params': '-quiet -nt AUTO',
+                 'input': '-s',
+                 'output': '-pre',
+                 'version': '-version'}
 
         if (args.db_type == 'n' or args.force_nucleotides):
-            gene_tree1['params'] += ' -m GTR',
-            gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
+            tree1['params'] += ' -m GTR'
+            tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
         elif args.db_type == 'a':
-            gene_tree1['params'] += ' -m LG',
-            gene_tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
+            tree1['params'] += ' -m LG'
+            tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
 
     progs['tree1'] = tree1
 
