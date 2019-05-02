@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.32'
-__date__ = '27 March 2019'
+__version__ = '0.33'
+__date__ = '18 April 2019'
 
 
 import os
@@ -1877,7 +1877,7 @@ def trim_not_variant_rec(x):
                     t1 = time.time()
                     info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
             elif verbose:
-                    info('"{}" discarded because no cloumns retained while removing not '
+                    info('"{}" discarded because no columns retained while removing not '
                          'variant sites (thr: {})\n'.format(inp, thr))
         except Exception as e:
             terminating.set()
