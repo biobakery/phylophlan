@@ -56,7 +56,7 @@ def read_params():
 
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-g', '--get', type=str,
-                       help=('Specify the taxonomic label for which download the set of reference proteomes. '
+                       help=('Specify the taxonomic label for which download the set of reference genomes. '
                              'The label must represents a valid taxonomic level or the special case "all"'))
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
                        help='Print for all taxa the total number of species and reference genomes available')
@@ -66,7 +66,7 @@ def read_params():
     p.add_argument('-o', '--output', type=str,
                    help="Specify path to the output folder where to save the files, required when -g/--get is specified")
     p.add_argument('-n', '--how_many', type=int, default=4,
-                   help='Specify how many reference proteomes to download, where -1 stands for "all available"')
+                   help='Specify how many reference genomes to download, where -1 stands for "all available"')
     p.add_argument('-m', '--genbank_mapping', type=str, default=GB_ASSEMBLY_FILE,
                    help='The local GenBank mapping file, if not found it will be automatically downloaded')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")

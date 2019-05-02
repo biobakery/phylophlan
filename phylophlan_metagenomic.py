@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.14'
-__date__ = '16 April 2019'
+__version__ = '0.15'
+__date__ = '2 May 2019'
 
 
 import sys
@@ -688,7 +688,7 @@ def phylophlan_metagenomic():
         metadata_rows = []
 
         for r in bz2.open(args.mapping, 'rt'):
-            if r.startswith('#'):
+            if not r.startswith('#'):
                 metadata_rows.append(r.strip().split('\t'))
 
         mdidx = dict([(m, i) for i, m in enumerate(metadata_rows[-1][2:])])
