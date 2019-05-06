@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.15'
-__date__ = '2 May 2019'
+__version__ = '0.16'
+__date__ = '6 May 2019'
 
 
 import sys
@@ -63,7 +63,7 @@ def read_params():
     p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True,
-                   help="Input folder containing the metagnomic bins to be indexed")
+                   help="Input folder containing the metagenomic bins to be indexed")
     p.add_argument('-o', '--output_prefix', type=str, default=None,
                    help=("Prefix used for the output folders: indexed bins, distance estimations. If not specified, "
                          "the input folder will be used"))
@@ -121,15 +121,15 @@ def check_params(args, verbose=False):
         if verbose:
             info('Setting prefix output folder to "{}"\n'.format(args.output_prefix))
 
-    if not os.path.isdir(args.database_folder):
-        if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)):
-            args.database_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)
+    # database folder
+    if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)):
+        args.database_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)
 
-            if verbose:
-                info('Setting --database_folder to "{}"\n'.format(args.database_folder))
-        else:
-            error('"{}" folder not found, neither in "{}"'
-                  .format(args.database_folder, os.path.dirname(os.path.abspath(__file__))), exit=True)
+        if verbose:
+            info('Setting --database_folder to "{}"\n'.format(args.database_folder))
+
+    if not os.path.isdir(args.database_folder):
+        create_folder(args.database_folder, verbose=verbose)
 
     if args.how_many != 'all':
         try:
@@ -233,11 +233,11 @@ def download(url, download_file, verbose=False):
 def create_folder(output, verbose=False):
     if not os.path.exists(output):
         if verbose:
-            info('Creating output folder "{}"\n'.format(output))
+            info('Creating folder "{}"\n'.format(output))
 
         os.mkdir(output, mode=0o775)
     elif verbose:
-        info('Output "{}" folder present\n'.format(output))
+        info('Folder "{}" already present\n'.format(output))
 
 
 def remove_file(filename, path=None, verbose=False):
@@ -688,7 +688,7 @@ def phylophlan_metagenomic():
         metadata_rows = []
 
         for r in bz2.open(args.mapping, 'rt'):
-            if not r.startswith('#'):
+            if r.startswith('#'):
                 metadata_rows.append(r.strip().split('\t'))
 
         mdidx = dict([(m, i) for i, m in enumerate(metadata_rows[-1][2:])])
