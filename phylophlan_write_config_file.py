@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.07'
-__date__ = '29 March 2019'
+__version__ = '0.08'
+__date__ = '7 May 2019'
 
 
 import os
@@ -100,7 +100,7 @@ def read_params():
                    help="Write the absolute path to the executable instead of the executable name as find in the system path environment")
     p.add_argument('--force_nucleotides', default=None, action='store_true',
                    help=('If specified sets parameters for phylogenetic analysis softwares so that they use '
-                         'nucleotide sequences, even in the case of a database of amino acids'))   
+                         'nucleotide sequences, even in the case of a database of amino acids'))
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
@@ -365,14 +365,13 @@ def phylophlan_write_config_file():
                           'params': '-quiet -nt 1',
                           'input': '-s',
                           'output': '-pre',
-                          'version': '-version'}
+                          'version': '-version',
+                          'command_line': '#program_name# #params# #input# #output#'}
 
             if (args.db_type == 'n' or args.force_nucleotides):
                 gene_tree1['params'] += ' -m GTR',
-                gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
             elif args.db_type == 'a':
-                gene_tree1['model'] = '-m'
-                gene_tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
+                gene_tree1['params'] = ' -m LG'
 
         progs['gene_tree1'] = gene_tree1
 
@@ -451,14 +450,13 @@ def phylophlan_write_config_file():
                  'params': '-quiet -nt AUTO',
                  'input': '-s',
                  'output': '-pre',
-                 'version': '-version'}
+                 'version': '-version',
+                 'command_line': '#program_name# #params# #input# #output#'}
 
         if (args.db_type == 'n' or args.force_nucleotides):
             tree1['params'] += ' -m GTR'
-            tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
         elif args.db_type == 'a':
             tree1['params'] += ' -m LG'
-            tree1['command_line'] = '#program_name# #params# #model# #output_path# #input# #output#'
 
     progs['tree1'] = tree1
 
