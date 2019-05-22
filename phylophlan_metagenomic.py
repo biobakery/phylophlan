@@ -3,11 +3,12 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
+              'Fabio Cumbo (fabio.cumbo@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.16'
-__date__ = '6 May 2019'
+__version__ = '0.17'
+__date__ = '22 May 2019'
 
 
 import sys
@@ -495,11 +496,12 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
     inps = sorted(glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"))
     inps_combs = itertools.combinations_with_replacement(inps, r=2)
     out_pre, out_ext = os.path.splitext(output_file)
+    out_f = os.path.join(output_prefix + "_dists", prj_name)
 
     for inp_a, inp_b in inps_combs:
         a = inp_a.split('_')[-1].split('.')[0]
         b = inp_b.split('_')[-1].split('.')[0]
-        out_f = '{}_{}vs{}{}'.format(out_pre, a, b, out_ext)
+        out_f = '{}_{}vs{}{}'.format(out_f, a, b, out_ext)
 
         if not os.path.isfile(out_f):
             commands.append((inp_a, inp_b, out_f, verbose))
@@ -625,10 +627,10 @@ def decompress_rec(x):
         terminating.set()
 
 
-def merging(output_file, verbose=False):
+def merging(output_prefix, prj_name, output_file, verbose=False):
+    out_f = os.path.join(output_prefix + "_dists", prj_name)
     out_pre, out_ext = os.path.splitext(output_file)
-
-    to_be_merged = glob.glob('{}_*vs*{}'.format(out_pre, out_ext))
+    to_be_merged = glob.glob('{}_*vs*{}'.format(out_f, out_ext))
 
     if len(to_be_merged) == 1:
         os.rename(to_be_merged[0], output_file)
@@ -830,7 +832,7 @@ def phylophlan_metagenomic():
 
     else:  # input vs. input mode
         disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file, nproc=args.nproc, verbose=args.verbose)
-        merging(output_file, verbose=args.verbose)
+        merging(args.output_prefix, os.path.basename(args.output_prefix), output_file, verbose=args.verbose)
 
     info('Results saved to "{}"\n'.format(output_file))
 

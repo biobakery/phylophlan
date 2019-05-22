@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.11'
-__date__ = '20 March 2019'
+__version__ = '0.12'
+__date__ = '22 May 2019'
 
 
 import sys
@@ -249,11 +249,13 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
         r_clean = r.strip().split('\t')
 
-        if taxa_label in r_clean[1].split('|'):
-            url = r_clean[2]
-            core_proteins[r_clean[1]] = r_clean[3].split(';')
-        elif taxa_label in r_clean[1]:
-            core_proteins[r_clean[1]] = None
+        if taxa_label in r_clean[1]:
+            if taxa_label == r_clean[1].split('|')[-1]:
+                url = r_clean[2]
+                core_proteins[r_clean[1]] = r_clean[3].split(';')
+                break
+            else:
+                core_proteins[r_clean[1]] = None
 
     if not len(core_proteins):
         error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
