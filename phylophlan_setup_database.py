@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.12'
-__date__ = '22 May 2019'
+__version__ = '0.13'
+__date__ = '24 May 2019'
 
 
 import sys
@@ -259,11 +259,14 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
     if not len(core_proteins):
         error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
-    elif len(core_proteins) > 1:
+    elif len([k for k, v in core_proteins.items() if v is not None]) > 1:
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
 
     for lbl, core_prots in core_proteins.items():
+        if core_prots is None:
+            continue
+
         if verbose:
             info('Downloading {} core proteins for {}\n'.format(len(core_prots), lbl))
 
