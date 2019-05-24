@@ -271,6 +271,18 @@ def read_configs(config_file, verbose=False):
 
 
 def check_args(args, command_line_arguments, verbose=True):
+    if args.database:
+        if os.path.isdir(args.database):
+            if '--databases_folder' not in command_line_arguments:
+                args.databases_folder = os.path.dirname(os.path.abspath(args.database))
+                args.database = os.path.basename(os.path.abspath(args.database))
+
+                if verbose:
+                    info('Automatically setting "database={}" and "databases_folder={}"\n'
+                         .format(args.database, args.databases_folder))
+            else:
+                error('--databases_folder is specified and the -d/--database is a path to a folder', exit=True)
+
     args.databases_folder = check_and_create_folder(os.path.join(args.databases_folder),
                                                     try_local=True, create=True, exit=True, verbose=verbose)
     args.submat_folder = check_and_create_folder(os.path.join(args.submat_folder),
@@ -305,8 +317,7 @@ def check_args(args, command_line_arguments, verbose=True):
                     info('Automatically setting "input={}" and "input_folder={}"\n'
                          .format(args.input, args.input_folder))
             else:
-                error('--input_folder is specified and the -i/--input is a path to a folder',
-                      exit=True)
+                error('--input_folder is specified and the -i/--input is a path to a folder', exit=True)
 
         project_name = args.input
     elif args.clean:
@@ -320,8 +331,7 @@ def check_args(args, command_line_arguments, verbose=True):
                     info('Automatically setting "clean={}" and "input_folder={}"\n'
                          .format(args.input, args.input_folder))
             else:
-                error('--input_folder is specified and the -c/--clean is a path to a folder',
-                      exit=True)
+                error('--input_folder is specified and the -c/--clean is a path to a folder', exit=True)
 
         project_name = args.clean
 
