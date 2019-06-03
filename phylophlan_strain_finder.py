@@ -2,8 +2,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it)',
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.01'
-__date__ = '29 May 2019'
+__version__ = '0.02'
+__date__ = '03 June 2019'
 
 
 import argparse as ap
@@ -20,6 +20,7 @@ NEWICK = 'newick'
 TREE_TYPES = ['newick','nexus','phyloxml','cdao','nexml']
 PHYLOGENETIC_THR = 0.05
 MUT_PERCENTAGE_THR = 0.05 
+OUTPUT_FOLDER = 'output_strain_finder'
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
     if init_new_line:
@@ -76,6 +77,36 @@ def read_params():
     return p.parse_args()
 
 
+def check_and_create_folder(folder, try_local=False, create=False, exit=False, verbose=False):
+    folders_to_test = [folder]
+    msg_err = ''
+
+    if try_local:
+        folders_to_test.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), folder))
+
+    for f in folders_to_test:
+        if not os.path.isdir(f):
+            if not create:
+                msg_err = '"{}" folder does not exists'.format(f)
+        else:
+            return f
+
+    if msg_err:
+        error(msg_err, exit=exit)
+        return None
+
+    if create:
+        if not os.path.isdir(f):
+            os.mkdir(folder, mode=0o775)
+
+            if verbose:
+                info('Creating folder "{}"\n'.format(folder))
+        elif verbose:
+            info('Folder "{}" exists\n'.format(folder))
+
+        return folder
+
+
 def check_params(args, verbose=False):
     if verbose:
         info('Checking for parameters...\n')
@@ -89,14 +120,28 @@ def check_params(args, verbose=False):
     if (not args.overwrite) and args.output and os.path.isfile(args.output) :
         args.output = args.output+str(datetime.datetime.today().strftime('%Y%m%d%H%M%S'))
         
+    OUTPUT_FOLDER = ''
     if not args.output:
         args.output = sys.stdout
+    else:
+        if os.path.dirname(args.output):
+            if not os.path.exists(os.path.dirname(args.output)):
+                error('the path specified in {} does not exist'.format(args.output), exit=True)
+            else:
+                OUTPUT_FOLDER = os.path.dirname(args.output)
+                check_and_create_folder(OUTPUT_FOLDER, create=True, exit=True, verbose=verbose)
+                
+        if not os.path.basename(args.output):
+            error('you should specify a filename in {}'.format(args.output), exit=True)
+        else:
+            args.output=os.path.join(OUTPUT_FOLDER,os.path.basename(args.output))
+   
 
     if args.p_threshold < 0:
-        error('p_threshold should be a positive number')
+        error('p_threshold should be a positive number', exit=True)
     
     if args.m_threshold < 0:
-        error('m_threshold should be a positive number')
+        error('m_threshold should be a positive number', exit=True)
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)))
