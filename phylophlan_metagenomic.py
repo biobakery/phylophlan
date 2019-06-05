@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.17'
-__date__ = '22 May 2019'
+__version__ = '0.18'
+__date__ = '5 June 2019'
 
 
 import sys
@@ -649,16 +649,19 @@ def phylophlan_metagenomic():
     check_dependencies(verbose=args.verbose)
 
     if not args.only_input:  # if mashing vs. the SGBs
-        sgbs_url = os.path.basename(DOWNLOAD_URL)
-        download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
-        urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
-                if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
+        if (    not os.path.exists(os.path.join(args.database_folder, args.database)) and
+                not os.path.exists(os.path.join(args.database_folder, args.mapping))    ):
+            sgbs_url = os.path.basename(DOWNLOAD_URL)
+            download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
+            urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
+                    if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
 
-        if len(urls) != 3:
-            error('invalid number of URLs in the downloaded file', exit=True)
+            if len(urls) != 3:
+                error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
+                      exit=True)
 
-        for url, filename in urls:
-            download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
+            for url, filename in urls:
+                download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
 
         args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
