@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 
-__author__ = ('Francesco Asnicar (f.asnicar@unitn.it)',
+
+__author__ = ('Francesco Asnicar (f.asnicar@unitn.it),'
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
 __version__ = '0.01'
 __date__ = '03 June 2019'
+
 
 import argparse as ap
 import os
@@ -19,6 +21,10 @@ import matplotlib.pyplot as plt
 
 OUTPUT_NAME='output_heatmap'
 OUTPUT_FOLDER='output_draw_metagenomic'
+
+if sys.version_info[0] < 3:
+    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
     if init_new_line:
@@ -225,7 +231,7 @@ def find_top_SGBs(top, meta_dict, verbose=False):
     
 
 
-def phylophlan_draw_heatmaps():
+def phylophlan_draw_metagenomic():
     args = read_params()
 
     if args.verbose:
@@ -326,7 +332,7 @@ def phylophlan_draw_heatmaps():
     
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_draw_heatmaps()
+    phylophlan_draw_metagenomic()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)
