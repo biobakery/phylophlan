@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.13'
-__date__ = '24 May 2019'
+__version__ = '0.14'
+__date__ = '7 June 2019'
 
 
 import sys
@@ -101,8 +101,10 @@ def check_params(args, verbose=False):
                 error('input is a folder, hence --input_extension must be specified', exit=True)
 
     if args.get_core_proteins:
-        if args.get_core_proteins[:3] != 's__':  # not sure it's needed, but I don't think we are handling sitautions different than species right now! (Tue 19 Jun 2018)
-            error('The taxonomic label provided "{}" does not starts with "s__"'.format(args.get_core_proteins), exit=True)
+        # not handling keys different than species (Tue 19 Jun 2018)
+        if args.get_core_proteins[:3] != 's__':
+            error('The taxonomic label provided "{}" does not starts with "s__"'.format(args.get_core_proteins),
+                  exit=True)
 
         if not args.output:
             args.output = args.get_core_proteins
@@ -258,7 +260,8 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
                 core_proteins[r_clean[1]] = None
 
     if not len(core_proteins):
-        error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label), exit=True)
+        error('no entry found for "{}", please check the taxonomic label provided'.format(taxa_label),
+              exit=True)
     elif len([k for k, v in core_proteins.items() if v is not None]) > 1:
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
@@ -293,7 +296,8 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
         try:
             response = urlopen(request, data)
-            uniprotkb2uniref90 = [line.decode().split('\t')[:2] for line in response.readlines()]
+            uniprotkb2uniref90 = [line.decode().strip().split('\t')[:2]
+                                  for line in response.readlines()][1:]  # skip ['From', 'To']
         except Exception:
             error('unable convert UniProtKB ID to UniRef90 ID')
 
@@ -304,35 +308,26 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
             if not os.path.exists(local_prot):
                 not_mapped.append(uniref90_id)
 
-        if (len(uniprotkb2uniref90) - 1) != len(retry2download):
-            request_id = uniprotkb2uniref90[0][0].split(':')[1]
-            not_mapped_url = 'http://www.uniprot.org/mapping/{}.not'.format(request_id)
+        if len(uniprotkb2uniref90) != len(retry2download):
+            # probably deleted proteins in the Uniprot versions, try to download their latest version in any case
+            for ur90 in set([ur90 for ur90, _ in uniprotkb2uniref90]) - set(retry2download):
+                local_prot = os.path.join(output, ur90 + output_extension)
+                download('https://www.uniprot.org/uniprot/{}.fasta?version=*'.format(ur90), local_prot,
+                         verbose=verbose)
 
-            try:
-                not_mapped_request = urlopen(not_mapped_url)
-                not_mapped_response = [x.decode().strip() for x in not_mapped_request.readlines()]
-                not_mapped.extend(not_mapped_response[1:])
-            except Exception:
-                error('unable fetch not converted IDs')
+                if not os.path.exists(local_prot):
+                    not_mapped_again.append(core_prot)
 
-    # probably deleted proteins in the Uniprot versions, try to download their latest version in any case
-    for nm in not_mapped:
-        local_prot = os.path.join(output, nm + output_extension)
-        download('https://www.uniprot.org/uniprot/{}.fasta?version=*'.format(nm), local_prot, verbose=verbose)
+        # really don't know what else to try... I'm sorry!
+        if not_mapped_again:
+            nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
 
-        if not os.path.exists(local_prot):
-            not_mapped_again.append(core_prot)
+            if verbose:
+                info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'
+                     .format(len(not_mapped_again), nd_out))
 
-    # really don't know what else to try... I'm sorry!
-    if not_mapped_again:
-        nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
-
-        if verbose:
-            info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'
-                 .format(len(not_mapped_again), nd_out))
-
-        with open(nd_out, 'w') as f:
-            f.write('\n'.join(not_mapped_again) + '\n')
+            with open(nd_out, 'w') as f:
+                f.write('\n'.join(not_mapped_again) + '\n')
 
 
 def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False):
