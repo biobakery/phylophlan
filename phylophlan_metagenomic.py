@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.18'
-__date__ = '5 June 2019'
+__version__ = '0.19'
+__date__ = '7 June 2019'
 
 
 import sys
@@ -70,8 +70,6 @@ def read_params():
                          "the input folder will be used"))
     p.add_argument('-d', '--database', type=str, default=SGB_RELEASE_FILE,
                    help="Specify the name of the database, if not found locally will be automatically downloaded")
-    p.add_argument('-m', '--mapping', type=str, default=SGB_RELEASE_FILE,
-                   help="Specify the name of the mapping file, if not found locally will be automatically downloaded")
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))
@@ -143,6 +141,8 @@ def check_params(args, verbose=False):
             args.how_many = HOW_MANY
 
         args.how_many = how_many
+
+    args.mapping = args.database
 
     if not args.mapping.endswith('.txt.bz2'):
         args.mapping += '.txt.bz2'
