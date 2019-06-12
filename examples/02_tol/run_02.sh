@@ -1,4 +1,4 @@
-#!usr/bin/bash
+#!/bin/bash
 
 #Get reference genomes for all species
 phylophlan_get_reference.py -g all -o examples/02_tol/input_genomes/ \

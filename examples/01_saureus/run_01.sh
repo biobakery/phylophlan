@@ -1,4 +1,4 @@
-#!usr/bin/bash
+#!/bin/bash
 
 #Download the 135 S. aureus isolate genomes
 ./examples/01_saureus/download_saureus_genomes.sh
