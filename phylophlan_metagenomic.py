@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.19'
-__date__ = '7 June 2019'
+__version__ = '0.20'
+__date__ = '11 June 2019'
 
 
 import sys
@@ -570,8 +570,8 @@ def check_md5(tar_file, md5_file, verbose=False):
 
     # compare checksums
     if md5_tar != md5_md5:
-        error("MD5 checksums do not correspond! If this happens again, you should remove the database files and "
-              "rerun MetaPhlAn2 so they are re-downloaded", exit=True)
+        error("MD5 checksums do not correspond! Try removing the database files and rerun PhyloPhlAn2 "
+              "to re-download them. If this happens again, please report this error.", exit=True)
 
 
 def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
@@ -649,8 +649,9 @@ def phylophlan_metagenomic():
     check_dependencies(verbose=args.verbose)
 
     if not args.only_input:  # if mashing vs. the SGBs
-        if (    not os.path.exists(os.path.join(args.database_folder, args.database)) and
-                not os.path.exists(os.path.join(args.database_folder, args.mapping))    ):
+        if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
+                not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
+                not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
             sgbs_url = os.path.basename(DOWNLOAD_URL)
             download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
             urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
