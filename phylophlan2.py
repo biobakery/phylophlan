@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.34'
-__date__ = '23 May 2019'
+__version__ = '0.35'
+__date__ = '13 June 2019'
 
 
 import os
@@ -280,8 +280,10 @@ def check_args(args, command_line_arguments, verbose=True):
                 if verbose:
                     info('Automatically setting "database={}" and "databases_folder={}"\n'
                          .format(args.database, args.databases_folder))
-            else:
-                error('--databases_folder is specified and the -d/--database is a path to a folder', exit=True)
+            elif not glob.glob(os.path.join(args.databases_folder, args.database) + '*'):
+                error('no database found at "{}"'.format(os.path.join(args.databases_folder, args.database)), exit=True)
+            # else:
+            #     error('--databases_folder not specified and the -d/--database is a path to a folder', exit=True)
 
     args.databases_folder = check_and_create_folder(os.path.join(args.databases_folder),
                                                     try_local=True, create=True, exit=True, verbose=verbose)
