@@ -292,7 +292,6 @@ def phylophlan_draw_metagenomic():
     
     
 if __name__ == '__main__':
-    print('a')
     t0 = time.time()
     phylophlan_draw_metagenomic()
     t1 = time.time()
