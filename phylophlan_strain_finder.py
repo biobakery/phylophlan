@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.34'
-__date__ = '23 May 2019'
+__version__ = '0.05'
+__date__ = '18 June 2019'
 
 
 import argparse as ap
@@ -82,36 +82,6 @@ def read_params():
     return p.parse_args()
 
 
-def check_and_create_folder(folder, try_local=False, create=False, exit=False, verbose=False):
-    folders_to_test = [folder]
-    msg_err = ''
-
-    if try_local:
-        folders_to_test.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), folder))
-
-    for f in folders_to_test:
-        if not os.path.isdir(f):
-            if not create:
-                msg_err = '"{}" folder does not exists'.format(f)
-        else:
-            return f
-
-    if msg_err:
-        error(msg_err, exit=exit)
-        return None
-
-    if create:
-        if not os.path.isdir(f):
-            os.mkdir(folder, mode=0o775)
-
-            if verbose:
-                info('Creating folder "{}"\n'.format(folder))
-        elif verbose:
-            info('Folder "{}" exists\n'.format(folder))
-
-        return folder
-
-
 def check_params(args, verbose=False):
     if verbose:
         info('Checking for parameters...\n')
@@ -125,14 +95,15 @@ def check_params(args, verbose=False):
     if args.output is None:
         args.output = sys.stdout
     else:
-        if not os.path.exists(os.path.dirname(args.output)):
-            error('output path does not exists: "{}"'.format(args.output), exit=True)
+        if(os.path.dirname(args.output)):
+            if not os.path.exists(os.path.dirname(args.output)):
+                error('output path does not exists: "{}"'.format(args.output), exit=True)
 
         if not os.path.basename(args.output):
             old = args.output
             out_ext  = OUTPUT_EXTENSIONS[args.separator] if args.separator in OUTPUT_EXTENSIONS else '.txt'
             args.output = os.path.join(args.output, 'phylophlan_strain_finder.{}'.format(out_ext))
-            info('No output filename specified "{}", writing output to "{}"'.format(old, args.output), exit=True)
+            info('No output filename specified "{}", writing output to "{}"'.format(old, args.output))
 
         if (not args.overwrite) and os.path.isfile(args.output):
             old = args.output

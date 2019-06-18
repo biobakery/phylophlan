@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 
-__author__ = ('Francesco Asnicar (f.asnicar@unitn.it),'
+__author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.01'
-__date__ = '03 June 2019'
+__version__ = '0.02'
+__date__ = '18 June 2019'
 
 
 import argparse as ap
@@ -20,7 +20,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 
 OUTPUT_NAME='output_heatmap'
-OUTPUT_FOLDER='output_draw_metagenomic'
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
@@ -59,9 +58,8 @@ def read_params():
                    help='Specify a mapping TSV file that maps for each bin its metagenome')
     p.add_argument('--top', default=20, type=int,
                    help='Specify the number of SGBs to display in the figure, if not specified is set to 20')
-    p.add_argument('-o','--output', type=str, default=None,
-                   help='Specify a prefix for output files. Default is output_heatmap_ '
-                   'If desired you can also specify the path to the file. Default is output_draw_metagenomic/')
+    p.add_argument('-o','--output', type=str, default=OUTPUT_NAME,
+                   help='Specify a prefix for output files. Default is output_heatmap_ ')
     p.add_argument('-s','--separator', type=str, default='\t',
                    help='Specify the separator used in the mapping file, default is tab')
     p.add_argument('--dpi', type=int, default=200,
@@ -73,36 +71,7 @@ def read_params():
                    version='phylophlan_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
                    help="Prints the current phylophlan_draw_metagenomic.py version and exit")
     return p.parse_args()
-    
-
-def check_and_create_folder(folder, try_local=False, create=False, exit=False, verbose=False):
-    folders_to_test = [folder]
-    msg_err = ''
-
-    if try_local:
-        folders_to_test.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), folder))
-
-    for f in folders_to_test:
-        if not os.path.isdir(f):
-            if not create:
-                msg_err = '"{}" folder does not exists'.format(f)
-        else:
-            return f
-
-    if msg_err:
-        error(msg_err, exit=exit)
-        return None
-
-    if create:
-        if not os.path.isdir(f):
-            os.mkdir(folder, mode=0o775)
-
-            if verbose:
-                info('Creating folder "{}"\n'.format(folder))
-        elif verbose:
-            info('Folder "{}" exists\n'.format(folder))
-
-        return folder
+  
 
 
 def check_params(args, verbose=False):
@@ -117,23 +86,15 @@ def check_params(args, verbose=False):
     
     if (args.top < 1):
         error('top cannot be 0 or negative', exit=True)
-
-    global OUTPUT_FOLDER, OUTPUT_NAME
-    if not args.output:
-        args.output= os.path.join(OUTPUT_FOLDER,OUTPUT_NAME) 
-    else:
-        if os.path.dirname(args.output):
-            if not os.path.exists(os.path.dirname(args.output)):
-                error('the path specified in {} does not exist'.format(args.output), exit=True)
-            else:
-                OUTPUT_FOLDER = os.path.dirname(args.output)
-
-        if os.path.basename(args.output):
-            args.output=os.path.join(OUTPUT_FOLDER,os.path.basename(args.output))
-        else:
-            args.output=os.path.join(OUTPUT_FOLDER,OUTPUT_NAME)
     
-    check_and_create_folder(OUTPUT_FOLDER, create=True, exit=True, verbose=verbose)
+    if(os.path.dirname(args.output)):
+        if not os.path.exists(os.path.dirname(args.output)):
+            error('output path does not exists: "{}"'.format(args.output), exit=True)
+
+    if not os.path.basename(args.output):
+        old = args.output
+        args.output = os.path.join(old, OUTPUT_NAME)
+        info('No output filename specified "{}", writing output to "{}"\n'.format(old, args.output))
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)))
@@ -232,22 +193,22 @@ def find_top_SGBs(top, meta_dict, verbose=False):
 
 
 def phylophlan_draw_metagenomic():
+
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_draw_heatmaps.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_draw_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
- 
+
     check_params(args, verbose=args.verbose)
 
     map_dict = bin2met(args, args.separator)
     meta_dict = read_input(args.input, map_dict, args.verbose)
     species_list = find_top_SGBs(args.top, meta_dict, args.verbose)
-    
 
 
     df1 = pd.DataFrame(0, index=species_list, columns=meta_dict.keys())
-    
+
     for x in species_list:
         for y in meta_dict.keys():
             if x in meta_dict[y]:
@@ -257,7 +218,7 @@ def phylophlan_draw_metagenomic():
 
     if args.verbose:
        info('Writing to output file {}_pres_abs.{}\n'.format(args.output, args.f))
-    
+
     output_file = open(args.output+'_pres_abs.csv', 'w')
     df1.to_csv(args.output+'_pres_abs.csv')
     output_file.close()
@@ -266,17 +227,17 @@ def phylophlan_draw_metagenomic():
 
     if args.verbose:
         info('Drawing image {}_pres_abs.{}\n'.format(args.output, args.f))
-    
+
     myColors = ((0., 0.0, 0.0, 0.0), (0.00,0.00,0.55))
     cmap = LinearSegmentedColormap.from_list('Custom', myColors, len(myColors))
-    
+
     hm1 = sns.clustermap(df1, cmap=cmap, linewidths=.1, square=True, 
                          linecolor='Black', figsize=(20,8))
-    
+ 
     colorbar = hm1.ax_heatmap.collections[0].colorbar
     colorbar.set_ticks([0,1])
     colorbar.set_ticklabels(['Absent', 'Present'])
-        
+ 
     plt.setp(hm1.ax_col_dendrogram, visible=False)
     plt.setp(hm1.ax_row_dendrogram, visible=False)    
     plt.setp(hm1.ax_heatmap.yaxis, ticks_position='none')
@@ -331,6 +292,7 @@ def phylophlan_draw_metagenomic():
     
     
 if __name__ == '__main__':
+    print('a')
     t0 = time.time()
     phylophlan_draw_metagenomic()
     t1 = time.time()
