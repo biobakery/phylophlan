@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.02'
-__date__ = '18 June 2019'
+__version__ = '0.03'
+__date__ = '9 July 2019'
 
 
 import argparse as ap
@@ -19,11 +19,13 @@ import datetime
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 
+
 OUTPUT_NAME='output_heatmap'
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
     if init_new_line:
@@ -53,41 +55,38 @@ def read_params():
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True,
-                   help='Specify the input TSV file generated from phylophlan_metagenomic.py')
-    p.add_argument('--map', required=True, type=str,
-                   help='Specify a mapping TSV file that maps for each bin its metagenome')
+                   help='The input file generated from phylophlan_metagenomic.py')
+    p.add_argument('-m', '--map', required=True, type=str,
+                   help='A mapping file that maps each bin to its metagenome')
     p.add_argument('--top', default=20, type=int,
-                   help='Specify the number of SGBs to display in the figure, if not specified is set to 20')
+                   help='The number of SGBs to display in the figure')
     p.add_argument('-o','--output', type=str, default=OUTPUT_NAME,
-                   help='Specify a prefix for output files. Default is output_heatmap_ ')
+                   help='Prefix output files')
     p.add_argument('-s','--separator', type=str, default='\t',
-                   help='Specify the separator used in the mapping file, default is tab')
+                   help='The separator used in the mapping file')
     p.add_argument('--dpi', type=int, default=200,
-                   help='Specify the dpi of the images. Default is 200')
+                   help='Dpi resolution of the images')
     p.add_argument('-f', type=str, default='svg',
-                   help='Specify deisired format for images. Default is svg')
+                   help='Images output format')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
                    help="Prints the current phylophlan_draw_metagenomic.py version and exit")
     return p.parse_args()
-  
+
 
 
 def check_params(args, verbose=False):
-    if verbose:
-        info('Checking for parameters...\n')
-            
-    if (not os.path.isfile(args.input)):
+    if not os.path.isfile(args.input):
         error('input file {} does not exist'.format(args.input), exit=True)
-         
-    if (not os.path.isfile(args.map)):
-       error('map file {} does not exist'.format(args.map), exit=True)
-    
-    if (args.top < 1):
-        error('top cannot be 0 or negative', exit=True)
-    
-    if(os.path.dirname(args.output)):
+
+    if not os.path.isfile(args.map):
+       error('--map file {} does not exist'.format(args.map), exit=True)
+
+    if args.top < 1:
+        error('--top cannot be 0 or negative', exit=True)
+
+    if os.path.dirname(args.output):
         if not os.path.exists(os.path.dirname(args.output)):
             error('output path does not exists: "{}"'.format(args.output), exit=True)
 
@@ -100,31 +99,29 @@ def check_params(args, verbose=False):
         info('Arguments: {}\n'.format(vars(args)))
 
 
-
 def read_input(inputt, map_dict, verbose=False):
     d = dict([(m, []) for m in map_dict.values()])
-    
+
     with open(inputt) as f:
         for r in f:
             if r.startswith('#'):
                 continue
-            
+
             rc = r.strip().split('\t')
-            
+
             bin_id = rc[0]
             sgb = rc[1]
-            
             avg_dist = float(sgb.split(':')[3])
-            
+
             if avg_dist > 0.05:
                 continue
 
             sgb_id = ' '.join(sgb.split(':')[0].split('_'))
             taxa_level = sgb.split(':')[1]
             taxonomy = sgb.split(':')[2]
-        
+
             label = [sgb_id]
-        
+
             if taxa_level == 'Species':
                 t = ' '.join([l for l in taxonomy.split('|') if l.startswith('s__')][0].replace('s__', '').split('_'))
                 label.append('(' + t + ')')
@@ -141,9 +138,8 @@ def read_input(inputt, map_dict, verbose=False):
                 error('Taxa level {} not valid \n'.format(taxa_level))
 
             d[map_dict[bin_id]].append(' '.join(label))
-            
-    return d
 
+    return d
 
 
 def bin2met(args, sep):
@@ -151,49 +147,43 @@ def bin2met(args, sep):
 
 
 def find_top_SGBs(top, meta_dict, verbose=False):
-    
     c = Counter()
+
     for x in meta_dict:
         tmpc = Counter(meta_dict[x])
         c = tmpc + c
-     
-             
+
     if len(c) < top:
-               
         if verbose:
             info('Number of top SGBs was set to {} but there are only {}.\n\n'.format(top, len(c)))
-        
+
         top = len(c)
-        
+
     elif len(c) - top <= 5 and len(c) != top:
-        
          if verbose:
             info('Number of top SGBs was set to {} but since there are in total {} SGBs, all were left in.\n\n'.format(top, len(c)))
-        
+
          top = len(c)
-    
+
     elif len(c) > top:
-        
         c1 = c.most_common(top + 1)
         i = top
-        
+
         while(c1[-1][1] == c1[-2][1] and i < len(c)):
             i += 1
             c1 = c.most_common(i + 1)
-        
+
         if verbose:
            info('Number of top SGBs was set to {} but since there were {} more SGBs at the same distance, these were left in aswell.\n\n'.format(top,i-top))
-        
+
         top = i
-        
-    
+
     c = c.most_common(top)
+
     return [x[0] for x in c]
-    
 
 
 def phylophlan_draw_metagenomic():
-
     args = read_params()
 
     if args.verbose:
@@ -202,10 +192,10 @@ def phylophlan_draw_metagenomic():
 
     check_params(args, verbose=args.verbose)
 
+    # presence/absence heatmap
     map_dict = bin2met(args, args.separator)
     meta_dict = read_input(args.input, map_dict, args.verbose)
     species_list = find_top_SGBs(args.top, meta_dict, args.verbose)
-
 
     df1 = pd.DataFrame(0, index=species_list, columns=meta_dict.keys())
 
@@ -214,8 +204,6 @@ def phylophlan_draw_metagenomic():
             if x in meta_dict[y]:
                 df1.at[x,y] = 1
 
-
-
     if args.verbose:
        info('Writing to output file {}_pres_abs.{}\n'.format(args.output, args.f))
 
@@ -223,33 +211,30 @@ def phylophlan_draw_metagenomic():
     df1.to_csv(args.output+'_pres_abs.csv')
     output_file.close()
 
-
-
     if args.verbose:
         info('Drawing image {}_pres_abs.{}\n'.format(args.output, args.f))
 
     myColors = ((0., 0.0, 0.0, 0.0), (0.00,0.00,0.55))
     cmap = LinearSegmentedColormap.from_list('Custom', myColors, len(myColors))
 
-    hm1 = sns.clustermap(df1, cmap=cmap, linewidths=.1, square=True, 
+    hm1 = sns.clustermap(df1, cmap=cmap, linewidths=.1, square=True,
                          linecolor='Black', figsize=(20,8))
- 
+
     colorbar = hm1.ax_heatmap.collections[0].colorbar
     colorbar.set_ticks([0,1])
     colorbar.set_ticklabels(['Absent', 'Present'])
- 
+
     plt.setp(hm1.ax_col_dendrogram, visible=False)
-    plt.setp(hm1.ax_row_dendrogram, visible=False)    
+    plt.setp(hm1.ax_row_dendrogram, visible=False)
     plt.setp(hm1.ax_heatmap.yaxis, ticks_position='none')
     plt.setp(hm1.ax_heatmap.xaxis, ticks_position='none')
-    
-    hm1.savefig(args.output+'_pres_abs.'+args.f,dpi=args.dpi)    
-    
 
+    hm1.savefig(args.output+'_pres_abs.'+args.f,dpi=args.dpi)
 
+    # counts-heatmap: unassigned, uSGB, and kSGB
     xlabels_clustered = [x.get_text() for x in list(plt.getp(hm1.ax_heatmap.xaxis, 'ticklabels'))]
-    df2 = pd.DataFrame(0, index=['uSGBs', 'kSGBs'], columns=xlabels_clustered)
-    
+    df2 = pd.DataFrame(0, index=['unassigned', 'uSGBs', 'kSGBs'], columns=xlabels_clustered)
+
     for x in xlabels_clustered:
         for md in meta_dict[x]:
             if md.startswith('k'):
@@ -257,40 +242,36 @@ def phylophlan_draw_metagenomic():
             elif md.startswith('u'):
                 df2.at['uSGBs', x] += 1
             else:
-                info('Unclassified species {}'.format(md))
-
-
+                df2.at['unassigned', x] += 1
+                # info('Unclassified species {}'.format(md))
 
     if args.verbose:
-       info('Writing to output file {}_counts.{}\n'.format(args.output, args.f))   
+       info('Writing to output file {}_counts.{}\n'.format(args.output, args.f))
 
     output_file = open(args.output+'_counts.csv', 'w')
     df2.to_csv(args.output+'_counts.csv')
     output_file.close()
-    
-
 
     if args.verbose:
         info(('Drawing image {}_counts.{}').format(args.output, args.f))
-    
+
     hm2 = sns.clustermap(df2, cmap='Oranges', linewidths=.1, figsize=(40,10),
                          row_cluster=False, col_cluster=False, square=True,
-                         cbar_kws={'orientation':'horizontal', 
+                         cbar_kws={'orientation':'horizontal',
                                    'label':'Number of SGBs'})
 
     colorbar = hm2.ax_heatmap.collections[0].colorbar
     max_ticks_value = max(df2.max()) + 1
-    colorbar.set_ticks(range(0, max_ticks_value, math.ceil(max_ticks_value/10))) 
-    
+    colorbar.set_ticks(range(0, max_ticks_value, math.ceil(max_ticks_value/10)))
+
     plt.setp(hm2.ax_col_dendrogram, visible=False)
     plt.setp(hm2.ax_row_dendrogram, visible=False)
     plt.setp(hm2.ax_heatmap.yaxis, ticks_position= 'none')
     plt.setp(hm2.ax_heatmap.xaxis, ticks_position= 'none')
-    
-    hm2.savefig(args.output+'_counts.'+args.f, dpi=args.dpi)  
-    
-    
-    
+
+    hm2.savefig(args.output+'_counts.'+args.f, dpi=args.dpi)
+
+
 if __name__ == '__main__':
     t0 = time.time()
     phylophlan_draw_metagenomic()
