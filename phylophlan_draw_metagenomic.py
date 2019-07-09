@@ -101,6 +101,7 @@ def check_params(args, verbose=False):
 
 def read_input(inputt, map_dict, verbose=False):
     d = dict([(m, []) for m in map_dict.values()])
+    unassigned = dict([(m, []) for m in map_dict.values()])
 
     with open(inputt) as f:
         for r in f:
@@ -113,14 +114,15 @@ def read_input(inputt, map_dict, verbose=False):
             sgb = rc[1]
             avg_dist = float(sgb.split(':')[3])
 
-            if avg_dist > 0.05:
-                continue
-
             sgb_id = ' '.join(sgb.split(':')[0].split('_'))
             taxa_level = sgb.split(':')[1]
             taxonomy = sgb.split(':')[2]
 
             label = [sgb_id]
+
+            if avg_dist > 0.05:
+                unassigned[map_dict[bin_id]].append(label)
+                continue
 
             if taxa_level == 'Species':
                 t = ' '.join([l for l in taxonomy.split('|') if l.startswith('s__')][0].replace('s__', '').split('_'))
@@ -139,7 +141,7 @@ def read_input(inputt, map_dict, verbose=False):
 
             d[map_dict[bin_id]].append(' '.join(label))
 
-    return d
+    return (d, unassigned)
 
 
 def bin2met(args, sep):
@@ -194,7 +196,7 @@ def phylophlan_draw_metagenomic():
 
     # presence/absence heatmap
     map_dict = bin2met(args, args.separator)
-    meta_dict = read_input(args.input, map_dict, args.verbose)
+    meta_dict, unass_dict = read_input(args.input, map_dict, args.verbose)
     species_list = find_top_SGBs(args.top, meta_dict, args.verbose)
 
     df1 = pd.DataFrame(0, index=species_list, columns=meta_dict.keys())
@@ -241,8 +243,8 @@ def phylophlan_draw_metagenomic():
                 df2.at['kSGBs', x] += 1
             elif md.startswith('u'):
                 df2.at['uSGBs', x] += 1
-            else:
-                df2.at['unassigned', x] += 1
+
+            df2.at['unassigned', x] = len(unass_dict[x])
                 # info('Unclassified species {}'.format(md))
 
     if args.verbose:
