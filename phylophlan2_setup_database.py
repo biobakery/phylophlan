@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.14'
-__date__ = '7 June 2019'
+__version__ = '0.12'
+__date__ = '22 July 2019'
 
 
 import sys
@@ -25,7 +25,7 @@ import time
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
@@ -83,8 +83,8 @@ def read_params():
                    help="If specified and the output file exists it will be overwritten")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_setup_database.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_setup_database.py version and exit")
+                   version='phylophlan2_setup_database.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan2_setup_database.py version and exit")
     return p.parse_args()
 
 
@@ -296,8 +296,7 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
         try:
             response = urlopen(request, data)
-            uniprotkb2uniref90 = [line.decode().strip().split('\t')[:2]
-                                  for line in response.readlines()][1:]  # skip ['From', 'To']
+            uniprotkb2uniref90 = [line.decode().strip().split('\t')[:2] for line in response.readlines()][1:]  # skip ['From', 'To']
         except Exception:
             error('unable convert UniProtKB ID to UniRef90 ID')
 
@@ -312,8 +311,7 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
             # probably deleted proteins in the Uniprot versions, try to download their latest version in any case
             for ur90 in set([ur90 for ur90, _ in uniprotkb2uniref90]) - set(retry2download):
                 local_prot = os.path.join(output, ur90 + output_extension)
-                download('https://www.uniprot.org/uniprot/{}.fasta?version=*'.format(ur90), local_prot,
-                         verbose=verbose)
+                download('https://www.uniprot.org/uniprot/{}.fasta?version=*'.format(ur90), local_prot, verbose=verbose)
 
                 if not os.path.exists(local_prot):
                     not_mapped_again.append(core_prot)
@@ -364,11 +362,11 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
         SeqIO.write(seqs, f, "fasta")
 
 
-def phylophlan_setup_database():
+def phylophlan2_setup_database():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_setup_database.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_setup_database.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -385,17 +383,15 @@ def phylophlan_setup_database():
                     break  # file should contains only one line, i.e., the name of the latest taxa2core file
 
         download(os.path.join(DOWNLOAD_URL, taxa2core_file_latest), taxa2core_file_latest, verbose=args.verbose)
-        get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension,
-                          verbose=args.verbose)
+        get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension, verbose=args.verbose)
 
-    create_database(args.db_name, args.input, args.input_extension,
-                    os.path.join(args.output, args.db_name + args.output_extension),
+    create_database(args.db_name, args.input, args.input_extension, os.path.join(args.output, args.db_name + args.output_extension),
                     args.overwrite, verbose=args.verbose)
 
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_setup_database()
+    phylophlan2_setup_database()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

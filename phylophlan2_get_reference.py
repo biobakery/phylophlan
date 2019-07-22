@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.08'
-__date__ = '7 January 2019'
+__version__ = '0.09'
+__date__ = '22 July 2019'
 
 
 import sys
@@ -19,7 +19,7 @@ import ftplib
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
@@ -71,8 +71,8 @@ def read_params():
                    help='The local GenBank mapping file, if not found it will be automatically downloaded')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_get_reference.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_get_reference.py version and exit")
+                   version='phylophlan2_get_reference.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan2_get_reference.py version and exit")
     return p.parse_args()
 
 
@@ -270,12 +270,12 @@ def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_r
                 error('no URL found for "{}"'.format(genome))
 
 
-def phylophlan_get_reference():
+def phylophlan2_get_reference():
     taxa2genomes_file_latest = None
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_get_reference.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_get_reference.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -300,7 +300,7 @@ def phylophlan_get_reference():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_get_reference()
+    phylophlan2_get_reference()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

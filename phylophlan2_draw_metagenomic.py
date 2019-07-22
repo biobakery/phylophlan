@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.03'
-__date__ = '9 July 2019'
+__version__ = '0.04'
+__date__ = '22 July 2019'
 
 
 import argparse as ap
@@ -15,15 +15,14 @@ from collections import Counter
 import math
 import pandas as pd
 import seaborn as sns
-import datetime
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
 
 
-OUTPUT_NAME='output_heatmap'
+OUTPUT_NAME = 'output_heatmap'
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 
@@ -54,26 +53,18 @@ def read_params():
                           epilog=(""),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    p.add_argument('-i', '--input', type=str, required=True,
-                   help='The input file generated from phylophlan_metagenomic.py')
-    p.add_argument('-m', '--map', required=True, type=str,
-                   help='A mapping file that maps each bin to its metagenome')
-    p.add_argument('--top', default=20, type=int,
-                   help='The number of SGBs to display in the figure')
-    p.add_argument('-o','--output', type=str, default=OUTPUT_NAME,
-                   help='Prefix output files')
-    p.add_argument('-s','--separator', type=str, default='\t',
-                   help='The separator used in the mapping file')
-    p.add_argument('--dpi', type=int, default=200,
-                   help='Dpi resolution of the images')
-    p.add_argument('-f', type=str, default='svg',
-                   help='Images output format')
+    p.add_argument('-i', '--input', type=str, required=True, help='The input file generated from phylophlan2_metagenomic.py')
+    p.add_argument('-m', '--map', required=True, type=str, help='A mapping file that maps each bin to its metagenome')
+    p.add_argument('--top', default=20, type=int, help='The number of SGBs to display in the figure')
+    p.add_argument('-o', '--output', type=str, default=OUTPUT_NAME, help='Prefix output files')
+    p.add_argument('-s', '--separator', type=str, default='\t', help='The separator used in the mapping file')
+    p.add_argument('--dpi', type=int, default=200, help='Dpi resolution of the images')
+    p.add_argument('-f', type=str, default='svg', help='Images output format')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_draw_metagenomic.py version and exit")
+                   version='phylophlan2_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan2_draw_metagenomic.py version and exit")
     return p.parse_args()
-
 
 
 def check_params(args, verbose=False):
@@ -81,7 +72,7 @@ def check_params(args, verbose=False):
         error('input file {} does not exist'.format(args.input), exit=True)
 
     if not os.path.isfile(args.map):
-       error('--map file {} does not exist'.format(args.map), exit=True)
+        error('--map file {} does not exist'.format(args.map), exit=True)
 
     if args.top < 1:
         error('--top cannot be 0 or negative', exit=True)
@@ -162,10 +153,10 @@ def find_top_SGBs(top, meta_dict, verbose=False):
         top = len(c)
 
     elif len(c) - top <= 5 and len(c) != top:
-         if verbose:
+        if verbose:
             info('Number of top SGBs was set to {} but since there are in total {} SGBs, all were left in.\n\n'.format(top, len(c)))
 
-         top = len(c)
+        top = len(c)
 
     elif len(c) > top:
         c1 = c.most_common(top + 1)
@@ -176,7 +167,7 @@ def find_top_SGBs(top, meta_dict, verbose=False):
             c1 = c.most_common(i + 1)
 
         if verbose:
-           info('Number of top SGBs was set to {} but since there were {} more SGBs at the same distance, these were left in aswell.\n\n'.format(top,i-top))
+            info('Top SGBs is {}, but reporting {} SGBs as they were at the same distance.\n'.format(top, i - top))
 
         top = i
 
@@ -185,11 +176,11 @@ def find_top_SGBs(top, meta_dict, verbose=False):
     return [x[0] for x in c]
 
 
-def phylophlan_draw_metagenomic():
+def phylophlan2_draw_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_draw_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_draw_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -204,26 +195,25 @@ def phylophlan_draw_metagenomic():
     for x in species_list:
         for y in meta_dict.keys():
             if x in meta_dict[y]:
-                df1.at[x,y] = 1
+                df1.at[x, y] = 1
 
     if args.verbose:
-       info('Writing to output file {}_pres_abs.{}\n'.format(args.output, args.f))
+        info('Writing to output file {}_pres_abs.{}\n'.format(args.output, args.f))
 
-    output_file = open(args.output+'_pres_abs.csv', 'w')
-    df1.to_csv(args.output+'_pres_abs.csv')
+    output_file = open(args.output + '_pres_abs.csv', 'w')
+    df1.to_csv(args.output + '_pres_abs.csv')
     output_file.close()
 
     if args.verbose:
         info('Drawing image {}_pres_abs.{}\n'.format(args.output, args.f))
 
-    myColors = ((0., 0.0, 0.0, 0.0), (0.00,0.00,0.55))
+    myColors = ((0., 0.0, 0.0, 0.0), (0.00, 0.00, 0.55))
     cmap = LinearSegmentedColormap.from_list('Custom', myColors, len(myColors))
 
-    hm1 = sns.clustermap(df1, cmap=cmap, linewidths=.1, square=True,
-                         linecolor='Black', figsize=(20,8))
+    hm1 = sns.clustermap(df1, cmap=cmap, linewidths=.1, square=True, linecolor='Black', figsize=(20, 8))
 
     colorbar = hm1.ax_heatmap.collections[0].colorbar
-    colorbar.set_ticks([0,1])
+    colorbar.set_ticks([0, 1])
     colorbar.set_ticklabels(['Absent', 'Present'])
 
     plt.setp(hm1.ax_col_dendrogram, visible=False)
@@ -231,7 +221,7 @@ def phylophlan_draw_metagenomic():
     plt.setp(hm1.ax_heatmap.yaxis, ticks_position='none')
     plt.setp(hm1.ax_heatmap.xaxis, ticks_position='none')
 
-    hm1.savefig(args.output+'_pres_abs.'+args.f,dpi=args.dpi)
+    hm1.savefig(args.output + '_pres_abs.' + args.f, dpi=args.dpi)
 
     # counts-heatmap: unassigned, uSGB, and kSGB
     xlabels_clustered = [x.get_text() for x in list(plt.getp(hm1.ax_heatmap.xaxis, 'ticklabels'))]
@@ -245,38 +235,35 @@ def phylophlan_draw_metagenomic():
                 df2.at['uSGBs', x] += 1
 
             df2.at['unassigned', x] = len(unass_dict[x])
-                # info('Unclassified species {}'.format(md))
 
     if args.verbose:
-       info('Writing to output file {}_counts.{}\n'.format(args.output, args.f))
+        info('Writing to output file {}_counts.{}\n'.format(args.output, args.f))
 
-    output_file = open(args.output+'_counts.csv', 'w')
-    df2.to_csv(args.output+'_counts.csv')
+    output_file = open(args.output + '_counts.csv', 'w')
+    df2.to_csv(args.output + '_counts.csv')
     output_file.close()
 
     if args.verbose:
         info(('Drawing image {}_counts.{}').format(args.output, args.f))
 
-    hm2 = sns.clustermap(df2, cmap='Oranges', linewidths=.1, figsize=(40,10),
-                         row_cluster=False, col_cluster=False, square=True,
-                         cbar_kws={'orientation':'horizontal',
-                                   'label':'Number of SGBs'})
+    hm2 = sns.clustermap(df2, cmap='Oranges', linewidths=.1, figsize=(40, 10), row_cluster=False, col_cluster=False, square=True,
+                         cbar_kws={'orientation': 'horizontal', 'label': 'Number of SGBs'})
 
     colorbar = hm2.ax_heatmap.collections[0].colorbar
     max_ticks_value = max(df2.max()) + 1
-    colorbar.set_ticks(range(0, max_ticks_value, math.ceil(max_ticks_value/10)))
+    colorbar.set_ticks(range(0, max_ticks_value, math.ceil(max_ticks_value / 10)))
 
     plt.setp(hm2.ax_col_dendrogram, visible=False)
     plt.setp(hm2.ax_row_dendrogram, visible=False)
-    plt.setp(hm2.ax_heatmap.yaxis, ticks_position= 'none')
-    plt.setp(hm2.ax_heatmap.xaxis, ticks_position= 'none')
+    plt.setp(hm2.ax_heatmap.yaxis, ticks_position='none')
+    plt.setp(hm2.ax_heatmap.xaxis, ticks_position='none')
 
-    hm2.savefig(args.output+'_counts.'+args.f, dpi=args.dpi)
+    hm2.savefig(args.output + '_counts.' + args.f, dpi=args.dpi)
 
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_draw_metagenomic()
+    phylophlan2_draw_metagenomic()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.05'
-__date__ = '18 June 2019'
+__version__ = '0.06'
+__date__ = '22 July 2019'
 
 
 import argparse as ap
@@ -15,20 +15,20 @@ import datetime
 import pandas as pd
 import itertools
 from Bio import Phylo
-import tempfile
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 NEWICK = 'newick'
-TREE_TYPES = ['newick','nexus','phyloxml','cdao','nexml']
+TREE_TYPES = ['newick', 'nexus', 'phyloxml', 'cdao', 'nexml']
 PHYLOGENETIC_THR = 0.05
 MUT_PERCENTAGE_THR = 0.05
 OUTPUT_EXTENSIONS = {';': '.txt',
                      ',': '.csv',
                      '\t': '.tsv'}
+
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
     if init_new_line:
@@ -58,26 +58,22 @@ def read_params():
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True,
-                   help='Specify the file of the phylogenetic tree as generated from phylophlan.py')
+                   help='Specify the file of the phylogenetic tree as generated from phylophlan2.py')
     p.add_argument('-m', '--mutation_rates', type=str, required=True,
-                   help='Specify the file of the mutation rates as generated from phylophlan.py')
+                   help='Specify the file of the mutation rates as generated from phylophlan2.py')
     p.add_argument('--p_threshold', type=float, default=PHYLOGENETIC_THR,
                    help='Maximum phylogenetic distance threshold for every pair of nodes in the same subtree (inclusive)')
     p.add_argument('--m_threshold', type=float, default=MUT_PERCENTAGE_THR,
                    help='Maximum mutation rate ratio for every pair of nodes in the same subtree (inclusive)')
-    p.add_argument('--tree_format', choices=TREE_TYPES, default=NEWICK,
-                   help='Specify the format of the input tree')
-    p.add_argument('-o','--output', type=str, default=None,
-                   help='Specify the output filename, if not specified will be stdout')
-    p.add_argument('--overwrite', action='store_true', default=False,
-                   help='Overwrite the output file if exists')
-    p.add_argument('-s','--separator', type=str, default='\t', choices=OUTPUT_EXTENSIONS.keys(),
+    p.add_argument('--tree_format', choices=TREE_TYPES, default=NEWICK, help='Specify the format of the input tree')
+    p.add_argument('-o', '--output', type=str, default=None, help='Specify the output filename, if not specified will be stdout')
+    p.add_argument('--overwrite', action='store_true', default=False, help='Overwrite the output file if exists')
+    p.add_argument('-s', '--separator', type=str, default='\t', choices=OUTPUT_EXTENSIONS.keys(),
                    help='Specify the separator to use in the output')
     p.add_argument('--verbose', action='store_true', default=False, help='Write more stuff')
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_strain_finder.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_strain_finder.py version and exit")
-
+                   version='phylophlan2_strain_finder.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophla2_strain_finder.py version and exit")
 
     return p.parse_args()
 
@@ -90,7 +86,7 @@ def check_params(args, verbose=False):
         error('input file {} does not exist'.format(args.input), exit=True)
 
     if (not os.path.isfile(args.mutation_rates)):
-       error('mutation_rates file {} does not exist'.format(args.map), exit=True)
+        error('mutation_rates file {} does not exist'.format(args.map), exit=True)
 
     if args.output is None:
         args.output = sys.stdout
@@ -101,8 +97,8 @@ def check_params(args, verbose=False):
 
         if not os.path.basename(args.output):
             old = args.output
-            out_ext  = OUTPUT_EXTENSIONS[args.separator] if args.separator in OUTPUT_EXTENSIONS else '.txt'
-            args.output = os.path.join(args.output, 'phylophlan_strain_finder.{}'.format(out_ext))
+            out_ext = OUTPUT_EXTENSIONS[args.separator] if args.separator in OUTPUT_EXTENSIONS else '.txt'
+            args.output = os.path.join(args.output, 'phylophlan2_strain_finder.{}'.format(out_ext))
             info('No output filename specified "{}", writing output to "{}"'.format(old, args.output))
 
         if (not args.overwrite) and os.path.isfile(args.output):
@@ -153,18 +149,17 @@ def check_thr(p, l, tree, md, p_thr, m_thr, verbose=False):
         tup = [(sorted(t)) for t in tup]
         if any(float(md[(t[0], t[1])]) > m_thr for t in tup):
             if verbose:
-                info('Not every leaf under {} respects the mutation_rates threshold,\n'
-                'return {} as root of the subtree\n'.format(p,l))
+                info('Not every leaf under "{}" respects the mutation_rates threshold, return "{}"" as root of the subtree\n'.format(p, l))
             return l
         else:
             return check_thr(get_parent(tree, p), p, tree, md, p_thr, m_thr, verbose=verbose)
 
 
-def phylophlan_strain_finder():
+def phylophlan2_strain_finder():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_strain_finder.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_strain_finder.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, args.verbose)
@@ -185,7 +180,6 @@ def phylophlan_strain_finder():
 
         r = (check_thr(get_parent(tree, l), l, tree, mydict, args.p_threshold, args.m_threshold, args.verbose))
         tested_valid.append(r)
-
 
     if args.verbose:
         info('Creating output...\n')
@@ -210,9 +204,9 @@ def phylophlan_strain_finder():
 
         tup = list(itertools.combinations(sons, 2))
         m_rate = []
-        distances= []
+        distances = []
         m_min = d_min = tree.total_branch_length()
-        m_max = m_mean = d_max = d_mean = count =  0
+        m_max = m_mean = d_max = d_mean = count = 0
 
         for t in tup:
             if t[0].name < t[1].name:
@@ -222,7 +216,7 @@ def phylophlan_strain_finder():
 
             d = tree.distance(t[0], t[1])
             distances.append(t[0].name + ',' + t[1].name + ':' + str(d))
-            m_rate.append(t[0].name + ',' + t[1].name + ':' +  str(m))
+            m_rate.append(t[0].name + ',' + t[1].name + ':' + str(m))
             m_min = min(m_min, m)
             m_max = max(m_max, m)
             m_mean = m_mean + m
@@ -234,8 +228,8 @@ def phylophlan_strain_finder():
         d_mean = float(d_mean / count)
         m_mean = float(m_mean / count)
 
-        print((args.separator).join([subtree, str(d_min), str(d_mean), str(d_max),
-              str(m_min), str(m_mean), str(m_max),'|'.join(distances), '|'.join(m_rate)]), file=f)
+        print((args.separator).join([subtree, str(d_min), str(d_mean), str(d_max), str(m_min), str(m_mean), str(m_max),
+                                     '|'.join(distances), '|'.join(m_rate)]), file=f)
 
     if isinstance(args.output, str):
         if not f.closed:
@@ -244,7 +238,7 @@ def phylophlan_strain_finder():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_strain_finder()
+    phylophlan2_strain_finder()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

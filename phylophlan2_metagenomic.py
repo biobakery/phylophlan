@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.20'
-__date__ = '11 June 2019'
+__version__ = '0.21'
+__date__ = '22 July 2019'
 
 
 import sys
@@ -29,13 +29,13 @@ import copy
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 HOW_MANY = "10"
-DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/phylophlan_metagenomic.txt"
+DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/phylophlan2_metagenomic.txt"
 SGB_RELEASE_FILE = "SGB.Jan19"
-DATABASE_FOLDER = 'phylophlan_databases/'
+DATABASE_FOLDER = 'phylophlan2_databases/'
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -90,8 +90,8 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrites the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_metagenomic.py version and exit")
+                   version='phylophlan2_metagenomic.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan2_metagenomic.py version and exit")
     return p.parse_args()
 
 
@@ -466,14 +466,14 @@ def disting_rec(x):
                     cmd = ['mash', 'dist', sgb_msh_idx, msh_idx]
 
                     try:
-                       sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL)
+                        sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL)
                     except Exception as e:
-                       terminating.set()
-                       fout.close()
-                       remove_file(dist_file, verbose=verbose)
-                       error(str(e), init_new_line=True)
-                       error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
-                       raise
+                        terminating.set()
+                        fout.close()
+                        remove_file(dist_file, verbose=verbose)
+                        error(str(e), init_new_line=True)
+                        error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                        raise
 
                 if verbose:
                     t1 = time.time()
@@ -638,11 +638,11 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
         error('not yet implemented!', init_new_line=True, exit=True)
 
 
-def phylophlan_metagenomic():
+def phylophlan2_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -843,7 +843,7 @@ def phylophlan_metagenomic():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_metagenomic()
+    phylophlan2_metagenomic()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
