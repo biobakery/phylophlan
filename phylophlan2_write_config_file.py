@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.08'
-__date__ = '7 May 2019'
+__version__ = '0.09'
+__date__ = '22 July 2019'
 
 
 import os
@@ -19,7 +19,7 @@ import configparser as cp
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn requires Python 3, your current Python version is {}.{}.{}"
+    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
                     .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
@@ -104,8 +104,8 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_write_config_file.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_write_config_file.py version and exit")
+                   version='phylophlan2_write_config_file.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan2_write_config_file.py version and exit")
     return p.parse_args()
 
 
@@ -166,11 +166,11 @@ def find_executable(exe, absolute=False, rollback=False):
 #              syntax VARIABLE1=VALUE1,VARIABLE2=VALUE2,...
 
 
-def phylophlan_write_config_file():
+def phylophlan2_write_config_file():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_write_config_file.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan2_write_config_file.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -500,7 +500,7 @@ def phylophlan_write_config_file():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan_write_config_file()
+    phylophlan2_write_config_file()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

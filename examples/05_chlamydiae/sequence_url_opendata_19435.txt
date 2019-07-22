@@ -1,2 +1,0 @@
-https://s3-eu-west-1.amazonaws.com/sgb-genomes/data/genomes/19435/Obregon-TitoAJ_2015__SM30__bin.4.fa
-https://s3-eu-west-1.amazonaws.com/sgb-genomes/data/genomes/19435/Obregon-TitoAJ_2015__SM42__bin.11.fa
