@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 __author__  = 'Nicola Segata (nsegata@hsph.harvard.edu)'
-__version__ = '0.99'
+__version__ = '1.0'
 __date__    = '8 May 2013'
 
 import sys
