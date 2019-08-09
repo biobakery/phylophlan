@@ -1,23 +1,33 @@
 #!/bin/bash
 
-#Retrieve E.Coli genomes bins
-./examples/04_coli/retrieve_coli_bins.sh
 
-#Generate the phylogenetic markers database for E. coli based on the core set of UniRef90 proteins
-phylophlan_setup_database.py -g s__Escherichia_coli -o examples/04_coli/ \
---verbose 2>&1 | tee examples/04_coli/logs/phylophlan_setup_database.log
+# Generate the phylogenetic markers database for E. coli based on the core set of UniRef90 proteins
+phylophlan2_setup_database.py \
+    -g s__Escherichia_coli \
+    --verbose 2>&1 | tee logs/phylophlan2_setup_database.log
 
-# Add E. coli reference genomes
-phylophlan_get_reference.py -g s__Escherichia_coli -o examples/04_coli/input_references/ \
--n 200 --verbose 2>&1 | tee examples/04_coli/logs/phylophlan_get_reference.log
+# Retrieve 200 E. coli reference genomes
+phylophlan2_get_reference.py \
+    -g s__Escherichia_coli \
+    -o inputs/ \
+    -n 200 \
+    --verbose 2>&1 | tee logs/phylophlan2_get_reference.log
 
-cp -a examples/04_coli/input_bins/* examples/04_coli/input_references/
+# Retrieve 8 Ethiopian MAGs asssigned to E. coli
+for i in $(grep kSGB_10068 ../03_metagenomic/output_metagenomic.tsv | cut -f1); do
+    cp -a ../03_metagenomic/input_metagenomic/$i.fna inputs/;
+done;
 
-#Build the phylogeny
+# Build the phylogeny
 phylophlan2.py \
--i examples/04_coli/input_references \
--o output_references --output_folder examples/04_coli/ \
--d s__Escherichia_coli --databases_folder examples/04_coli/ \
--t a -f examples/04_coli/references_config.cfg --nproc 4 \
---subsample twentyfivepercent --diversity low --fast \
---verbose 2>&1 |tee examples/04_coli/logs/phylophlan2__s__Escherichia_coli.log
+    -i inputs \
+    -o output_references \
+    -d s__Escherichia_coli \
+    -t a \
+    -f references_config.cfg \
+    --force_nucleotides \
+    --nproc 4 \
+    --subsample twentyfivepercent \
+    --diversity low \
+    --fast \
+    --verbose 2>&1 |tee logs/phylophlan2__inputs.log

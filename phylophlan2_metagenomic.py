@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.21'
-__date__ = '22 July 2019'
+__version__ = '0.22'
+__date__ = '9 August 2019'
 
 
 import sys
@@ -83,11 +83,11 @@ def read_params():
                    help="If specified provides a distance matrix between only the input genomes provided")
     p.add_argument('--add_ggb', action='store_true', default=False,
                    help=("If specified adds GGB assignments. If specified with --add_fgb, then -n/--how_many will be set to 1"
-                         " and will be add a column that reports the closest reference genome"))
+                         " and will be adding a column that reports the closest reference genome"))
     p.add_argument('--add_fgb', action='store_true', default=False,
                    help=("If specified adds FGB assignments. If specified with --add_ggb, then -n/--how_many will be set to 1"
-                         " and will be add a column that reports the closest reference genome"))
-    p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrites the output file if exists")
+                         " and will be adding a column that reports the closest reference genome"))
+    p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrite the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan2_metagenomic.py version {} ({})'.format(__version__, __date__),

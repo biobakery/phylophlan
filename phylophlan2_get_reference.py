@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.09'
-__date__ = '22 July 2019'
+__version__ = '0.10'
+__date__ = '9 August 2019'
 
 
 import sys
@@ -57,7 +57,7 @@ def read_params():
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-g', '--get', type=str,
                        help=('Specify the taxonomic label for which download the set of reference genomes. '
-                             'The label must represents a valid taxonomic level or the special case "all"'))
+                             'The label must represent a valid taxonomic level or the special case "all"'))
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
                        help='Print for all taxa the total number of species and reference genomes available')
 

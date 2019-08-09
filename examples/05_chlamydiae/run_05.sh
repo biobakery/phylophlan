@@ -1,25 +1,39 @@
 #!/bin/bash
 
-# Retrieve the genome bins in uSGB 19436 found in 03.Metagenomic
-./examples/05_chlamydiae/retrieve_chlamydiae_bins.sh 
 
-# Download other genome bins in uSGB 19436 
-./examples/05_chlamydiae/download_files.sh
-examples/05_chlamydiae/sequence_url_opendata_19436.txt \
-examples/05_chlamydiae/input_bins
+# Download all MAGs of the uSGB 19436
+./download_files.sh sequence_url_opendata_19436.txt input_bins/
 
-# Download reference genomes for each species in Chlamydiae phylum
-phylophlan_get_reference.py -g p__Chlamydiae -n 2 \
--o examples/05_chlamydiae/input_bins --verbose 2>&1 | \
-tee examples/05_chlamyidiae/logs/phylophlan_get_reference.log
+# Download all reference genomes for all species in the Chlamydiae phylum
+phylophlan2_get_reference.py \
+    -g p__Chlamydiae \
+    -n -1 \
+    -o input_bins \
+    --verbose 2>&1 | tee logs/phylophlan2_get_reference__chlamydiae.log
 
-# Download genomes from Actinobacteria as outgroup
-./examples/05_chlamydiae/retrieve_actinobacteria_genomes.sh
+# Download all reference genomes for all species in the Planctomycetes phylum (outgroup for rooting)
+phylophlan2_get_reference.py \
+    -g p__Planctomycetes \
+    -n -1 \
+    -o input_bins \
+    --verbose 2>&1 | tee logs/phylophlan2_get_reference__planctomycetes.log
+
+# Retrieve 10 Ethiopian MAGs assigned to the uSGB 19436 (Chalmydiae phylum)
+for i in $(grep uSGB_19436 ../03_metagenomic/output_metagenomic.tsv | cut -f1); do
+    cp -a ../03_metagenomic/input_metagenomic/$i.fna input_bins/;
+done;
 
 # Build the phylogeny
-phylophlan2.py -i examples/05_chlamydiae/input_bins \
--d phylophlan --diversity medium --accurate -f examples/05_chlamydiae/chlamydiae_config.cfg \
--o output_chlamydiae --output_folder examples/05_chlamydiae/ --nproc 4 -t a \
---verbose 2>&1 | tee examples/05_chlamydiae/logs/phylophlan2_chlamydiae.log 
+phylophlan2.py \
+    -i input_bins \
+    -d phylophlan \
+    --diversity high \
+    --accurate \
+    -f chlamydiae_config.cfg \
+    -o output_chlamydiae \
+    --force_nucleotides \
+    --nproc 4 \
+    -t a \
+    --verbose 2>&1 | tee logs/phylophlan2__input_bins.log 
 
 
