@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.36'
-__date__ = '22 July 2019'
+__version__ = '0.37'
+__date__ = '9 August 2019'
 
 
 import os
@@ -191,19 +191,19 @@ def read_params():
     p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES,
                    help="The minimum number of entries to be present for each of the markers in the database")
     p.add_argument('--maas', type=str, default=None,
-                   help=("Select a mapping file that specify the substitution model of amino acid to use for each of the markers "
+                   help=("Select a mapping file that specifies the substitution model of amino acid to use for each of the markers "
                          "for the gene tree reconstruction. File must be tab-separated"))
     p.add_argument('--remove_only_gaps_entries', action='store_true', default=False,
                    help=('If specified, entries in the MSAs composed only of gaps ("-") will be removed. This is equivalent to '
                          'specify "--remove_fragmentary_entries --fragmentary_threshold 1"'))
     p.add_argument('--mutation_rates', action='store_true', default=False,
                    help=("If specified will produced a mutation rates table for each of the aligned markers and a summary table "
-                         "for the concatenated MSA. This operation can take long time to finish"))
+                         "for the concatenated MSA. This operation can take a long time to finish"))
     p.add_argument('--force_nucleotides', action='store_true', default=False,
-                   help=("If specified force PhyloPhlAn2 to use nucloetide sequences for the phylogenetic analysis,  "
+                   help=("If specified force PhyloPhlAn2 to use nucleotide sequences for the phylogenetic analysis,  "
                          "even in the case of a database of amino acids"))
 
-    group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folders location")
+    group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folder locations")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the input data")
     group.add_argument('--data_folder', type=str, default=None,
                        help=('Path to the folder where to store the intermediate files, '
@@ -2683,13 +2683,21 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
     t0 = time.time()
     info('Refining phylogeny "{}"\n'.format(starting_tree))
 
+    nproc_loc = nproc
+
     # RAxML is slower when using more than 20 cores
     if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()):
         nproc_loc = 20
 
+        if verbose:
+            info('Reducing number of RAxML threads to {}, as it appears to underperform with more threads\n'.format(nproc_loc))
+
     # threaded RAxML complains if number of threads is 1!
     if (nproc_loc == 1) and ('raxml' in configs[key]['program_name'].lower()) and ('threads' in configs[key]):
         nproc_loc = 2
+
+        if verbose:
+            info('Setting RAxML threads to {}, cannot use 1 thread with RAxML parallel version\n'.format(nproc_loc))
 
     cmd = compose_command(configs[key], input_file=inputt, database=starting_tree,
                           output_path=output_path, output_file=output_tree, nproc=nproc_loc)

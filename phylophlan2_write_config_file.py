@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.09'
-__date__ = '22 July 2019'
+__version__ = '0.10'
+__date__ = '9 August 2019'
 
 
 import os
@@ -97,9 +97,9 @@ def read_params():
                    help=('Add the "tree2" section of the selected software that will be used for refining the '
                          'phylogeny previously built with what specified in the "tree1" section'))
     p.add_argument('-a', '--absolute_path', action='store_true', default=False,
-                   help="Write the absolute path to the executable instead of the executable name as find in the system path environment")
+                   help="Write the absolute path to the executable instead of the executable name as found in the system path environment")
     p.add_argument('--force_nucleotides', default=None, action='store_true',
-                   help=('If specified sets parameters for phylogenetic analysis softwares so that they use '
+                   help=('If specified sets parameters for phylogenetic analysis software so that they use '
                          'nucleotide sequences, even in the case of a database of amino acids'))
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")

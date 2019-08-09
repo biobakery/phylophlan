@@ -1,9 +1,14 @@
-#/usr/bin/bash!
+#!/usr/bin/bash
 
-graphlan_annotate.py --annot examples/01_saureus/graphlan/isolates_annotation.txt \
-examples/01_saureus/output_isolates/RAxML_bestTree.input_isolates_refined.tre \
-examples/01_saureus/graphlan/isolates_annotated.xml
 
-graphlan.py --dpi 300 \
-examples/01_saureus/graphlan/isolates_annotated.xml \
-examples/01_saureus/graphlan/saureus_isolates.png
+echo "GraPhlAn annotate"
+graphlan_annotate.py \
+    --annot graphlan/isolates_annotation.txt \
+    output_isolates/RAxML_bestTree.input_isolates_refined.tre \
+    graphlan/isolates_annotated.xml
+
+echo "GraPhlAn draw"
+graphlan.py \
+    graphlan/isolates_annotated.xml \
+    graphlan/saureus_isolates.png \
+    --dpi 300

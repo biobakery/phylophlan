@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.12'
-__date__ = '22 July 2019'
+__version__ = '0.13'
+__date__ = '9 August 2019'
 
 
 import sys
@@ -66,7 +66,7 @@ def read_params():
                              "files or the file of markers, in (multi-)fasta format"))
     group.add_argument('-g', '--get_core_proteins', type=str, default=None,
                        help=('Specify the taxonomic label for which download the set of '
-                             'core proteins. The label must represents a species: '
+                             'core proteins. The label must represent a species: '
                              '"--get_core_proteins s__Escherichia_coli"'))
 
     p.add_argument('-o', '--output', type=str, default=None,
