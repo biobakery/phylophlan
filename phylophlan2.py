@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.37'
-__date__ = '9 August 2019'
+__version__ = '0.38'
+__date__ = '12 August 2019'
 
 
 import os
@@ -1288,8 +1288,8 @@ def gene_markers_identification_rec(x):
         terminating.set()
 
 
-def gene_markers_selection(input_folder, function, min_num_proteins, nproc=1, verbose=False):
-    commands = [(f, f[:-4], function, min_num_proteins)
+def gene_markers_selection(input_folder, function, min_num_proteins, nucleotides, nproc=1, verbose=False):
+    commands = [(f, f[:-4], function, min_num_proteins, nucleotides)
                 for f in glob.iglob(os.path.join(input_folder, '*.b6o.bkp')) if not os.path.isfile(f[:-4])]
 
     if commands:
@@ -1310,9 +1310,9 @@ def gene_markers_selection_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, function, min_num_proteins = x
+            inp, out, function, min_num_proteins, nt = x
             info('Selecting "{}"\n'.format(inp))
-            matches = function(inp)
+            matches = function(inp, nt)
 
             # there should be at least min_num_proteins mapped
             if len(matches) >= min_num_proteins:
@@ -1333,7 +1333,7 @@ def gene_markers_selection_rec(x):
         terminating.set()
 
 
-def best_hit(f):
+def best_hit(f, nucleotides):
     tab = (ll.strip().split('\t') for ll in open(f))
     best_matches = {}
 
@@ -1345,6 +1345,16 @@ def best_hit(f):
         ms = entry[8]
         me = entry[9]
         b = entry[-1]
+        cl = int(ce) - (int(cs) - 1) if int(cs) < int(ce) else int(cs) - (int(ce) - 1)
+        ml = int(me) - (int(ms) - 1) if int(ms) < int(me) else int(ms) - (int(me) - 1)
+        ratio = cl / ml if ml > cl else ml / cl
+
+        if nucleotides:
+            cl / 3
+
+        if ratio < 0.34:  # skip too short hits (less than 34% of the length of the matching marker)
+            continue
+
         rev = '0' if (int(cs) < int(ce)) and (int(ms) < int(me)) else '1'
 
         if m in best_matches:
@@ -1356,7 +1366,7 @@ def best_hit(f):
     return [v for _, v in best_matches.items()]
 
 
-def largest_cluster(f):
+def largest_cluster(f, nucleotides):
     tab = (ll.strip().split('\t') for ll in open(f))
     clusters = {}
     largest_clusters = []
@@ -2879,7 +2889,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna, args.min_num_proteins,
                                     nproc=args.nproc, verbose=args.verbose)
         gene_markers_selection(inp_f, largest_cluster if (args.db_type == 'a') and (not args.force_nucleotides) else best_hit,
-                               args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                               args.min_num_proteins, nucleotides=True if args.db_type == 'a' else False,
+                               nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.data_folder, 'markers_dna')
         gene_markers_extraction(input_fna, inp_f, out_f, args.genome_extension, args.min_num_markers,
                                 frameshifts=True if (args.db_type == 'a') and (not args.force_nucleotides) else False,
@@ -2913,7 +2924,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                 inp_f = os.path.join(args.data_folder, 'map_aa')
                 gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa,
                                             args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
-                gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nucleotides=False,
+                                       nproc=args.nproc, verbose=args.verbose)
                 out_f = os.path.join(args.data_folder, 'markers_aa')
                 gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension, args.min_num_markers,
                                         nproc=args.nproc, verbose=args.verbose)
