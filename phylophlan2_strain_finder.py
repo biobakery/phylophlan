@@ -147,7 +147,7 @@ def check_thr(p, l, tree, md, p_thr, m_thr, verbose=False):
         sons = [s.name for s in p.get_terminals()]
         tup = list(itertools.combinations(sons, 2))
         tup = [(sorted(t)) for t in tup]
-        if any(float(md[(t[0], t[1])]) > m_thr for t in tup):
+        if any(md[(t[0], t[1])] > m_thr for t in tup):
             if verbose:
                 info('Not every leaf under "{}" respects the mutation_rates threshold, return "{}"" as root of the subtree\n'.format(p, l))
             return l
@@ -166,12 +166,16 @@ def phylophlan2_strain_finder():
     tree = Phylo.read(args.input, args.tree_format)
 
     mut_rates = pd.read_csv(args.mutation_rates, sep='\t', header=0, index_col=0)
-    # mut_rates.set_index('ids', inplace=True)  # TO BE TESTED BEFORE REMOVE
 
     if args.verbose:
         info('Reading mutation_rates table...\n')
 
-    mydict = dict([((i, c), mut_rates.at[i, c]) for i in mut_rates.index for c in mut_rates.columns if (i < c)])
+    mydict = dict([((r, c), float(mut_rates.at[r, c]))
+                   for ir, r in enumerate(mut_rates.index)
+                   for ic, c in enumerate(mut_rates.columns) if ir < ic])
+    mydict.update(dict([((c, r), float(mut_rates.at[r, c]))
+                        for ir, r in enumerate(mut_rates.index)
+                        for ic, c in enumerate(mut_rates.columns) if (ir < ic) and (c, r) not in mydict]))
     tested_valid = []
 
     for l in tree.get_terminals():
@@ -209,11 +213,7 @@ def phylophlan2_strain_finder():
         m_max = m_mean = d_max = d_mean = count = 0
 
         for t in tup:
-            if t[0].name < t[1].name:
-                m = float(mydict[(t[0].name, t[1].name)])
-            else:
-                m = float(mydict[(t[1].name, t[0].name)])
-
+            m = mydict[(t[0].name, t[1].name)]
             d = tree.distance(t[0], t[1])
             distances.append(t[0].name + ',' + t[1].name + ':' + str(d))
             m_rate.append(t[0].name + ',' + t[1].name + ':' + str(m))
@@ -225,8 +225,8 @@ def phylophlan2_strain_finder():
             d_mean = d_mean + d
             count = count + 1
 
-        d_mean = float(d_mean / count)
-        m_mean = float(m_mean / count)
+        d_mean = d_mean / count
+        m_mean = m_mean / count
 
         print((args.separator).join([subtree, str(d_min), str(d_mean), str(d_max), str(m_min), str(m_mean), str(m_max),
                                      '|'.join(distances), '|'.join(m_rate)]), file=f)
