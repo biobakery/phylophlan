@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.38'
-__date__ = '12 August 2019'
+__version__ = '0.39'
+__date__ = '2 September 2019'
 
 
 import os
@@ -1347,10 +1347,11 @@ def best_hit(f, nucleotides):
         b = entry[-1]
         cl = int(ce) - (int(cs) - 1) if int(cs) < int(ce) else int(cs) - (int(ce) - 1)
         ml = int(me) - (int(ms) - 1) if int(ms) < int(me) else int(ms) - (int(me) - 1)
-        ratio = cl / ml if ml > cl else ml / cl
 
         if nucleotides:
-            cl / 3
+            cl = cl / 3
+
+        ratio = cl / ml if ml > cl else ml / cl
 
         if ratio < 0.34:  # skip too short hits (less than 34% of the length of the matching marker)
             continue
@@ -3065,6 +3066,8 @@ class ReportHook():
 
             status += "        \r"
             info(status)
+
+        info('\n')
 
 
 def download(url, download_file, verbose=False):
