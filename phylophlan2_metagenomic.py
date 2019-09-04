@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.22'
-__date__ = '9 August 2019'
+__version__ = '0.23'
+__date__ = '2 September 2019'
 
 
 import sys
@@ -26,6 +26,7 @@ import tarfile
 import datetime
 import itertools
 import copy
+import pandas as pd
 
 
 if sys.version_info[0] < 3:
@@ -34,7 +35,6 @@ if sys.version_info[0] < 3:
 
 HOW_MANY = "10"
 DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/phylophlan2_metagenomic.txt"
-SGB_RELEASE_FILE = "SGB.Jan19"
 DATABASE_FOLDER = 'phylophlan2_databases/'
 
 
@@ -63,13 +63,18 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 def read_params():
     p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    p.add_argument('-i', '--input', type=str, required=True,
+    p.add_argument('-i', '--input', type=str,
                    help="Input folder containing the metagenomic bins to be indexed")
     p.add_argument('-o', '--output_prefix', type=str, default=None,
                    help=("Prefix used for the output folders: indexed bins, distance estimations. If not specified, "
                          "the input folder will be used"))
-    p.add_argument('-d', '--database', type=str, default=SGB_RELEASE_FILE,
-                   help="Specify the name of the database, if not found locally will be automatically downloaded")
+    p.add_argument('-d', '--database', type=str, default=None,
+                   help="Database name, available options can be listed using the --database_list parameter")
+    p.add_argument('--database_list', action='store_true', default=False,
+                   help="List of all the available databases that can be specified with the -d/--database option")
+
+    p.add_argument('--database_update', action='store_true', default=False, help="Update the databases file")
+
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))
@@ -95,7 +100,33 @@ def read_params():
     return p.parse_args()
 
 
+def database_list(databases_folder, update=False, exit=False, exit_value=0):
+    sgbs_url = os.path.basename(DOWNLOAD_URL)
+    download(DOWNLOAD_URL, sgbs_url, overwrite=update, verbose=False)
+    urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '') for r in open(sgbs_url)
+                if not r.startswith('#') and (len(r.split('\t')) == 2) and ('tutorial' not in r)])
+
+    info('\nAvailable databases that can be specified with -d/--database:\n    ')
+    info('\n    '.join(urls) + '\n', exit=exit, exit_value=exit_value)
+
+
 def check_params(args, verbose=False):
+    # database folder
+    if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)):
+        args.database_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)
+
+        if verbose:
+            info('Setting --database_folder to "{}"\n'.format(args.database_folder))
+
+    if args.database_list:
+        database_list(args.database_folder, update=args.database_update, exit=True)
+
+    if not os.path.isdir(args.database_folder):
+        create_folder(args.database_folder, verbose=verbose)
+
+    if (not args.input) and (not args.database):
+        error('both -i/--input and -d/--database must be specified', exit=True)
+
     if not os.path.isdir(args.input):
         error('"{}" folder not found, -i/--input must be a folder'.format(args.input), exit=True)
 
@@ -119,16 +150,6 @@ def check_params(args, verbose=False):
 
         if verbose:
             info('Setting prefix output folder to "{}"\n'.format(args.output_prefix))
-
-    # database folder
-    if os.path.isdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)):
-        args.database_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.database_folder)
-
-        if verbose:
-            info('Setting --database_folder to "{}"\n'.format(args.database_folder))
-
-    if not os.path.isdir(args.database_folder):
-        create_folder(args.database_folder, verbose=verbose)
 
     if args.how_many != 'all':
         try:
@@ -213,13 +234,15 @@ class ReportHook():
             status += "        \r"
             info(status)
 
+        info('\n')
 
-def download(url, download_file, verbose=False):
+
+def download(url, download_file, overwrite=False, verbose=False):
     """
     Download a file from a url
     """
 
-    if not os.path.isfile(download_file):
+    if (not os.path.isfile(download_file)) or overwrite:
         try:
             if verbose:
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
@@ -501,45 +524,18 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
     for inp_a, inp_b in inps_combs:
         a = inp_a.split('_')[-1].split('.')[0]
         b = inp_b.split('_')[-1].split('.')[0]
-        out_f = '{}_{}vs{}{}'.format(out_f, a, b, out_ext)
+        out_t = '{}_{}vs{}{}'.format(out_f, a, b, out_ext)
 
-        if not os.path.isfile(out_f):
-            commands.append((inp_a, inp_b, out_f, verbose))
-
-    if commands:
-        terminating = mp.Event()
-
-        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
-            try:
-                [_ for _ in pool.imap_unordered(disting_input_vs_input_rec, commands, chunksize=1)]
-            except Exception as e:
-                error(str(e), init_new_line=True)
-                error('disting_input_vs_input crashed', init_new_line=True, exit=True)
-    else:
-        info('Disting input vs. input already computed!\n')
-
-
-def disting_input_vs_input_rec(x):
-    if not terminating.is_set():
-        try:
-            inp_a, inp_b, out_f, verbose = x
-            cmd = ['mash', 'dist', '-t', '-p', '1', inp_a, inp_b]
+        if not os.path.isfile(out_t):
+            cmd = ['mash', 'dist', '-t', '-p', str(nproc), inp_a, inp_b]
 
             try:
-                sb.check_call(cmd, stdout=open(out_f, 'w'), stderr=sb.DEVNULL)
+                sb.check_call(cmd, stdout=open(out_t, 'w'), stderr=sb.DEVNULL)
             except Exception as e:
-                terminating.set()
-                remove_file(out_f, verbose=verbose)
+                remove_file(out_t, verbose=verbose)
                 error(str(e), init_new_line=True)
                 error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                 raise
-        except Exception as e:
-            terminating.set()
-            error(str(e), init_new_line=True)
-            error('error while disting\n    {}'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
-            raise
-    else:
-        terminating.set()
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -634,6 +630,43 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
 
     if len(to_be_merged) == 1:
         os.rename(to_be_merged[0], output_file)
+    elif len(to_be_merged) == 3:
+        if verbose:
+            info('[w] this operation can take several hours and hundreds of Giga of RAM\n')
+
+        t11 = [i for i in to_be_merged if '_1vs1' in i][0]
+        t12 = [i for i in to_be_merged if '_1vs2' in i][0]
+        t22 = [i for i in to_be_merged if '_2vs2' in i][0]
+
+        if verbose:
+            info('Loading {}\n'.format(t11))
+
+        d11 = pd.read_csv(t11, sep='\t', index_col=0)
+
+        if verbose:
+            info('Loading {}\n'.format(t12))
+
+        d12 = pd.read_csv(t12, sep='\t', index_col=0)
+
+        if verbose:
+            info('Loading {}\n'.format(t22))
+
+        d22 = pd.read_csv(t22, sep='\t', index_col=0)
+
+        if verbose:
+            info('Merging {} with {}\n'.format(t11, t12))
+
+        d11_d12 = d11.merge(d12.T, how='outer', left_index=True, right_index=True)
+
+        if verbose:
+            info('Merging {} with {}\n'.format(t12, t22))
+
+            d12_d22 = d12.merge(d22, how='outer', left_index=True, right_index=True)
+
+        if verbose:
+            info('Writing "{}" outpuf file\n'.format(output_file))
+
+            d11_d12.append(d12_d22).to_csv(output_file, sep='\t')
     else:
         error('not yet implemented!', init_new_line=True, exit=True)
 

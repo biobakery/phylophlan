@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.13'
-__date__ = '9 August 2019'
+__version__ = '0.14'
+__date__ = '2 September 2019'
 
 
 import sys
@@ -202,6 +202,8 @@ class ReportHook():
 
             status += "        \r"
             info(status)
+
+        info('\n')
 
 
 def download(url, download_file, verbose=False):
