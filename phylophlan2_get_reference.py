@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.11'
-__date__ = '2 September 2019'
+__version__ = '0.12'
+__date__ = '11 September 2019'
 
 
 import sys
@@ -52,7 +52,11 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
+    p = ap.ArgumentParser(description=("The phylophlan2_get_reference.py script allows to download a specified number (-n/--how_many) of "
+                                       "reference genomes from the Genbank repository. Special case \"all\" allows to download a specified "
+                                       "number of reference genomes for all available taxonomic species. With the -l/--list_clades params "
+                                       "the phylophlan2_get_reference.py scripts returns the list of all species in the database"),
+                          formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-g', '--get', type=str,
@@ -155,8 +159,6 @@ class ReportHook():
             status += "        \r"
             info(status)
 
-        info('\n')
-
 
 def download(url, download_file, verbose=False):
     """
@@ -169,6 +171,7 @@ def download(url, download_file, verbose=False):
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, filename=download_file, reporthook=ReportHook().report)
+            info('\n')
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:

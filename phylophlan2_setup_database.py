@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.14'
-__date__ = '2 September 2019'
+__version__ = '0.15'
+__date__ = '10 September 2019'
 
 
 import sys
@@ -58,29 +58,27 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
+    p = ap.ArgumentParser(description=("The phylophlan2_setup_database.py script can be used to either format an input folder or "
+                                       "multi-fasta file to be used as database in phylophlan2.py, or automatically download a "
+                                       "pre-identified set of core UniRef90 proteins for the taxonomic label of a given species"),
+                          formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument('-i', '--input', type=str,
-                       help=("Specify the path to either the folder containing the marker "
-                             "files or the file of markers, in (multi-)fasta format"))
+                       help=("Specify the path to either the folder containing the marker files or the file of markers, in "
+                             "(multi-)fasta format"))
     group.add_argument('-g', '--get_core_proteins', type=str, default=None,
-                       help=('Specify the taxonomic label for which download the set of '
-                             'core proteins. The label must represent a species: '
-                             '"--get_core_proteins s__Escherichia_coli"'))
+                       help=('Specify the taxonomic label for which download the set of core proteins. The label must represent a '
+                             'species: "--get_core_proteins s__Escherichia_coli"'))
 
-    p.add_argument('-o', '--output', type=str, default=None,
-                   help="Specify path to the output folder where to save the database")
+    p.add_argument('-o', '--output', type=str, default=None, help="Specify path to the output folder where to save the database")
     p.add_argument('-d', '--db_name', type=str, help="Specify the name of the output database")
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help="Specify the extension of the input file(s) specified via -i/--input")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
-                   help=('Specify the type of the database, where "n" stands for '
-                         'nucleotides and "a" for amino acids'))
-    p.add_argument('-x', '--output_extension', type=str, default=None,
-                   help="Set the database output extension")
-    p.add_argument('--overwrite', action='store_true', default=False,
-                   help="If specified and the output file exists it will be overwritten")
+                   help='Specify the type of the database, where "n" stands for nucleotides and "a" for amino acids')
+    p.add_argument('-x', '--output_extension', type=str, default=None, help="Set the database output extension")
+    p.add_argument('--overwrite', action='store_true', default=False, help="If specified and the output file exists it will be overwritten")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan2_setup_database.py version {} ({})'.format(__version__, __date__),
@@ -203,8 +201,6 @@ class ReportHook():
             status += "        \r"
             info(status)
 
-        info('\n')
-
 
 def download(url, download_file, verbose=False):
     """
@@ -217,6 +213,7 @@ def download(url, download_file, verbose=False):
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
+            info('\n')
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:

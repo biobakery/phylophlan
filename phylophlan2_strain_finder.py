@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.06'
-__date__ = '22 July 2019'
+__version__ = '0.07'
+__date__ = '9 September 2019'
 
 
 import argparse as ap
@@ -53,8 +53,11 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description="",
-                          epilog=(""),
+    p = ap.ArgumentParser(description=("The phylophlan2_strain_finder.py script analyzes the phylogeny and the mutation rates table "
+                                       "generated from the phylophlan2.py script and returns sub-trees representing the same strain, "
+                                       "according to both a phylogenetic threshold (computed on the normalized pairwise phylogenetic "
+                                       "distances) and a mutation rate threshold (computed on the aligned sequences of the markers used "
+                                       "in the phylogenetic analysis)"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True,

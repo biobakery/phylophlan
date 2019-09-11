@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.23'
-__date__ = '2 September 2019'
+__version__ = '0.24'
+__date__ = '11 September 2019'
 
 
 import sys
@@ -61,7 +61,12 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(formatter_class=ap.ArgumentDefaultsHelpFormatter)
+    p = ap.ArgumentParser(description=("The phylophlan2_metagenomic.py script assign SGB and taxonomy to a given set of input genomes. "
+                                       "Outputs can be of three types: (1) for each input genomes returns the list of the closest "
+                                       "-n/--how_many SGBs sorted by average Mash distance; (2) for each input genomes returns the "
+                                       "closest SGB, GGB, FGB, and reference genomes; (3) returns a all vs. all matrix with all the "
+                                       "pairwise mash distances"),
+                          formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str,
                    help="Input folder containing the metagenomic bins to be indexed")
@@ -234,8 +239,6 @@ class ReportHook():
             status += "        \r"
             info(status)
 
-        info('\n')
-
 
 def download(url, download_file, overwrite=False, verbose=False):
     """
@@ -248,6 +251,7 @@ def download(url, download_file, overwrite=False, verbose=False):
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
+            info('\n')
         except EnvironmentError:
             error('unable to download "{}"'.format(url), exit=True)
     elif verbose:
