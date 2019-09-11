@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.39'
-__date__ = '2 September 2019'
+__version__ = '0.40'
+__date__ = '10 September 2019'
 
 
 import os
@@ -97,8 +97,13 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description='PhyloPhlAn2',
-                          epilog='',
+    p = ap.ArgumentParser(description=("PhyloPhlAn2 is an accurate, rapid, and easy-to-use method for large-scale microbial genome "
+                                       "characterization and phylogenetic analysis at multiple levels of resolution. PhyloPhlAn2 can assign "
+                                       "finished, draft, or metagenome-assembled genomes (MAGs) to species-level genome bins (SGBs). For "
+                                       "individual clades of interest (e.g. newly sequenced genome sets), PhyloPhlAn2 reconstructs strain-level "
+                                       "phylogenies from among the closest species using clade-specific maximally informative markers. At the "
+                                       "other extreme of resolution, PhyloPhlAn2 scales to very-large phylogenies comprising >17,000 microbial "
+                                       "species"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     group = p.add_mutually_exclusive_group()
@@ -162,9 +167,8 @@ def read_params():
     p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD,
                    help='Specify the value used to consider a column not variant when "--trim not_variant" is specified')
     p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES,
-                   help=('The number of positions to retain from each single marker: '
-                         '"phylophlan": specific number of positions for each PhyloPhlAn marker '
-                                       '(works only when --database phylophlan); '
+                   help=('The number of positions to retain from each single marker, available option are: '
+                         '"phylophlan": specific number of positions for each PhyloPhlAn marker (only when "--database phylophlan"); '
                          '"onethousand": return the top 1000 positions; '
                          '"sevenhundred": return the top 700; '
                          '"fivehundred": return the top 500; '
@@ -172,10 +176,10 @@ def read_params():
                          '"onehundred": return the top 100 positions; '
                          '"fifty": return the top 50 positions; '
                          '"twentyfive": return the top 25 positions; '
-                         '"fiftypercent": return the top 50% positions; '
-                         '"twentyfivepercent": return the top 25% positions;'
-                         '"tenpercent": return the top 10% positions;'
-                         'If not specified, the complete alignment will be used'))
+                         '"fiftypercent": return the top 50 percent positions; '
+                         '"twentyfivepercent": return the top 25% positions; '
+                         '"tenpercent": return the top 10% positions; '
+                         'If not specified, the complete alignment will be used').replace(r"%", r"%%"))
     p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION,
                    help='Define the amount of unknowns ("X" and "-") allowed in each column of the MSA of the markers')
     p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES,
@@ -3067,8 +3071,6 @@ class ReportHook():
             status += "        \r"
             info(status)
 
-        info('\n')
-
 
 def download(url, download_file, verbose=False):
     """
@@ -3081,6 +3083,7 @@ def download(url, download_file, verbose=False):
                 info('Downloading "{}"\n'.format(url))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
+            info('\n')
         except EnvironmentError:
             error('unable to download "{}"'.format(url))
     elif verbose:

@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.04'
-__date__ = '22 July 2019'
+__version__ = '0.05'
+__date__ = '11 September 2019'
 
 
 import argparse as ap
@@ -49,8 +49,10 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description="",
-                          epilog=(""),
+    p = ap.ArgumentParser(description=("The phylophlan2_draw_metagenomic.py script takes as input the output table generated form the "
+                                       "phylophlan2_metagenomic.py script and produces two heatmap figures: (1) presence/absence heatmap "
+                                       "of the SGBs and the metagenomic samples of the recontructed input genomes; and (2) heatmap "
+                                       "showing the amount of kSGB, uSGB, and unassinged for each metagenome"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True, help='The input file generated from phylophlan2_metagenomic.py')
