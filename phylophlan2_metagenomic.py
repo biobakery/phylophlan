@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.24'
-__date__ = '11 September 2019'
+__version__ = '0.25'
+__date__ = '4 October 2019'
 
 
 import sys
@@ -129,8 +129,15 @@ def check_params(args, verbose=False):
     if not os.path.isdir(args.database_folder):
         create_folder(args.database_folder, verbose=verbose)
 
-    if (not args.input) and (not args.database):
-        error('both -i/--input and -d/--database must be specified', exit=True)
+    if not args.only_input:
+        if (not args.input) or (not args.database):
+            error('both -i/--input and -d/--database must be specified')
+            database_list(args.database_folder, update=args.database_update, exit=True)
+
+        args.mapping = args.database
+
+        if not args.mapping.endswith('.txt.bz2'):
+            args.mapping += '.txt.bz2'
 
     if not os.path.isdir(args.input):
         error('"{}" folder not found, -i/--input must be a folder'.format(args.input), exit=True)
@@ -167,11 +174,6 @@ def check_params(args, verbose=False):
             args.how_many = HOW_MANY
 
         args.how_many = how_many
-
-    args.mapping = args.database
-
-    if not args.mapping.endswith('.txt.bz2'):
-        args.mapping += '.txt.bz2'
 
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
