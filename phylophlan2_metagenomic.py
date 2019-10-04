@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.24'
-__date__ = '11 September 2019'
+__version__ = '0.25'
+__date__ = '4 October 2019'
 
 
 import sys
@@ -129,7 +129,7 @@ def check_params(args, verbose=False):
     if not os.path.isdir(args.database_folder):
         create_folder(args.database_folder, verbose=verbose)
 
-    if (not args.input) and (not args.database):
+    if (not args.input) or (not args.database):
         error('both -i/--input and -d/--database must be specified', exit=True)
 
     if not os.path.isdir(args.input):
