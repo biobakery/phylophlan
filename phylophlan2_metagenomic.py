@@ -130,7 +130,7 @@ def check_params(args, verbose=False):
         create_folder(args.database_folder, verbose=verbose)
 
     if (not args.input) or (not args.database):
-        error('both -i/--input and -d/--database must be specified\n')
+        error('both -i/--input and -d/--database must be specified')
         database_list(args.database_folder, update=args.database_update, exit=True)
 
     if not os.path.isdir(args.input):
