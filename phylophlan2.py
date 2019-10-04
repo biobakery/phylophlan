@@ -385,10 +385,10 @@ def check_args(args, command_line_arguments, verbose=True):
 
         if args.fast:
             trim = 'greedy'
-            subsample = 'fiftyfive'
+            subsample = 'fifty'
             fragmentary_threshold = 0.75
             gap_perc_threshold = 0.75
-            not_variant_threshold = 0.99
+            not_variant_threshold = 0.97
 
     if args.diversity == 'high':
         trim = 'greedy'
