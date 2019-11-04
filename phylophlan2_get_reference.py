@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.12'
-__date__ = '11 September 2019'
+__version__ = '0.13'
+__date__ = '4 November 2019'
 
 
 import sys
@@ -65,6 +65,7 @@ def read_params():
     group.add_argument('-l', '--list_clades', action='store_true', default=False,
                        help='Print for all taxa the total number of species and reference genomes available')
 
+    p.add_argument('--database_update', action='store_true', default=False, help="Update the databases file")
     p.add_argument('-e', '--output_file_extension', type=str, default='.fna.gz',
                    help="Specify path to the extension of the output files")
     p.add_argument('-o', '--output', type=str,
@@ -160,12 +161,12 @@ class ReportHook():
             info(status)
 
 
-def download(url, download_file, verbose=False):
+def download(url, download_file, overwrite=False, verbose=False):
     """
     Download a file from a url
     """
 
-    if not os.path.isfile(download_file):
+    if overwrite or not os.path.isfile(download_file):
         try:
             if verbose:
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
@@ -229,11 +230,11 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
         info('\t'.join([k, str(v[0]), str(v[1])]) + '\n')
 
 
-def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, verbose=False):
+def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, update, verbose=False):
     core_genomes = {}
     metadata = None
 
-    download(GB_ASSEMBLY_URL, gb_assembly_file, verbose=verbose)
+    download(GB_ASSEMBLY_URL, gb_assembly_file, overwrite=update, verbose=verbose)
 
     # load GenBank assembly summary
     gb_assembly_summary = dict([(r.strip().split('\t')[0],
@@ -284,7 +285,7 @@ def phylophlan2_get_reference():
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, verbose=args.verbose)
+    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, overwrite=args.database_update, verbose=args.verbose)
 
     with open(TAXA2GENOMES_FILE) as f:
         for r in f:
@@ -300,7 +301,7 @@ def phylophlan2_get_reference():
 
     create_folder(os.path.join(args.output), verbose=args.verbose)
     get_reference_genomes(args.genbank_mapping, taxa2genomes_file_latest, args.get, args.how_many,
-                          args.output_file_extension, args.output, verbose=args.verbose)
+                          args.output_file_extension, args.output, args.database_update, verbose=args.verbose)
 
 
 if __name__ == '__main__':
