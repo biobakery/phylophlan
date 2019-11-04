@@ -77,9 +77,7 @@ def read_params():
                    help="Database name, available options can be listed using the --database_list parameter")
     p.add_argument('--database_list', action='store_true', default=False,
                    help="List of all the available databases that can be specified with the -d/--database option")
-
     p.add_argument('--database_update', action='store_true', default=False, help="Update the databases file")
-
     p.add_argument('-e', '--input_extension', type=str, default=None,
                    help=("Specify the extension of the input file(s) specified via -i/--input. If not specified will "
                          "try to infer it from the input files"))

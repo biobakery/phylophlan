@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.15'
-__date__ = '10 September 2019'
+__version__ = '0.16'
+__date__ = '4 November 2019'
 
 
 import sys
@@ -71,6 +71,7 @@ def read_params():
                        help=('Specify the taxonomic label for which download the set of core proteins. The label must represent a '
                              'species: "--get_core_proteins s__Escherichia_coli"'))
 
+    p.add_argument('--database_update', action='store_true', default=False, help="Update the databases file")
     p.add_argument('-o', '--output', type=str, default=None, help="Specify path to the output folder where to save the database")
     p.add_argument('-d', '--db_name', type=str, help="Specify the name of the output database")
     p.add_argument('-e', '--input_extension', type=str, default=None,
@@ -202,12 +203,12 @@ class ReportHook():
             info(status)
 
 
-def download(url, download_file, verbose=False):
+def download(url, download_file, overwrite=False, verbose=False):
     """
     Download a file from a url
     """
 
-    if not os.path.isfile(download_file):
+    if overwrite or not os.path.isfile(download_file):
         try:
             if verbose:
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
@@ -373,7 +374,7 @@ def phylophlan2_setup_database():
 
     if args.get_core_proteins:
         taxa2core_file_latest = None
-        download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, verbose=args.verbose)
+        download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, overwrite=args.database_update, verbose=args.verbose)
 
         with open(TAXA2CORE_FILE) as f:
             for r in f:
