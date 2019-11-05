@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.25'
-__date__ = '4 October 2019'
+__version__ = '0.26'
+__date__ = '5 October 2019'
 
 
 import sys
@@ -159,7 +159,16 @@ def check_params(args, verbose=False):
         args.output_prefix = os.path.abspath(args.input)
 
         if verbose:
-            info('Setting prefix output folder to "{}"\n'.format(args.output_prefix))
+            info('Setting output prefix to "{}"\n'.format(args.output_prefix))
+
+    if os.path.isdir(args.output_prefix):
+        if args.output_prefix.endswith('/'):
+           args.output_prefix = args.output_prefix[:-1]
+
+        args.output_prefix = os.path.join(args.output_prefix, os.path.basename(args.output_prefix))
+
+        if verbose:
+            info('Output prefix is a folder, setting it to "{}"\n'.format(args.output_prefix))
 
     if args.how_many != 'all':
         try:
