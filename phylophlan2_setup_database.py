@@ -63,7 +63,7 @@ def read_params():
                                        "pre-identified set of core UniRef90 proteins for the taxonomic label of a given species"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('-i', '--input', type=str,
                        help=("Specify the path to either the folder containing the marker files or the file of markers, in "
                              "(multi-)fasta format"))
@@ -88,6 +88,13 @@ def read_params():
 
 
 def check_params(args, verbose=False):
+    if args.database_update:
+        database_update(update=args.database_update, verbose=args.verbose)
+        args.database_update = False
+
+    if not args.input and not args.get_core_proteins:
+        error('either -i/--input or -g/--get_core_proteins must be specified', init_new_line=True, exit=True)
+
     if args.input:
         if (not os.path.isdir(args.input)) and (not os.path.isfile(args.input)):
             error('input must be either a folder or a file', exit=True)
@@ -159,6 +166,21 @@ def check_params(args, verbose=False):
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)))
+
+
+def database_update(update=False, verbose=False):
+    taxa2core_file_latest = None
+    download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, overwrite=update, verbose=verbose)
+
+    with open(TAXA2CORE_FILE) as f:
+        for r in f:
+            if not r.startswith('#'):
+                taxa2core_file_latest = r.strip()
+                break  # file should contains only one line, i.e., the name of the latest taxa2core file
+
+    download(os.path.join(DOWNLOAD_URL, taxa2core_file_latest), taxa2core_file_latest, overwrite=update, verbose=verbose)
+
+    return taxa2core_file_latest
 
 
 def byte_to_megabyte(byte):
@@ -373,16 +395,7 @@ def phylophlan2_setup_database():
     create_folder(args.output, verbose=args.verbose)
 
     if args.get_core_proteins:
-        taxa2core_file_latest = None
-        download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, overwrite=args.database_update, verbose=args.verbose)
-
-        with open(TAXA2CORE_FILE) as f:
-            for r in f:
-                if not r.startswith('#'):
-                    taxa2core_file_latest = r.strip()
-                    break  # file should contains only one line, i.e., the name of the latest taxa2core file
-
-        download(os.path.join(DOWNLOAD_URL, taxa2core_file_latest), taxa2core_file_latest, verbose=args.verbose)
+        taxa2core_file_latest = database_update(update=args.database_update, verbose=args.verbose)
         get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension, verbose=args.verbose)
 
     create_database(args.db_name, args.input, args.input_extension, os.path.join(args.output, args.db_name + args.output_extension),
