@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.26'
-__date__ = '5 October 2019'
+__version__ = '0.27'
+__date__ = '6 October 2019'
 
 
 import sys
@@ -109,8 +109,9 @@ def database_list(databases_folder, update=False, exit=False, exit_value=0):
     urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '') for r in open(sgbs_url)
                 if not r.startswith('#') and (len(r.split('\t')) == 2) and ('tutorial' not in r)])
 
-    info('\nAvailable databases that can be specified with -d/--database:\n    ')
-    info('\n    '.join(urls) + '\n', exit=exit, exit_value=exit_value)
+    if not update:
+        info('\nAvailable databases that can be specified with -d/--database:\n    ')
+        info('\n    '.join(urls) + '\n', exit=exit, exit_value=exit_value)
 
 
 def check_params(args, verbose=False):
@@ -121,6 +122,10 @@ def check_params(args, verbose=False):
         if verbose:
             info('Setting --database_folder to "{}"\n'.format(args.database_folder))
 
+    if args.database_update:
+        database_list(args.database_folder, update=args.database_update)
+        args.database_update = False
+
     if args.database_list:
         database_list(args.database_folder, update=args.database_update, exit=True)
 
@@ -129,7 +134,7 @@ def check_params(args, verbose=False):
 
     if not args.only_input:
         if (not args.input) or (not args.database):
-            error('both -i/--input and -d/--database must be specified')
+            error('both -i/--input and -d/--database must be specified', init_new_line=True)
             database_list(args.database_folder, update=args.database_update, exit=True)
 
         args.mapping = args.database

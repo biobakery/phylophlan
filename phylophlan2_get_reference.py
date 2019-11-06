@@ -58,7 +58,7 @@ def read_params():
                                        "the phylophlan2_get_reference.py scripts returns the list of all species in the database"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    group = p.add_mutually_exclusive_group(required=True)
+    group = p.add_mutually_exclusive_group()
     group.add_argument('-g', '--get', type=str,
                        help=('Specify the taxonomic label for which download the set of reference genomes. '
                              'The label must represent a valid taxonomic level or the special case "all"'))
@@ -82,6 +82,13 @@ def read_params():
 
 
 def check_params(args, verbose=False):
+    if args.database_update:
+        database_update(update=args.database_update, verbose=args.verbose)
+        args.database_update = False
+
+    if not args.get and not args.list_clades:
+        error('either -g/--get or -l/--list must be specified', init_new_line=True, exit=True)
+
     if args.list_clades:
         return
 
@@ -117,6 +124,21 @@ def create_folder(output, verbose=False):
         os.mkdir(output, mode=0o775)
     elif verbose:
         info('Output folder "{}" present\n'.format(output))
+
+
+def database_update(update=False, verbose=False):
+    taxa2genomes_file_latest = None
+    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, overwrite=update, verbose=verbose)
+
+    with open(TAXA2GENOMES_FILE) as f:
+        for r in f:
+            if not r.startswith('#'):
+                taxa2genomes_file_latest = r.strip()
+                break  # file should contains only one line, i.e., the name of the latest taxa2genomes file
+
+    download(os.path.join(DOWNLOAD_URL, taxa2genomes_file_latest), taxa2genomes_file_latest, overwrite=update, verbose=verbose)
+
+    return taxa2genomes_file_latest
 
 
 def byte_to_megabyte(byte):
@@ -166,15 +188,15 @@ def download(url, download_file, overwrite=False, verbose=False):
     Download a file from a url
     """
 
-    if overwrite or not os.path.isfile(download_file):
+    if (not os.path.isfile(download_file)) or overwrite:
         try:
             if verbose:
                 info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
-            urlretrieve(url, filename=download_file, reporthook=ReportHook().report)
+            urlretrieve(url, download_file, reporthook=ReportHook().report)
             info('\n')
         except EnvironmentError:
-            error('unable to download "{}"'.format(url))
+            error('unable to download "{}"'.format(url), exit=True)
     elif verbose:
         info('File "{}" present\n'.format(download_file))
 
@@ -285,15 +307,7 @@ def phylophlan2_get_reference():
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
-    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, overwrite=args.database_update, verbose=args.verbose)
-
-    with open(TAXA2GENOMES_FILE) as f:
-        for r in f:
-            if not r.startswith('#'):
-                taxa2genomes_file_latest = r.strip()
-                break  # file should contains only one line, i.e., the name of the latest taxa2genomes file
-
-    download(os.path.join(DOWNLOAD_URL, taxa2genomes_file_latest), taxa2genomes_file_latest, verbose=args.verbose)
+    taxa2genomes_file_latest = database_update(update=args.database_update, verbose=args.verbose)
 
     if args.list_clades:
         list_available_clades(taxa2genomes_file_latest, verbose=args.verbose)
