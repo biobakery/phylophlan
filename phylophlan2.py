@@ -787,9 +787,9 @@ def compose_command(params, check=False, sub_mod=None, input_file=None, database
     quotes = [j for j, e in enumerate(command_line) if e == '"']
 
     for s, e in zip(quotes[0::2], quotes[1::2]):
-        command_line = command_line.replace(command_line[s + 1:e], command_line[s + 1:e].replace(' ', '#'))
+        command_line = command_line.replace(command_line[s + 1:e], command_line[s + 1:e])
 
-    return {'command_line': [str(a).replace('#', ' ') for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a],
+    return {'command_line': [repr(a) for a in re.sub(' +', ' ', command_line.replace('"', '')).split(' ') if a],
             'stdin': stdin, 'stdout': stdout, 'env': environment, 'output_path': r_output_path, 'output_file': r_output_file}
 
 
