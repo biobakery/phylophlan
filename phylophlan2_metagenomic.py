@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.27'
-__date__ = '6 October 2019'
+__version__ = '0.28'
+__date__ = '12 October 2019'
 
 
 import sys
@@ -106,7 +106,8 @@ def read_params():
 def database_list(databases_folder, update=False, exit=False, exit_value=0):
     sgbs_url = os.path.basename(DOWNLOAD_URL)
     download(DOWNLOAD_URL, sgbs_url, overwrite=update, verbose=False)
-    urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '') for r in open(sgbs_url)
+    urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '')
+                for r in open(sgbs_url)
                 if not r.startswith('#') and (len(r.split('\t')) == 2) and ('tutorial' not in r)])
 
     if not update:
@@ -789,7 +790,7 @@ def phylophlan2_metagenomic():
             if args.verbose:
                 info('Loading reference genomes list\n')
 
-            binn_2_refgen = copy.deepcopy(binn_2_sgb)
+            binn_2_refgen = dict([(binn, []) for binn in binn_2_sgb])
             refgen_list = set(itertools.chain.from_iterable([x[mdidx['List of reference genomes']].strip().split(',')
                                                              for x in sgb_2_info.values()
                                                              if x[mdidx['List of reference genomes']].strip() != '-']))
@@ -815,7 +816,7 @@ def phylophlan2_metagenomic():
                         sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
 
                         if sgb_member in refgen_list:
-                            binn_2_refgen[binn][sgb_member] = float(rc[2])
+                            binn_2_refgen[binn].append((sgb_member, float(rc[2])))
 
             for binn, dists in binn_2_dists.items():
                 binn_2_sgb[binn][sgbid] = np.mean(dists)
@@ -825,7 +826,8 @@ def phylophlan2_metagenomic():
                 info('Computing GGB distances\n')
 
             for ggb_id, info_list in ggb_2_info.items():
-                sgb_2_count = dict([(sgb_id, int(sgb_2_info[sgb_id][mdidx['Number of reconstructed genomes']]) + int(sgb_2_info[sgb_id][mdidx['Number of reference genomes']]))
+                sgb_2_count = dict([(sgb_id, (int(sgb_2_info[sgb_id][mdidx['Number of reconstructed genomes']]) +
+                                              int(sgb_2_info[sgb_id][mdidx['Number of reference genomes']])))
                                     for sgb_id in [x.replace('SGB', '') for x in info_list[mdidx['List of reconstructed genomes']].split(',')
                                     if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
                 tot_sgbs = sum(sgb_2_count.values())
@@ -838,13 +840,15 @@ def phylophlan2_metagenomic():
                 info('Computing FGB distances\n')
 
             for fgb_id, info_list in fgb_2_info.items():
-                ggb_2_count = dict([(ggb_id, int(ggb_2_info[ggb_id][mdidx['Number of reconstructed genomes']]) + int(ggb_2_info[ggb_id][mdidx['Number of reference genomes']]))
+                ggb_2_count = dict([(ggb_id, (int(ggb_2_info[ggb_id][mdidx['Number of reconstructed genomes']]) +
+                                              int(ggb_2_info[ggb_id][mdidx['Number of reference genomes']])))
                                     for ggb_id in [x.replace('GGB', '') for x in info_list[mdidx['List of reconstructed genomes']].split(',')
                                     if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
                 tot_sgbs = sum(ggb_2_count.values())
 
                 for binn in binn_2_ggb:
-                    binn_2_fgb[binn][fgb_id] = sum([((ggb_sum / tot_sgbs) * binn_2_ggb[binn][ggb_id]) for ggb_id, ggb_sum in ggb_2_count.items()])
+                    binn_2_fgb[binn][fgb_id] = sum([((ggb_sum / tot_sgbs) * binn_2_ggb[binn][ggb_id])
+                                                    for ggb_id, ggb_sum in ggb_2_count.items()])
 
         if args.how_many == 'all':
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
@@ -864,7 +868,11 @@ def phylophlan2_metagenomic():
                     sgb_id, sgb_dist = sorted(binn_2_sgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
                     ggb_id, ggb_dist = sorted(binn_2_ggb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
                     fgb_id, fgb_dist = sorted(binn_2_fgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
-                    refgen, refgen_dist = sorted(binn_2_refgen[binn].items(), key=lambda x: x[1])[:args.how_many][0]
+
+                    # closest ref.gens within 5% Mash distance of the closest ref.gen and no more than 100 in any case
+                    refgen_sorted = list(sorted(binn_2_refgen[binn], key=lambda x: x[1]))
+                    refgen_closest_thr = refgen_sorted[0][1] + (refgen_sorted[0][1] * 0.05)
+                    refgens_closest = [i for i in refgen_sorted if i[1] <= refgen_closest_thr][:100]
 
                     f.write('\t'.join([binn,
                                        "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id][5], sgb_id, sgb_2_info[sgb_id][6],
@@ -873,7 +881,7 @@ def phylophlan2_metagenomic():
                                                                ggb_2_info[ggb_id][7], ggb_dist),
                                        "{}_{}:{}:{}:{}".format(fgb_2_info[fgb_id][5], fgb_id, fgb_2_info[fgb_id][6],
                                                                fgb_2_info[fgb_id][7], fgb_dist),
-                                       "{}:{}".format(refgen, refgen_dist)]) + '\n')
+                                       "|".join(["{}:{}".format(a[0], a[1]) for a in refgens_closest])]) + '\n')
             else:
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
@@ -886,7 +894,8 @@ def phylophlan2_metagenomic():
                                                 for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
 
     else:  # input vs. input mode
-        disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file, nproc=args.nproc, verbose=args.verbose)
+        disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file,
+                               nproc=args.nproc, verbose=args.verbose)
         merging(args.output_prefix, os.path.basename(args.output_prefix), output_file, verbose=args.verbose)
 
     info('Results saved to "{}"\n'.format(output_file))
