@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.40'
-__date__ = '10 September 2019'
+__version__ = '0.41'
+__date__ = '31 December 2019'
 
 
 import os
@@ -1461,7 +1461,7 @@ def gene_markers_extraction_rec(x):
                 if contig not in contig2marker2b6o:
                     contig2marker2b6o[contig] = {}
 
-                contig2marker2b6o[contig][marker] = (end, start, rev) if rev else (start, end, rev)
+                contig2marker2b6o[contig][marker] = (end, start, rev) if end < start else (start, end, rev)
 
             for record in SimpleFastaParser(open(src_file)):
                 fid = record[0].split(' ')[0]
@@ -2650,9 +2650,24 @@ def build_phylogeny(configs, key, inputt, output_path, output_tree, nproc=1,
              .format(os.path.join(output_path, output_tree), output_tree))
         return
 
+    nproc_loc = nproc
+
+    # RAxML is slower when using more than 20 cores
+    if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()):
+        nproc_loc = 20
+
+        if verbose:
+            info('Reducing number of RAxML threads to {}, as it appears to underperform with more threads\n'.format(nproc_loc))
+
+    # threaded RAxML complains if number of threads is 1!
+    if (nproc_loc == 1) and ('raxml' in configs[key]['program_name'].lower()) and ('threads' in configs[key]):
+        nproc_loc = 2
+
+        if verbose:
+            info('Setting RAxML threads to {}, cannot use 1 thread with RAxML parallel version\n'.format(nproc_loc))
+
     t0 = time.time()
     info('Building phylogeny "{}"\n'.format(inputt))
-    nproc_loc = 20 if (nproc > 20) and ('raxml' in configs[key]['program_name'].lower()) else nproc
     cmd = compose_command(configs[key], input_file=inputt, output_path=output_path,
                           output_file=output_tree, nproc=nproc_loc)
     inp_f = None
