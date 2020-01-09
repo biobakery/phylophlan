@@ -800,7 +800,7 @@ def phylophlan2_metagenomic():
 
         for sgb in os.listdir(dists_folder):
             sgbid = sgb.replace('.tsv', '')
-            binn_2_dists = dict([(binn, []) binn for binn in binn_2_sgb])
+            binn_2_dists = dict([(binn, []) for binn in binn_2_sgb])
 
             with open(os.path.join(dists_folder, sgb), 'rt') as f:
                 for r in f:
