@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.28'
-__date__ = '12 October 2019'
+__version__ = '0.29'
+__date__ = '9 January 2020'
 
 
 import sys
@@ -800,17 +800,13 @@ def phylophlan2_metagenomic():
 
         for sgb in os.listdir(dists_folder):
             sgbid = sgb.replace('.tsv', '')
-            binn_2_dists = {}
+            binn_2_dists = dict([(binn, []) binn for binn in binn_2_sgb])
 
             with open(os.path.join(dists_folder, sgb), 'rt') as f:
                 for r in f:
                     rc = r.strip().split('\t')
                     binn = os.path.splitext(os.path.basename(rc[1]))[0]
-
-                    if binn in binn_2_dists:
-                        binn_2_dists[binn].append(float(rc[2]))
-                    else:
-                        binn_2_dists[binn] = [float(rc[2])]
+                    binn_2_dists[binn].append(float(rc[2]))
 
                     if args.add_ggb and args.add_fgb:
                         sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
