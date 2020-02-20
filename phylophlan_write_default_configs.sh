@@ -1,13 +1,13 @@
 #!/bin/bash
 
 
-# This script assumes that PhyloPhlAn2 is installed and the commands are available
+# This script assumes that PhyloPhlAn is installed and the commands are available
 # in the command line, if not, the first commented row is the execution of the
-# phylophlan2_write_config_file.py script from the local PhyloPhlAn2 folder.
+# phylophlan_write_config_file.py script from the local PhyloPhlAn folder.
 
 # supermatrix_nt.cfg
-# ./phylophlan2_write_config_file.py -o supermatrix_nt.cfg \
-phylophlan2_write_config_file.py -o supermatrix_nt.cfg \
+# ./phylophlan_write_config_file.py -o supermatrix_nt.cfg \
+phylophlan_write_config_file.py -o supermatrix_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -19,8 +19,8 @@ phylophlan2_write_config_file.py -o supermatrix_nt.cfg \
     --verbose
 
 # supertree_nt.cfg
-# ./phylophlan2_write_config_file.py -o supertree_nt.cfg \
-phylophlan2_write_config_file.py -o supertree_nt.cfg \
+# ./phylophlan_write_config_file.py -o supertree_nt.cfg \
+phylophlan_write_config_file.py -o supertree_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -33,8 +33,8 @@ phylophlan2_write_config_file.py -o supertree_nt.cfg \
     --verbose
 
 # supermatrix_aa.cfg
-# ./phylophlan2_write_config_file.py -o supermatrix_aa.cfg \
-phylophlan2_write_config_file.py -o supermatrix_aa.cfg \
+# ./phylophlan_write_config_file.py -o supermatrix_aa.cfg \
+phylophlan_write_config_file.py -o supermatrix_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -47,8 +47,8 @@ phylophlan2_write_config_file.py -o supermatrix_aa.cfg \
     --verbose
 
 # supertree_aa.cfg
-# ./phylophlan2_write_config_file.py -o supertree_aa.cfg \
-phylophlan2_write_config_file.py -o supertree_aa.cfg \
+# ./phylophlan_write_config_file.py -o supertree_aa.cfg \
+phylophlan_write_config_file.py -o supertree_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \

@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.29'
-__date__ = '9 January 2020'
+__version__ = '0.30'
+__date__ = '20 February 2020'
 
 
 import sys
@@ -30,12 +30,12 @@ import pandas as pd
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 HOW_MANY = "10"
-DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/phylophlan2_metagenomic.txt"
-DATABASE_FOLDER = 'phylophlan2_databases/'
+DOWNLOAD_URL = "https://www.dropbox.com/s/xdqm836d2w22npb/phylophlan_metagenomic.txt?dl=1"
+DATABASE_FOLDER = 'phylophlan_databases/'
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -61,7 +61,7 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan2_metagenomic.py script assign SGB and taxonomy to a given set of input genomes. "
+    p = ap.ArgumentParser(description=("The phylophlan_metagenomic.py script assign SGB and taxonomy to a given set of input genomes. "
                                        "Outputs can be of three types: (1) for each input genomes returns the list of the closest "
                                        "-n/--how_many SGBs sorted by average Mash distance; (2) for each input genomes returns the "
                                        "closest SGB, GGB, FGB, and reference genomes; (3) returns a all vs. all matrix with all the "
@@ -98,13 +98,13 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrite the output file if exists")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan2_metagenomic.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan2_metagenomic.py version and exit")
+                   version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_metagenomic.py version and exit")
     return p.parse_args()
 
 
 def database_list(databases_folder, update=False, exit=False, exit_value=0):
-    sgbs_url = os.path.basename(DOWNLOAD_URL)
+    sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
     download(DOWNLOAD_URL, sgbs_url, overwrite=update, verbose=False)
     urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '')
                 for r in open(sgbs_url)
@@ -585,7 +585,7 @@ def check_md5(tar_file, md5_file, verbose=False):
 
     # compare checksums
     if md5_tar != md5_md5:
-        error("MD5 checksums do not correspond! Try removing the database files and rerun PhyloPhlAn2 "
+        error("MD5 checksums do not correspond! Try removing the database files and rerun PhyloPhlAn "
               "to re-download them. If this happens again, please report this error.", exit=True)
 
 
@@ -690,11 +690,11 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
         error('not yet implemented!', init_new_line=True, exit=True)
 
 
-def phylophlan2_metagenomic():
+def phylophlan_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan2_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -704,7 +704,7 @@ def phylophlan2_metagenomic():
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
                 not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
                 not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
-            sgbs_url = os.path.basename(DOWNLOAD_URL)
+            sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
             download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
             urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
                     if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
@@ -899,7 +899,7 @@ def phylophlan2_metagenomic():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2_metagenomic()
+    phylophlan_metagenomic()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)

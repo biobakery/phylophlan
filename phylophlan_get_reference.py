@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.14'
-__date__ = '6 November 2019'
+__version__ = '0.15'
+__date__ = '20 February 2020'
 
 
 import sys
@@ -19,14 +19,12 @@ import ftplib
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
-DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
+DOWNLOAD_URL = "https://www.dropbox.com/s/gsnmn0xayx2rqrm/taxa2genomes.txt?dl=1"
 GB_ASSEMBLY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
-TAXA2GENOMES_FILE = "taxa2genomes.txt"
-GB_ASSEMBLY_FILE = "assembly_summary_genbank.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -52,10 +50,10 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan2_get_reference.py script allows to download a specified number (-n/--how_many) of "
+    p = ap.ArgumentParser(description=("The phylophlan_get_reference.py script allows to download a specified number (-n/--how_many) of "
                                        "reference genomes from the Genbank repository. Special case \"all\" allows to download a specified "
                                        "number of reference genomes for all available taxonomic species. With the -l/--list_clades params "
-                                       "the phylophlan2_get_reference.py scripts returns the list of all species in the database"),
+                                       "the phylophlan_get_reference.py scripts returns the list of all species in the database"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     group = p.add_mutually_exclusive_group()
@@ -72,12 +70,12 @@ def read_params():
                    help="Specify path to the output folder where to save the files, required when -g/--get is specified")
     p.add_argument('-n', '--how_many', type=int, default=4,
                    help='Specify how many reference genomes to download, where -1 stands for "all available"')
-    p.add_argument('-m', '--genbank_mapping', type=str, default=GB_ASSEMBLY_FILE,
+    p.add_argument('-m', '--genbank_mapping', type=str, default=os.path.basename(GB_ASSEMBLY_URL),
                    help='The local GenBank mapping file, if not found it will be automatically downloaded')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan2_get_reference.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan2_get_reference.py version and exit")
+                   version='phylophlan_get_reference.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_get_reference.py version and exit")
     return p.parse_args()
 
 
@@ -128,15 +126,16 @@ def create_folder(output, verbose=False):
 
 def database_update(update=False, verbose=False):
     taxa2genomes_file_latest = None
-    download(os.path.join(DOWNLOAD_URL, TAXA2GENOMES_FILE), TAXA2GENOMES_FILE, overwrite=update, verbose=verbose)
+    taxa2genomes_file = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
+    download(DOWNLOAD_URL, taxa2genomes_file, overwrite=update, verbose=verbose)
 
-    with open(TAXA2GENOMES_FILE) as f:
+    with open(taxa2genomes_file) as f:
         for r in f:
             if not r.startswith('#'):
-                taxa2genomes_file_latest = r.strip()
+                taxa2genomes_file_latest, taxa2genomes_file_latest_url = r.strip()
                 break  # file should contains only one line, i.e., the name of the latest taxa2genomes file
 
-    download(os.path.join(DOWNLOAD_URL, taxa2genomes_file_latest), taxa2genomes_file_latest, overwrite=update, verbose=verbose)
+    download(taxa2genomes_file_latest_url, taxa2genomes_file_latest, overwrite=update, verbose=verbose)
 
     return taxa2genomes_file_latest
 
@@ -298,12 +297,12 @@ def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_r
                 error('no URL found for "{}"'.format(genome))
 
 
-def phylophlan2_get_reference():
+def phylophlan_get_reference():
     taxa2genomes_file_latest = None
     args = read_params()
 
     if args.verbose:
-        info('phylophlan2_get_reference.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_get_reference.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -320,7 +319,7 @@ def phylophlan2_get_reference():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2_get_reference()
+    phylophlan_get_reference()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

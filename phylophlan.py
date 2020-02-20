@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.41'
-__date__ = '31 December 2019'
+__version__ = '0.42'
+__date__ = '20 February 2020'
 
 
 import os
@@ -40,8 +40,8 @@ import random as lib_random
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 CONFIG_SECTIONS_MANDATORY = [['map_dna', 'map_aa'], ['msa'], ['tree1']]
 CONFIG_SECTIONS_ALL = ['map_dna', 'map_aa', 'msa', 'trim', 'gene_tree1', 'gene_tree2', 'tree1', 'tree2']
@@ -50,10 +50,10 @@ CONFIG_OPTIONS_ALL = ['program_name', 'params', 'threads', 'input', 'database',
                       'output_path', 'output', 'version', 'environment', 'command_line']
 CONFIG_OPTIONS_TO_EXCLUDE = ['version', 'environment']
 INPUT_FOLDER = 'input/'
-DATABASES_FOLDER = 'phylophlan2_databases/'
-SUBMAT_FOLDER = 'phylophlan2_substitution_matrices/'
-SUBMOD_FOLDER = 'phylophlan2_substitution_models/'
-CONFIGS_FOLDER = 'phylophlan2_configs/'
+DATABASES_FOLDER = 'phylophlan_databases/'
+SUBMAT_FOLDER = 'phylophlan_substitution_matrices/'
+SUBMOD_FOLDER = 'phylophlan_substitution_models/'
+CONFIGS_FOLDER = 'phylophlan_configs/'
 OUTPUT_FOLDER = ''
 MIN_NUM_PROTEINS = 1
 MIN_LEN_PROTEIN = 50
@@ -71,7 +71,7 @@ NOT_VARIANT_THRESHOLD = 0.99
 GAP_PERC_THRESHOLD = 0.67
 FRAGMENTARY_THRESHOLD = 0.85
 UNKNOWN_FRACTION = 0.3
-DATABASE_DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
+DATABASE_DOWNLOAD_URL = "https://www.dropbox.com/s/x7cvma5bjzlllbt/phylophlan_databases.txt?dl=1"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -97,12 +97,12 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("PhyloPhlAn2 is an accurate, rapid, and easy-to-use method for large-scale microbial genome "
-                                       "characterization and phylogenetic analysis at multiple levels of resolution. PhyloPhlAn2 can assign "
+    p = ap.ArgumentParser(description=("PhyloPhlAn is an accurate, rapid, and easy-to-use method for large-scale microbial genome "
+                                       "characterization and phylogenetic analysis at multiple levels of resolution. PhyloPhlAn can assign "
                                        "finished, draft, or metagenome-assembled genomes (MAGs) to species-level genome bins (SGBs). For "
-                                       "individual clades of interest (e.g. newly sequenced genome sets), PhyloPhlAn2 reconstructs strain-level "
+                                       "individual clades of interest (e.g. newly sequenced genome sets), PhyloPhlAn reconstructs strain-level "
                                        "phylogenies from among the closest species using clade-specific maximally informative markers. At the "
-                                       "other extreme of resolution, PhyloPhlAn2 scales to very-large phylogenies comprising >17,000 microbial "
+                                       "other extreme of resolution, PhyloPhlAn scales to very-large phylogenies comprising >17,000 microbial "
                                        "species"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
@@ -118,7 +118,7 @@ def read_params():
     p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use.")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help=('Specify the type of the database of markers, where "n" stands for nucleotides and "a" for amino '
-                         'acids. If not specified, PhyloPhlAn2 will automatically detect the type of database'))
+                         'acids. If not specified, PhyloPhlAn will automatically detect the type of database'))
     p.add_argument('-f', '--config_file', type=str, default=None,
                    help=('The configuration file to load, four ready-to-use configuration files can be generated using the '
                          '"write_default_configs.sh" script present in the "configs" folder'))
@@ -204,7 +204,7 @@ def read_params():
                    help=("If specified will produced a mutation rates table for each of the aligned markers and a summary table "
                          "for the concatenated MSA. This operation can take a long time to finish"))
     p.add_argument('--force_nucleotides', action='store_true', default=False,
-                   help=("If specified force PhyloPhlAn2 to use nucleotide sequences for the phylogenetic analysis,  "
+                   help=("If specified force PhyloPhlAn to use nucleotide sequences for the phylogenetic analysis,  "
                          "even in the case of a database of amino acids"))
 
     group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folder locations")
@@ -227,9 +227,10 @@ def read_params():
     group.add_argument('--genome_extension', type=str, default=GENOME_EXTENSION, help="Extension for input genomes")
     group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Extension for input proteomes")
 
-    p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn2 verbose")
-    p.add_argument('-v', '--version', action='version', version='PhyloPhlAn2 version {} ({})'.format(__version__, __date__),
-                   help="Prints the current PhyloPhlAn2 version and exit")
+    p.add_argument('--update', action='store_true', default=False, help="Update the databases file")
+    p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn verbose")
+    p.add_argument('-v', '--version', action='version', version='PhyloPhlAn version {} ({})'.format(__version__, __date__),
+                   help="Prints the current PhyloPhlAn version and exit")
 
     return p.parse_args()
 
@@ -3087,25 +3088,25 @@ class ReportHook():
             info(status)
 
 
-def download(url, download_file, verbose=False):
+def download(url, download_file, overwrite=False, verbose=False):
     """
     Download a file from a url
     """
 
-    if not os.path.isfile(download_file):
+    if (not os.path.isfile(download_file)) or overwrite:
         try:
             if verbose:
-                info('Downloading "{}"\n'.format(url))
+                info('Downloading "{}" to "{}"\n'.format(url, download_file))
 
             urlretrieve(url, download_file, reporthook=ReportHook().report)
             info('\n')
         except EnvironmentError:
-            error('unable to download "{}"'.format(url))
+            error('unable to download "{}"'.format(url), exit=True)
     elif verbose:
         info('File "{}" present\n'.format(download_file))
 
 
-def download_and_unpack_db(url, db_name, folder, verbose=False):
+def download_and_unpack_db(db_name, db_url, db_md5, folder, update=False, verbose=False):
     """
     Download the url to the file and decompress into the folder
     """
@@ -3130,14 +3131,12 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
         error('database directory "{}" is not writeable, please modify the permissions'.format(folder), exit=True)
 
     # download database
-    tar_file = os.path.join(folder, db_name + ".tar")
-    url_tar_file = os.path.join(url, db_name + ".tar")
-    download(url_tar_file, tar_file, verbose=verbose)
+    tar_file = db_url.replace('?dl=1', '')
+    download(db_url, tar_file, overwrite=update, verbose=verbose)
 
     # download MD5 checksum
-    md5_file = os.path.join(folder, db_name + ".md5")
-    url_md5_file = os.path.join(url, db_name + ".md5")
-    download(url_md5_file, md5_file, verbose=verbose)
+    md5_file = db_md5.replace('?dl=1', '')
+    download(db_md5, md5_file, overwrite=update, verbose=verbose)
 
     md5_md5 = None
     md5_tar = None
@@ -3167,7 +3166,7 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
     # compare checksums
     if md5_tar != md5_md5:
         error('MD5 checksums do not correspond, if this happens again, please remove the database files '
-              'in "{}" and re-run PhyloPhlAn2 so they will be re-downloaded'.format(folder), exit=True)
+              'in "{}" and re-run PhyloPhlAn so they will be re-downloaded'.format(folder), exit=True)
 
     # untar
     if verbose:
@@ -3181,11 +3180,11 @@ def download_and_unpack_db(url, db_name, folder, verbose=False):
         error('unable to extract "{}"'.format(tar_file))
 
 
-def phylophlan2():
+def phylophlan():
     args = read_params()
 
     if args.verbose:
-        info('PhyloPhlAn2 version {} ({})\n'.format(__version__, __date__))
+        info('PhyloPhlAn version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     project_name = check_args(args, sys.argv, verbose=args.verbose)
@@ -3199,7 +3198,25 @@ def phylophlan2():
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
-    download_and_unpack_db(DATABASE_DOWNLOAD_URL, args.database, args.databases_folder, verbose=args.verbose)
+    database_download = os.path.join(args.databases_folder, os.path.basename(DATABASE_DOWNLOAD_URL).replace('?dl=1', ''))
+    found = False
+    download(DATABASE_DOWNLOAD_URL, database_download, overwrite=args.update, verbose=args.verbose)
+
+    with open(database_download) as f:
+        for r in f:
+            if r.startswith('#'):
+                continue
+
+            db, db_url, md5_url = r.strip().split('\t')
+
+            if db == args.database:
+                found = True
+                break
+
+    if not found:
+        db, db_url = None, None
+
+    download_and_unpack_db(args.database, db_url, md5_url, args.databases_folder, update=args.update, verbose=args.verbose)
     check_database(args.database, args.databases_folder, verbose=args.verbose)
     db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
                                            configs, 'db_dna', 'db_aa', verbose=args.verbose)
@@ -3211,7 +3228,7 @@ def phylophlan2():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2()
+    phylophlan()
     t1 = time.time()
     info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)

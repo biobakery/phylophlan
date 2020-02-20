@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.17'
-__date__ = '6 November 2019'
+__version__ = '0.18'
+__date__ = '20 February 2020'
 
 
 import sys
@@ -25,14 +25,13 @@ import time
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
-DOWNLOAD_URL = "https://bitbucket.org/nsegata/phylophlan/downloads/"
-TAXA2CORE_FILE = "taxa2core.txt"
+DOWNLOAD_URL = "https://www.dropbox.com/s/jrituki21vx6p30/taxa2core.txt?dl=1"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -58,8 +57,8 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan2_setup_database.py script can be used to either format an input folder or "
-                                       "multi-fasta file to be used as database in phylophlan2.py, or automatically download a "
+    p = ap.ArgumentParser(description=("The phylophlan_setup_database.py script can be used to either format an input folder or "
+                                       "multi-fasta file to be used as database in phylophlan.py, or automatically download a "
                                        "pre-identified set of core UniRef90 proteins for the taxonomic label of a given species"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
@@ -82,8 +81,8 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified and the output file exists it will be overwritten")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan2_setup_database.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan2_setup_database.py version and exit")
+                   version='phylophlan_setup_database.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_setup_database.py version and exit")
     return p.parse_args()
 
 
@@ -170,15 +169,17 @@ def check_params(args, verbose=False):
 
 def database_update(update=False, verbose=False):
     taxa2core_file_latest = None
-    download(os.path.join(DOWNLOAD_URL, TAXA2CORE_FILE), TAXA2CORE_FILE, overwrite=update, verbose=verbose)
+    taxa2core_file = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
+    download(DOWNLOAD_URL, taxa2core_file, overwrite=update, verbose=verbose)
 
-    with open(TAXA2CORE_FILE) as f:
+    with open(taxa2core_file) as f:
         for r in f:
             if not r.startswith('#'):
-                taxa2core_file_latest = r.strip()
+                taxa2core_file_latest, taxa2core_file_latest_url = r.strip().split('\n')
                 break  # file should contains only one line, i.e., the name of the latest taxa2core file
 
-    download(os.path.join(DOWNLOAD_URL, taxa2core_file_latest), taxa2core_file_latest, overwrite=update, verbose=verbose)
+    taxa2core_file_latest = taxa2core_file_latest.replace('?dl=1', '')
+    download(taxa2core_file_latest_url, taxa2core_file_latest, overwrite=update, verbose=verbose)
 
     return taxa2core_file_latest
 
@@ -384,11 +385,11 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
         SeqIO.write(seqs, f, "fasta")
 
 
-def phylophlan2_setup_database():
+def phylophlan_setup_database():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan2_setup_database.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_setup_database.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -404,7 +405,7 @@ def phylophlan2_setup_database():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2_setup_database()
+    phylophlan_setup_database()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

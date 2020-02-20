@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.05'
-__date__ = '11 September 2019'
+__version__ = '0.06'
+__date__ = '20 February 2020'
 
 
 import argparse as ap
@@ -22,8 +22,8 @@ import matplotlib.pyplot as plt
 OUTPUT_NAME = 'output_heatmap'
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -49,13 +49,13 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan2_draw_metagenomic.py script takes as input the output table generated form the "
-                                       "phylophlan2_metagenomic.py script and produces two heatmap figures: (1) presence/absence heatmap "
+    p = ap.ArgumentParser(description=("The phylophlan_draw_metagenomic.py script takes as input the output table generated form the "
+                                       "phylophlan_metagenomic.py script and produces two heatmap figures: (1) presence/absence heatmap "
                                        "of the SGBs and the metagenomic samples of the recontructed input genomes; and (2) heatmap "
                                        "showing the amount of kSGB, uSGB, and unassinged for each metagenome"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
-    p.add_argument('-i', '--input', type=str, required=True, help='The input file generated from phylophlan2_metagenomic.py')
+    p.add_argument('-i', '--input', type=str, required=True, help='The input file generated from phylophlan_metagenomic.py')
     p.add_argument('-m', '--map', required=True, type=str, help='A mapping file that maps each bin to its metagenome')
     p.add_argument('--top', default=20, type=int, help='The number of SGBs to display in the figure')
     p.add_argument('-o', '--output', type=str, default=OUTPUT_NAME, help='Prefix output files')
@@ -64,8 +64,8 @@ def read_params():
     p.add_argument('-f', type=str, default='svg', help='Images output format')
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan2_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan2_draw_metagenomic.py version and exit")
+                   version='phylophlan_draw_metagenomic.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_draw_metagenomic.py version and exit")
     return p.parse_args()
 
 
@@ -178,11 +178,11 @@ def find_top_SGBs(top, meta_dict, verbose=False):
     return [x[0] for x in c]
 
 
-def phylophlan2_draw_metagenomic():
+def phylophlan_draw_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan2_draw_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_draw_metagenomic.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -265,7 +265,7 @@ def phylophlan2_draw_metagenomic():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2_draw_metagenomic()
+    phylophlan_draw_metagenomic()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)

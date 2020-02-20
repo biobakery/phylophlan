@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.07'
-__date__ = '9 September 2019'
+__version__ = '0.08'
+__date__ = '20 February 2020'
 
 
 import argparse as ap
@@ -18,8 +18,8 @@ from Bio import Phylo
 
 
 if sys.version_info[0] < 3:
-    raise Exception("PhyloPhlAn2 requires Python 3, your current Python version is {}.{}.{}"
-                    .format(sys.version_info[0], sys.version_info[1], sys.version_info[2]))
+    raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
+                    .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 NEWICK = 'newick'
 TREE_TYPES = ['newick', 'nexus', 'phyloxml', 'cdao', 'nexml']
@@ -53,17 +53,17 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan2_strain_finder.py script analyzes the phylogeny and the mutation rates table "
-                                       "generated from the phylophlan2.py script and returns sub-trees representing the same strain, "
+    p = ap.ArgumentParser(description=("The phylophlan_strain_finder.py script analyzes the phylogeny and the mutation rates table "
+                                       "generated from the phylophlan.py script and returns sub-trees representing the same strain, "
                                        "according to both a phylogenetic threshold (computed on the normalized pairwise phylogenetic "
                                        "distances) and a mutation rate threshold (computed on the aligned sequences of the markers used "
                                        "in the phylogenetic analysis)"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True,
-                   help='Specify the file of the phylogenetic tree as generated from phylophlan2.py')
+                   help='Specify the file of the phylogenetic tree as generated from phylophlan.py')
     p.add_argument('-m', '--mutation_rates', type=str, required=True,
-                   help='Specify the file of the mutation rates as generated from phylophlan2.py')
+                   help='Specify the file of the mutation rates as generated from phylophlan.py')
     p.add_argument('--p_threshold', type=float, default=PHYLOGENETIC_THR,
                    help='Maximum phylogenetic distance threshold for every pair of nodes in the same subtree (inclusive)')
     p.add_argument('--m_threshold', type=float, default=MUT_PERCENTAGE_THR,
@@ -75,7 +75,7 @@ def read_params():
                    help='Specify the separator to use in the output')
     p.add_argument('--verbose', action='store_true', default=False, help='Write more stuff')
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan2_strain_finder.py version {} ({})'.format(__version__, __date__),
+                   version='phylophlan_strain_finder.py version {} ({})'.format(__version__, __date__),
                    help="Prints the current phylophla2_strain_finder.py version and exit")
 
     return p.parse_args()
@@ -101,7 +101,7 @@ def check_params(args, verbose=False):
         if not os.path.basename(args.output):
             old = args.output
             out_ext = OUTPUT_EXTENSIONS[args.separator] if args.separator in OUTPUT_EXTENSIONS else '.txt'
-            args.output = os.path.join(args.output, 'phylophlan2_strain_finder.{}'.format(out_ext))
+            args.output = os.path.join(args.output, 'phylophlan_strain_finder.{}'.format(out_ext))
             info('No output filename specified "{}", writing output to "{}"'.format(old, args.output))
 
         if (not args.overwrite) and os.path.isfile(args.output):
@@ -158,11 +158,11 @@ def check_thr(p, l, tree, md, p_thr, m_thr, verbose=False):
             return check_thr(get_parent(tree, p), p, tree, md, p_thr, m_thr, verbose=verbose)
 
 
-def phylophlan2_strain_finder():
+def phylophlan_strain_finder():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan2_strain_finder.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_strain_finder.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, args.verbose)
@@ -241,7 +241,7 @@ def phylophlan2_strain_finder():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan2_strain_finder()
+    phylophlan_strain_finder()
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)), init_new_line=True)
     sys.exit(0)
