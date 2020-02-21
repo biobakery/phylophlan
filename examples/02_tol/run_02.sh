@@ -1,15 +1,17 @@
 #!/bin/bash
 
 
+mkdir -p input_genomes;
+
 #Get reference genomes for all species
-phylophlan2_get_reference.py \
+phylophlan_get_reference.py \
     -g all \
     -o input_genomes \
     -n 1 \
-    --verbose 2>&1 | tee logs/phylophlan2_get_reference.log
+    --verbose 2>&1 | tee logs/phylophlan_get_reference.log
 
 #Run phylophlan
-phylophlan2.py \
+phylophlan.py \
     -i input_genomes \
     -d phylophlan \
     -f tol_config.cfg \
@@ -17,5 +19,4 @@ phylophlan2.py \
     --fast \
     -o output_tol \
     --nproc 4 \
-    --verbose 2>&1 | tee logs/phylophlan2.log
-
+    --verbose 2>&1 | tee logs/phylophlan.log
