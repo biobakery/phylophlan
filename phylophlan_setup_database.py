@@ -175,7 +175,7 @@ def database_update(update=False, verbose=False):
     with open(taxa2core_file) as f:
         for r in f:
             if not r.startswith('#'):
-                taxa2core_file_latest, taxa2core_file_latest_url = r.strip().split('\n')
+                taxa2core_file_latest, taxa2core_file_latest_url = r.strip().split('\t')
                 break  # file should contains only one line, i.e., the name of the latest taxa2core file
 
     taxa2core_file_latest = taxa2core_file_latest.replace('?dl=1', '')

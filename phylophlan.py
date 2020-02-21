@@ -628,7 +628,7 @@ def check_dependencies(configs, nproc, verbose=False):
 
             try:
                 if 'diamond' in cmd['command_line']:
-                    stdout = sb.check_output(cmd['command_line'], env=cmd['env'])
+                    stdout = sb.check_output(cmd['command_line'], stdin=inp_f, stderr=sb.DEVNULL, env=cmd['env'])
                     wrong = False
 
                     # diamond before version 0.8.30 is not able to map with the blastx algorithm as they are missing
@@ -3131,11 +3131,11 @@ def download_and_unpack_db(db_name, db_url, db_md5, folder, update=False, verbos
         error('database directory "{}" is not writeable, please modify the permissions'.format(folder), exit=True)
 
     # download database
-    tar_file = db_url.replace('?dl=1', '')
+    tar_file = os.path.join(folder, os.path.basename(db_url).replace('?dl=1', ''))
     download(db_url, tar_file, overwrite=update, verbose=verbose)
 
     # download MD5 checksum
-    md5_file = db_md5.replace('?dl=1', '')
+    md5_file = os.path.join(folder, os.path.basename(db_md5).replace('?dl=1', ''))
     download(db_md5, md5_file, overwrite=update, verbose=verbose)
 
     md5_md5 = None
@@ -3180,7 +3180,7 @@ def download_and_unpack_db(db_name, db_url, db_md5, folder, update=False, verbos
         error('unable to extract "{}"'.format(tar_file))
 
 
-def phylophlan():
+def phylophlan_main():
     args = read_params()
 
     if args.verbose:
@@ -3228,7 +3228,7 @@ def phylophlan():
 
 if __name__ == '__main__':
     t0 = time.time()
-    phylophlan()
+    phylophlan_main()
     t1 = time.time()
     info('\nTotal elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)

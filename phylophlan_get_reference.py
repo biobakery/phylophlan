@@ -132,7 +132,7 @@ def database_update(update=False, verbose=False):
     with open(taxa2genomes_file) as f:
         for r in f:
             if not r.startswith('#'):
-                taxa2genomes_file_latest, taxa2genomes_file_latest_url = r.strip()
+                taxa2genomes_file_latest, taxa2genomes_file_latest_url = r.strip().split('\t')
                 break  # file should contains only one line, i.e., the name of the latest taxa2genomes file
 
     download(taxa2genomes_file_latest_url, taxa2genomes_file_latest, overwrite=update, verbose=verbose)
