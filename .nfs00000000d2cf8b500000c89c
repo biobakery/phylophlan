@@ -2891,7 +2891,7 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
             elif i > j:  # lower triangular
                 row.append('/'.join([str(e) for e in aggregated[(a, b)]]))
             else:
-                row.append('0')
+                row.append(str(np.nan))
 
         out_tbl.append(row)
 

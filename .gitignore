@@ -29,5 +29,9 @@ examples/04_ecoli/output_references
 examples/05_campylobacter/logs
 examples/05_campylobacter/input_bins
 examples/05_campylobacter/output_campylobacter
+# wiki
+wiki
 # settings files
 .vscode
+# temp folders
+__pycache__
