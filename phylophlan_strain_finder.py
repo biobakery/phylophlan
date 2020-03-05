@@ -64,9 +64,9 @@ def read_params():
                    help='Specify the file of the phylogenetic tree as generated from phylophlan.py')
     p.add_argument('-m', '--mutation_rates', type=str, required=True,
                    help='Specify the file of the mutation rates as generated from phylophlan.py')
-    p.add_argument('--p_threshold', type=float, default=PHYLOGENETIC_THR,
+    p.add_argument('--phylo_thr', type=float, default=PHYLOGENETIC_THR,
                    help='Maximum phylogenetic distance threshold for every pair of nodes in the same subtree (inclusive)')
-    p.add_argument('--m_threshold', type=float, default=MUT_PERCENTAGE_THR,
+    p.add_argument('--mutrate_thr', type=float, default=MUT_PERCENTAGE_THR,
                    help='Maximum mutation rate ratio for every pair of nodes in the same subtree (inclusive)')
     p.add_argument('--tree_format', choices=TREE_TYPES, default=NEWICK, help='Specify the format of the input tree')
     p.add_argument('-o', '--output', type=str, default=None, help='Specify the output filename, if not specified will be stdout')
