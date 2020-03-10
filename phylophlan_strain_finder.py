@@ -76,7 +76,7 @@ def read_params():
     p.add_argument('--verbose', action='store_true', default=False, help='Write more stuff')
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_strain_finder.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophla2_strain_finder.py version and exit")
+                   help="Prints the current phylophlan_strain_finder.py version and exit")
 
     return p.parse_args()
 
