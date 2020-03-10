@@ -33,5 +33,6 @@ examples/05_campylobacter/output_campylobacter
 wiki
 # settings files
 .vscode
-# temp folders
+# temp files and folders
 __pycache__
+.nfs*
