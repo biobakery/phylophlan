@@ -36,5 +36,6 @@ setuptools.setup(
     ]},
     description='Precise phylogenetic analysis of microbial isolates and genomes from metagenomes',
     long_description=open('readme.md').read(),
+    long_description_content_type='text/markdown',
     install_requires=install_reqs
 )
