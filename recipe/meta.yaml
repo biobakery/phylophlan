@@ -2,20 +2,18 @@
 {% set version = "3.0" %}
 
 package:
-  name: "{{ name|lower }}"
+  name: "{{ name }}"
   version: "{{ version }}"
 
 source:
-  # url: https://github.com/biobakery/MetaPhlAn/archive/{{version}}.tar.gz
-  # sha256: 6249bf67f9e5a1a1264020bb0de689a17402606ada8134fb09ab416981d4a48b
-  # git_url: https://github.com/biobakery/MetaPhlAn.git
-  # git_rev: 32b32d5e8618acf88901a536428405dbb4f3be0b
+  # git_url: https://github.com/biobakery/phylophlan.git
+  # git_rev: 
   path: ..
 
 build:
   noarch: python
-  #number: 0  Need this for Bioconda, uncomment before pushing to bioconda-recipes
-  script: "{{ PYTHON }} -m pip install . -vv "
+  number: 0 
+  script: python -m pip install --no-deps .
 
 requirements:
   host:
@@ -27,7 +25,7 @@ requirements:
     - numpy >=1.15.4
     - pandas >=0.24.2
     - seaborn >=0.9.0
-
+  
   run:
     - python >=3.7
     - biopython >=1.73
@@ -45,15 +43,15 @@ requirements:
     - raxml >=8.2.10
     - iqtree >=1.6.6
 
-test:
-  commands:
-    - phylophlan --version
-    - phylophlan_draw_metagenomic --version
-    - phylophlan_get_reference --version
-    - phylophlan_metagenomic --version
-    - phylophlan_setup_database --version
-    - phylophlan_strain_finder --version
-    - phylophlan_write_config_file --version
+# test:
+#   commands:
+#     - phylophlan.py --version
+#     - phylophlan_draw_metagenomic.py --version
+#     - phylophlan_get_reference.py --version
+#     - phylophlan_metagenomic.py --version
+#     - phylophlan_setup_database.py --version
+#     - phylophlan_strain_finder.py --version
+#     - phylophlan_write_config_file.py --version
 
 about:
   home: https://github.com/biobakery/phylophlan
