@@ -1,31 +1,34 @@
 {% set name = "phylophlan" %}
 {% set version = "3.0" %}
+{% set sha256 = "" %}
 
 package:
-  name: "{{ name }}"
+  name: "{{ name|lower }}"
   version: "{{ version }}"
 
 source:
   # git_url: https://github.com/biobakery/phylophlan.git
   # git_rev: 
+  # sha256: "{{ sha256 }}"
   path: ..
 
 build:
   noarch: python
-  number: 0 
-  script: python -m pip install --no-deps .
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --ignore-installed --no-deps -vv"
 
 requirements:
   host:
     - python >=3.7
     - pip
+    - setuptools
     - biopython >=1.73
     - dendropy >=4.4.0
     - matplotlib >=3.1.0
     - numpy >=1.15.4
     - pandas >=0.24.2
     - seaborn >=0.9.0
-  
+
   run:
     - python >=3.7
     - biopython >=1.73
@@ -43,15 +46,15 @@ requirements:
     - raxml >=8.2.10
     - iqtree >=1.6.6
 
-# test:
-#   commands:
-#     - phylophlan.py --version
-#     - phylophlan_draw_metagenomic.py --version
-#     - phylophlan_get_reference.py --version
-#     - phylophlan_metagenomic.py --version
-#     - phylophlan_setup_database.py --version
-#     - phylophlan_strain_finder.py --version
-#     - phylophlan_write_config_file.py --version
+test:
+  commands:
+    - phylophlan --version
+    - phylophlan_draw_metagenomic --version
+    - phylophlan_get_reference --version
+    - phylophlan_metagenomic --version
+    - phylophlan_setup_database --version
+    - phylophlan_strain_finder --version
+    - phylophlan_write_config_file --version
 
 about:
   home: https://github.com/biobakery/phylophlan
