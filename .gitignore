@@ -1,0 +1,38 @@
+# markers databases
+phylophlan_databases
+# examples folders generated when running
+## example 01 - S. aureus
+examples/01_saureus/logs
+examples/01_saureus/input_isolates
+examples/01_saureus/s__Staphylococcus_aureus
+examples/01_saureus/output_isolates
+examples/01_saureus/input_references
+examples/01_saureus/output_references
+examples/01_saureus/graphlan/isolates_annotated.xml
+examples/01_saureus/graphlan/saureus_isolates.png
+## example 02 - Tree of life
+examples/02_tol/logs
+examples/02_tol/input_genomes
+examples/02_tol/output_tol
+## example 03 - Metagenomic
+examples/03_metagenomic/logs
+examples/03_metagenomic/ethiopian_mags.tar.bz2
+examples/03_metagenomic/input_metagenomic
+examples/03_metagenomic/output_metagenomic
+examples/03_metagenomic/output_heatmap
+## example 04 - E. coli
+examples/04_ecoli/logs
+examples/04_ecoli/s__Escherichia_coli
+examples/04_ecoli/inputs
+examples/04_ecoli/output_references
+## example 05 - Campylobacter
+examples/05_campylobacter/logs
+examples/05_campylobacter/input_bins
+examples/05_campylobacter/output_campylobacter
+# wiki
+wiki
+# settings files
+.vscode
+# temp files and folders
+__pycache__
+.nfs*
