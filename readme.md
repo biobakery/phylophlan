@@ -24,7 +24,7 @@ You can clone the PhyloPhlAn repository from GitHub:
 git clone https://github.com/biobakery/phylophlan
 ~~~
 
-Then remember to check that the [Dependencies and Tools](https://github.com/biobakery/phylophlan/wiki/PhyloPhlAn-3.0#requirements) are in stalled and available in your system.
+Then remember to check that the [Dependencies and Tools](https://github.com/biobakery/phylophlan/wiki#requirements) are in stalled and available in your system.
 
 
 # Tutorials
