@@ -43,3 +43,12 @@ Then remember to check that the [Dependencies and Tools](https://github.com/biob
 # Support
 
 We provide support through [the bioBakery help forum](https://forum.biobakery.org/) and through the issues tracking system of the [PhyloPhlAn repository](https://github.com/biobakery/phylophlan/issues).
+
+
+# Citation
+
+If you used PhyloPhlAn please cite the following paper:
+
+**Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0**  
+_Francesco Asnicar_, _Andrew Maltez Thomas_, _Francesco Beghini_, _Claudia Mengoni_, _Serena Manara_, _Paolo Manghi_, _Qiyun Zhu_, _Mattia Bolzan_, _Fabio Cumbo_, _Uyen May_, _Jon G. Sanders_, _Moreno Zolfo_, _Evguenia Kopylova_, _Edoardo Pasolli_, _Rob Knight_, _Siavash Mirarab_, _Curtis Huttenhower_, and _Nicola Segata_  
+In review
