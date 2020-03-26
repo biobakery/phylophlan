@@ -12,7 +12,7 @@ PhyloPhlAn 3.0 can reconstruct strain-level phylogenies using clade-specific max
 You can install PhyloPhlAn using conda as follows:
 
 ~~~Bash
-conda install phylophlan
+conda install -c bioconda phylophlan
 ~~~
 
 
@@ -22,6 +22,8 @@ You can clone the PhyloPhlAn repository from GitHub:
 
 ~~~Bash
 git clone https://github.com/biobakery/phylophlan
+cd phylophlan
+python setup.py install
 ~~~
 
 Then remember to check that the [Dependencies and Tools](https://github.com/biobakery/phylophlan/wiki#requirements) are in stalled and available in your system.
