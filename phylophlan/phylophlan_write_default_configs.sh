@@ -1,13 +1,22 @@
 #!/bin/bash
 
 
-# This script assumes that PhyloPhlAn is installed and the commands are available
-# in the command line, if not, the first commented row is the execution of the
-# phylophlan_write_config_file.py script from the local PhyloPhlAn folder.
+# This script assumes that PhyloPhlAn is installed and the commands are available in the command line
+
+
+if [[ $# -ne 1 ]]; then
+    outd='.'
+else
+    outd=$1
+fi;
+
+if [[ ! -d $outd ]]; then
+    echo "ERROR! Folder not found: $1";
+    exit 2;
+fi;
 
 # supermatrix_nt.cfg
-# ./phylophlan_write_config_file.py -o supermatrix_nt.cfg \
-phylophlan_write_config_file.py -o supermatrix_nt.cfg \
+phylophlan_write_config_file -o $outd/supermatrix_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -19,8 +28,7 @@ phylophlan_write_config_file.py -o supermatrix_nt.cfg \
     --verbose
 
 # supertree_nt.cfg
-# ./phylophlan_write_config_file.py -o supertree_nt.cfg \
-phylophlan_write_config_file.py -o supertree_nt.cfg \
+phylophlan_write_config_file -o $outd/supertree_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -33,8 +41,7 @@ phylophlan_write_config_file.py -o supertree_nt.cfg \
     --verbose
 
 # supermatrix_aa.cfg
-# ./phylophlan_write_config_file.py -o supermatrix_aa.cfg \
-phylophlan_write_config_file.py -o supermatrix_aa.cfg \
+phylophlan_write_config_file -o $outd/supermatrix_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -47,8 +54,7 @@ phylophlan_write_config_file.py -o supermatrix_aa.cfg \
     --verbose
 
 # supertree_aa.cfg
-# ./phylophlan_write_config_file.py -o supertree_aa.cfg \
-phylophlan_write_config_file.py -o supertree_aa.cfg \
+phylophlan_write_config_file -o $outd/supertree_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
