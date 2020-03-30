@@ -398,11 +398,10 @@ def phylophlan_write_config_file():
 
     # setting tree1
     if 'astral' in args.tree1:
-        tree1 = {'program_name': 'java -jar /CM/tools/astral-4.11.1/astral.4.11.1.jar',
+        tree1 = {'program_name': 'java -jar astral-4.11.1/astral.4.11.1.jar',
                  'input': '-i',
                  'output': '-o',
-                 # 'version': '--help',
-                 'version': '-i /CM/tools/astral-4.11.1/test_data/song_mammals.424.gene.tre',
+                 'version': '-i astral-4.11.1/test_data/song_mammals.424.gene.tre',
                  'command_line': '#program_name# #input# #output#'}
     if 'astrid' in args.tree1:
         exe, _ = find_executable('ASTRID', absolute=args.absolute_path)

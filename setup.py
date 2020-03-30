@@ -44,4 +44,4 @@ setuptools.setup(name='PhyloPhlAn',
 
 check_call(['sh',
             'phylophlan/phylophlan_write_default_configs.sh',
-            sys.prefix + '/lib/python{}.{}/site-packages/phylophlan'.format(sys.version_info[0], sys.version_info[1])])
+            sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])])

@@ -1,22 +1,20 @@
 #!/bin/bash
 
 
-# This script assumes that PhyloPhlAn is installed and the commands are available in the command line
+# This script assumes to be executed by the setup.py script
 
+outd='.'
 
-if [[ $# -ne 1 ]]; then
-    outd='.'
-else
+if [ $# -eq 1 ]; then
     outd=$1
 fi;
 
-if [[ ! -d $outd ]]; then
-    echo "ERROR! Folder not found: $1";
-    exit 2;
+if [ ! -d $outd ]; then
+    mkdir -p $outd
 fi;
 
 # supermatrix_nt.cfg
-phylophlan_write_config_file -o $outd/supermatrix_nt.cfg \
+python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -28,7 +26,7 @@ phylophlan_write_config_file -o $outd/supermatrix_nt.cfg \
     --verbose
 
 # supertree_nt.cfg
-phylophlan_write_config_file -o $outd/supertree_nt.cfg \
+python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -41,7 +39,7 @@ phylophlan_write_config_file -o $outd/supertree_nt.cfg \
     --verbose
 
 # supermatrix_aa.cfg
-phylophlan_write_config_file -o $outd/supermatrix_aa.cfg \
+python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -54,7 +52,7 @@ phylophlan_write_config_file -o $outd/supermatrix_aa.cfg \
     --verbose
 
 # supertree_aa.cfg
-phylophlan_write_config_file -o $outd/supertree_aa.cfg \
+python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
