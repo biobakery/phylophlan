@@ -64,3 +64,5 @@ python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_aa.cfg \
     --tree1 astral \
     --overwrite \
     --verbose
+
+exit 0;

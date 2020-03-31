@@ -1,7 +1,7 @@
 import setuptools
 from io import open
 import sys
-from subprocess import check_call
+from subprocess import call
 
 
 if sys.version_info[0] < 3:
@@ -42,6 +42,6 @@ setuptools.setup(name='PhyloPhlAn',
                  install_requires=install_reqs,
                  zip_safe=False)
 
-check_call(['sh',
-            'phylophlan/phylophlan_write_default_configs.sh',
-            sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])])
+call(['sh',
+      'phylophlan/phylophlan_write_default_configs.sh',
+      sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])])
