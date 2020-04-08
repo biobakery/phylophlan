@@ -962,7 +962,7 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa, verbos
                               output_exts=makeblastdb_exts, verbose=verbose)
 
                 if [None for ext in makeblastdb_exts if not os.path.isfile(os.path.join(db_folder, database + ext))]:
-                    error('database "{}" ({}) has not been created... something went wrong!'
+                    error('"{}" database "{}" ({}) has not been created... something went wrong!'
                           .format(key_dna, os.path.join(databases_folder, database), ', '.join(makeblastdb_exts)), exit=True)
             elif verbose:
                 info('"{}" database "{}" ({}) present\n'
@@ -2268,7 +2268,7 @@ def symbol_diversity(seq, log_base=21):
     """
     sh = 0.0
 
-    for aa, abs_freq in Counter(seq.upper()).items():
+    for _, abs_freq in Counter(seq.upper()).items():
         rel_freq = abs_freq / len(seq)
         sh -= rel_freq * math.log(rel_freq)
 
@@ -2849,7 +2849,6 @@ def mutation_rates_rec(x):
 def aggregate_mutation_rates(input_folder, output_file, verbose=False):
     mutation_rates = glob.glob(os.path.join(input_folder, "*.pkl"))
     aggregated = {}
-    ids = set()
 
     if not mutation_rates:
         info('No mutation rates to aggregate\n')
