@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.43'
-__date__ = '2 March 2020'
+__version__ = '0.44'
+__date__ = '8 April 2020'
 
 
 import os
@@ -38,6 +38,7 @@ import hashlib
 import gzip
 import random as lib_random
 import numpy as np
+from distutils.spawn import find_executable
 
 
 if sys.version_info[0] < 3:
@@ -612,52 +613,19 @@ def check_dependencies(configs, nproc, verbose=False):
     for params in configs:
         cmd = compose_command(configs[params], check=True, nproc=nproc)
 
-        if cmd not in cmds_tested:
-            cmds_tested.append(cmd)
+        if cmd['command_line'][0] in cmds_tested:
+            continue
 
-            if verbose:
-                info('Checking "{}"\n'.format(' '.join(cmd['command_line'])))
+        cmds_tested.append(cmd['command_line'][0])
 
-            inp_f = None
-            out_f = sb.DEVNULL
+        if verbose:
+            info('Checking "{}"\n'.format(cmd['command_line'][0]))
 
-            if cmd['stdin']:
-                inp_f = open(cmd['stdin'], 'r')
-
-            if cmd['stdout']:
-                out_f = open(cmd['stdout'], 'w')
-
-            try:
-                if 'diamond' in cmd['command_line']:
-                    stdout = sb.check_output(cmd['command_line'], stdin=inp_f, stderr=sb.DEVNULL, env=cmd['env'])
-                    wrong = False
-
-                    # diamond before version 0.8.30 is not able to map with the blastx algorithm as they are missing
-                    # the --max-hsps param. According to the changelog:
-                    # 0.8.31 (1 Jan 2017) - removed --single-domain option and replaced by --max-hsps
-                    # phylophlan-users@googlegroups.com, subject: "phylophlan.fna is empty"
-                    for a, b in zip(stdout.decode().strip().split(' ')[-1].split('.'), [0, 8, 31]):
-                        if a != str(b):
-                            wrong = wrong or (int(a) < b)
-                            break
-
-                    if wrong:
-                        error('the "{}" of diamond is not supported, please update it to at least version 0.8.31'.format(stdout),
-                              init_new_line=True, exit=True)
-                else:
-                    sb.check_call(cmd['command_line'], stdin=inp_f, stdout=out_f, stderr=sb.DEVNULL, env=cmd['env'])
-            except Exception as e:
-                error(str(e), init_new_line=True)
-                error('program not installed or not present in the system path\n'
-                      '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a])
-                                                     for a in ['command_line', 'stdin', 'stdout', 'env']])),
-                      init_new_line=True, exit=True)
-
-            if cmd['stdin']:
-                inp_f.close()
-
-            if cmd['stdout']:
-                out_f.close()
+        if find_executable(cmd['command_line'][0]) is None:
+            error('program not installed or not present in the system path\n'
+                  '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a])
+                                                 for a in ['command_line', 'stdin', 'stdout', 'env']])),
+                  init_new_line=True, exit=True)
 
 
 def check_database(db_name, databases_folder, verbose=False):

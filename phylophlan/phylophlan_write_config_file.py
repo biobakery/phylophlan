@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.12'
-__date__ = '20 February 2020'
+__version__ = '0.13'
+__date__ = '8 April 2020'
 
 
 import os
@@ -16,6 +16,7 @@ import stat
 import time
 import argparse as ap
 import configparser as cp
+from distutils.spawn import find_executable
 
 
 if sys.version_info[0] < 3:
@@ -124,29 +125,14 @@ def check_params(args, verbose=False):
         info('Arguments: {}\n'.format(vars(args)))
 
 
-def find_executable(exe, absolute=False, rollback=False):
-    current_env = os.environ.copy()
+def find_executable_wrapper(exe, absolute=False, rollback=False):
+    find1 = find_executable(exe)
+    find2 = find_executable(rollback) if rollback else None
 
-    if 'PATH' in current_env:
-        for d in current_env['PATH'].split(os.pathsep):
-            if not os.path.exists(d):
-                continue
+    if (find1 is None) and (find2 is None):
+        error('could not find "{}" ("{}") executable in your PATH environment variable'.format(exe, rollback), exit=True)
 
-            if not os.path.isdir(d):
-                continue
-
-            for f in os.listdir(d):
-                e = os.path.realpath(os.path.join(d, f))
-
-                if (os.path.exists(e) and (not os.path.isdir(e)) and bool(os.stat(e)[stat.ST_MODE] & stat.S_IXUSR)):
-                    if exe.lower() == f.lower():
-                        return (f if not absolute else e,
-                                True if rollback is None else False)
-
-    if rollback:
-        find_executable(rollback, absolute=absolute, rollback=None)
-
-    error('could not find "{}" ("{}") executable in your PATH environment variable'.format(exe, rollback), exit=True)
+    return (find1 if find1 else find2, find2 is None)
 
 
 # AVAILABLE OPTIONS:
@@ -179,7 +165,7 @@ def phylophlan_write_config_file():
     # setting the program for building the nucleotides DB
     if args.db_dna:
         if 'makeblastdb' in args.db_dna:
-            exe, _ = find_executable('makeblastdb', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('makeblastdb', absolute=args.absolute_path)
             db_dna = {'program_name': exe,
                       'params': '-parse_seqids -dbtype nucl',
                       'input': '-in',
@@ -192,7 +178,7 @@ def phylophlan_write_config_file():
     # setting the program for building the amino acids DB
     if args.db_aa:
         if 'usearch' in args.db_aa:
-            exe, _ = find_executable('usearch', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('usearch', absolute=args.absolute_path)
             db_aa = {'program_name': exe,
                      'params': '-quiet',
                      'input': '-makeudb_ublast',
@@ -200,7 +186,7 @@ def phylophlan_write_config_file():
                      'version': '-version',
                      'command_line': '#program_name# #params# #input# #output#'}
         elif 'diamond' in args.db_aa:
-            exe, _ = find_executable('diamond', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('diamond', absolute=args.absolute_path)
             db_aa = {'program_name': exe,
                      'params': 'makedb',
                      'threads': '--threads',
@@ -214,7 +200,7 @@ def phylophlan_write_config_file():
     # setting the software for mapping the genomes (dna)
     if args.map_dna:
         if 'blastn' in args.map_dna:
-            exe, _ = find_executable('blastn', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('blastn', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
                        'params': '-outfmt 6 -max_target_seqs 1000000',
                        'input': '-query',
@@ -223,7 +209,7 @@ def phylophlan_write_config_file():
                        'version': '-version',
                        'command_line': '#program_name# #params# #input# #database# #output#'}
         elif 'tblastn' in args.map_dna:
-            exe, _ = find_executable('tblastn', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('tblastn', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
                        'params': ('-outfmt "6 saccver qaccver pident length mismatch gapopen sstart send qstart '
                                   'qend evalue bitscore" -evalue 1e-50 -max_target_seqs 1000000'),
@@ -233,7 +219,7 @@ def phylophlan_write_config_file():
                        'version': '-version',
                        'command_line': '#program_name# #params# #input# #database# #output#'}
         elif 'diamond' in args.map_dna:
-            exe, _ = find_executable('diamond', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('diamond', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
                        'params': 'blastx --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35 -k 0',
                        'input': '--query',
@@ -247,7 +233,7 @@ def phylophlan_write_config_file():
     # setting the software for mapping the proteomes (aa)
     if args.map_aa:
         if 'usearch' in args.map_aa:
-            exe, _ = find_executable('usearch', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('usearch', absolute=args.absolute_path)
             map_aa = {'program_name': exe,
                       'params': '-quiet -evalue 1e-10 -maxaccepts 8 -maxrejects 32',
                       'threads': '-threads',
@@ -257,7 +243,7 @@ def phylophlan_write_config_file():
                       'version': '-version',
                       'command_line': '#program_name# #params# #threads# #input# #database# #output#'}
         elif 'diamond' in args.map_aa:
-            exe, _ = find_executable('diamond', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('diamond', absolute=args.absolute_path)
             map_aa = {'program_name': exe,
                       'params': 'blastp --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35 -k 0',
                       'input': '--query',
@@ -270,7 +256,7 @@ def phylophlan_write_config_file():
 
     # setting the MSA software
     if 'muscle' in args.msa:
-        exe, _ = find_executable('muscle', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('muscle', absolute=args.absolute_path)
         msa = {'program_name': exe,
                'params': '-quiet -maxiters 2',
                'input': '-in',
@@ -278,7 +264,7 @@ def phylophlan_write_config_file():
                'version': '-version',
                'command_line': '#program_name# #params# #input# #output#'}
     elif 'mafft' in args.msa:
-        exe, _ = find_executable('mafft', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('mafft', absolute=args.absolute_path)
         msa = {'program_name': exe,
                'params': '--quiet --anysymbol --thread 1 --auto',
                'version': '--version',
@@ -292,7 +278,7 @@ def phylophlan_write_config_file():
                 msa['environment'] = 'TMPDIR={}'.format(fld)
                 break
     elif 'opal' in args.msa:
-        exe, _ = find_executable('opal', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('opal', absolute=args.absolute_path)
         msa = {'program_name': exe,
                'input': '--in',
                'output': '--out',
@@ -302,7 +288,7 @@ def phylophlan_write_config_file():
         if (args.db_type == 'a' and (not args.force_nucleotides)):
             msa['params'] += ' --protein'
     elif 'upp' in args.msa:
-        exe, _ = find_executable('upp', rollback='run-upp.sh', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('upp', rollback='run-upp.sh', absolute=args.absolute_path)
         msa = {'program_name': exe,
                'params': '-x 1 -M -1 -T 0.66 -B 999999999',
                'input': '-s',
@@ -321,7 +307,7 @@ def phylophlan_write_config_file():
     # setting the trimming software
     if args.trim:
         if 'trimal' in args.trim:
-            exe, _ = find_executable('trimal', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('trimal', absolute=args.absolute_path)
             trim = {'program_name': exe,
                     'params': '-gappyout',
                     'input': '-in',
@@ -334,7 +320,7 @@ def phylophlan_write_config_file():
     # setting gene_tree1
     if args.gene_tree1:
         if 'fasttree' in args.gene_tree1:
-            exe, _ = find_executable('FastTree', rollback='fasttree', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('FastTree', rollback='fasttree', absolute=args.absolute_path)
             gene_tree1 = {'program_name': exe,
                           'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                           'output': '-out',
@@ -345,7 +331,7 @@ def phylophlan_write_config_file():
             elif args.db_type == 'a':
                 gene_tree1['params'] += ' -lg'
         elif 'raxml' in args.gene_tree1:
-            exe, _ = find_executable('raxmlHPC', rollback='raxml', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('raxmlHPC', rollback='raxml', absolute=args.absolute_path)
             gene_tree1 = {'program_name': exe,
                           'params': '-p 1989',
                           'input': '-s',
@@ -360,7 +346,7 @@ def phylophlan_write_config_file():
                 gene_tree1['model'] = '-m'
                 gene_tree1['command_line'] = '#program_name# #model# #params# #output_path# #input# #output#'
         elif 'iqtree' in args.gene_tree1:
-            exe, _ = find_executable('iqtree', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('iqtree', absolute=args.absolute_path)
             gene_tree1 = {'program_name': exe,
                           'params': '-quiet -nt 1',
                           'input': '-s',
@@ -378,7 +364,7 @@ def phylophlan_write_config_file():
     # setting gene_tree2
     if args.gene_tree2:
         if 'raxml' in args.gene_tree2:
-            exe, _ = find_executable('raxmlHPC', rollback='raxml', absolute=args.absolute_path)
+            exe, _ = find_executable_wrapper('raxmlHPC', rollback='raxml', absolute=args.absolute_path)
             gene_tree2 = {'program_name': exe,
                           'params': '-p 1989',
                           'database': '-t',  # starting tree
@@ -404,7 +390,7 @@ def phylophlan_write_config_file():
                  'version': '-i astral-4.11.1/test_data/song_mammals.424.gene.tre',
                  'command_line': '#program_name# #input# #output#'}
     if 'astrid' in args.tree1:
-        exe, _ = find_executable('ASTRID', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('ASTRID', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'input': '-i',
                  'params': '-m auto',
@@ -412,7 +398,7 @@ def phylophlan_write_config_file():
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}
     elif 'fasttree' in args.tree1:
-        exe, rb = find_executable('FastTreeMP', rollback='fasttree', absolute=args.absolute_path)
+        exe, rb = find_executable_wrapper('FastTreeMP', rollback='fasttree', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
                  'output': '-out',
@@ -426,7 +412,7 @@ def phylophlan_write_config_file():
         elif args.db_type == 'a':
             tree1['params'] += ' -lg'
     elif 'raxml' in args.tree1:
-        exe, rb = find_executable('raxmlHPC-PTHREADS-SSE3', rollback='raxml', absolute=args.absolute_path)
+        exe, rb = find_executable_wrapper('raxmlHPC-PTHREADS-SSE3', rollback='raxml', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'params': '-p 1989',
                  'input': '-s',
@@ -444,7 +430,7 @@ def phylophlan_write_config_file():
             tree1['params'] += ' -m PROTCATLG'
 
     elif 'iqtree' in args.tree1:
-        exe, _ = find_executable('iqtree', absolute=args.absolute_path)
+        exe, _ = find_executable_wrapper('iqtree', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'params': '-quiet -nt AUTO',
                  'input': '-s',
@@ -462,7 +448,7 @@ def phylophlan_write_config_file():
     # setting tree2
     if args.tree2:
         if 'raxml' in args.tree2:
-            exe, rb = find_executable('raxmlHPC-PTHREADS-SSE3', rollback='raxml', absolute=args.absolute_path)
+            exe, rb = find_executable_wrapper('raxmlHPC-PTHREADS-SSE3', rollback='raxml', absolute=args.absolute_path)
             tree2 = {'program_name': exe,
                      'params': '-p 1989',
                      'database': '-t',  # starting tree
