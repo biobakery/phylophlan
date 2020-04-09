@@ -1,3 +1,9 @@
+# phylophlan_setup_database.py
+taxa2core.txt
+taxa2core_*.txt.bz2
+# phylophlan_get_reference.py
+taxa2genomes.txt
+taxa2genomes_*.txt.bz2
 # markers databases
 phylophlan/phylophlan_databases
 # examples folders generated when running
