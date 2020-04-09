@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.30'
-__date__ = '20 February 2020'
+__version__ = '0.31'
+__date__ = '9 April 2020'
 
 
 import sys
@@ -179,10 +179,9 @@ def check_params(args, verbose=False):
     if args.how_many != 'all':
         try:
             how_many = int(args.how_many)
-        except Exception as e:
+        except Exception as _:
             if verbose:
-                info('Unrecognized value "{}", setting -n/--how_many to default value "{}"'
-                     .format(args.how_many, HOW_MANY))
+                info('Unrecognized value "{}", setting -n/--how_many to default value "{}"'.format(args.how_many, HOW_MANY))
 
             args.how_many = HOW_MANY
 
@@ -644,7 +643,7 @@ def decompress_rec(x):
 
 def merging(output_prefix, prj_name, output_file, verbose=False):
     out_f = os.path.join(output_prefix + "_dists", prj_name)
-    out_pre, out_ext = os.path.splitext(output_file)
+    _, out_ext = os.path.splitext(output_file)
     to_be_merged = glob.glob('{}_*vs*{}'.format(out_f, out_ext))
 
     if len(to_be_merged) == 1:

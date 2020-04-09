@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.15'
-__date__ = '20 February 2020'
+__version__ = '0.16'
+__date__ = '9 April 2020'
 
 
 import sys
@@ -227,17 +227,15 @@ def retrieve_refseq_url(gcx_id):
 
 def list_available_clades(taxa2proteomes_file, verbose=False):
     clades = {}
-    metadata = None
 
     for r in bz2.open(taxa2proteomes_file, 'rt'):
         if r.startswith('#'):
-            metadata = r.strip()
             continue
 
         taxa = r.strip().split('\t')[1].split('|')
         num_ref_gen = len(r.strip().split('\t')[-1].split(';'))
 
-        for i, c in enumerate(taxa):
+        for i, _ in enumerate(taxa):
             cl = '|'.join(taxa[:i + 1])
 
             if cl in clades:
@@ -253,7 +251,6 @@ def list_available_clades(taxa2proteomes_file, verbose=False):
 
 def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_ref, out_file_ext, output, update, verbose=False):
     core_genomes = {}
-    metadata = None
 
     download(GB_ASSEMBLY_URL, gb_assembly_file, overwrite=update, verbose=verbose)
 
@@ -270,7 +267,6 @@ def get_reference_genomes(gb_assembly_file, taxa2genomes_file, taxa_label, num_r
 
     for r in bz2.open(taxa2genomes_file, 'rt'):
         if r.startswith('#'):
-            metadata = r.strip()
             continue
 
         r_clean = r.strip().split('\t')

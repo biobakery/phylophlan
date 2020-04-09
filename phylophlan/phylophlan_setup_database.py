@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.18'
-__date__ = '20 February 2020'
+__version__ = '0.19'
+__date__ = '9 April 2020'
 
 
 import sys
@@ -257,7 +257,6 @@ def create_folder(output, verbose=False):
 def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verbose=False):
     core_proteins = {}
     url = None
-    metadata = None
     retry2download = []
     not_mapped = []
     not_mapped_again = []
@@ -269,7 +268,6 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
     for r in bz2.open(taxa2core_file, 'rt'):
         if r.startswith('#'):
-            metadata = r.strip()
             continue
 
         r_clean = r.strip().split('\t')
