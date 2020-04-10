@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.44'
-__date__ = '8 April 2020'
+__version__ = '0.45'
+__date__ = '9 April 2020'
 
 
 import os
@@ -102,22 +102,20 @@ def read_params():
     p = ap.ArgumentParser(description=("PhyloPhlAn is an accurate, rapid, and easy-to-use method for large-scale microbial genome "
                                        "characterization and phylogenetic analysis at multiple levels of resolution. PhyloPhlAn can assign "
                                        "finished, draft, or metagenome-assembled genomes (MAGs) to species-level genome bins (SGBs). For "
-                                       "individual clades of interest (e.g. newly sequenced genome sets), PhyloPhlAn reconstructs strain-level "
-                                       "phylogenies from among the closest species using clade-specific maximally informative markers. At the "
-                                       "other extreme of resolution, PhyloPhlAn scales to very-large phylogenies comprising >17,000 microbial "
-                                       "species"),
+                                       "individual clades of interest (e.g. newly sequenced genome sets), PhyloPhlAn reconstructs "
+                                       "strain-level phylogenies from among the closest species using clade-specific maximally informative "
+                                       "markers. At the other extreme of resolution, PhyloPhlAn scales to very-large phylogenies "
+                                       "comprising >17,000 microbial species"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     group = p.add_mutually_exclusive_group()
-    group.add_argument('-i', '--input', metavar='PROJECT_NAME', type=str, default=None,
-                       help="")
-    group.add_argument('-c', '--clean', type=str, default=None,
-                       help="Clean the output and partial data produced for the specified project")
+    group.add_argument('-i', '--input', type=str, default=None, help="Folder containing your input genomes and/or proteomes")
+    group.add_argument('-c', '--clean', type=str, default=None, help="Clean the output and partial data produced for the specified project")
 
     p.add_argument('-o', '--output', type=str, default=None,
                    help=("Output folder name, otherwise it will be the name of the input folder concatenated with the name of "
                          "the database used"))
-    p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use.")
+    p.add_argument('-d', '--database', type=str, default=None, help="The name of the database of markers to use")
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help=('Specify the type of the database of markers, where "n" stands for nucleotides and "a" for amino '
                          'acids. If not specified, PhyloPhlAn will automatically detect the type of database'))
@@ -1263,8 +1261,9 @@ def gene_markers_identification_rec(x):
 
 
 def gene_markers_selection(input_folder, function, min_num_proteins, nucleotides, nproc=1, verbose=False):
-    commands = [(f, f[:-4], function, min_num_proteins, nucleotides)
-                for f in glob.iglob(os.path.join(input_folder, '*.b6o.bkp')) if not os.path.isfile(f[:-4])]
+    commands = [(f, f.replace('.bkp', '.bz2'), function, min_num_proteins, nucleotides)
+                for f in glob.iglob(os.path.join(input_folder, '*.b6o.bkp'))
+                if not os.path.isfile(f.replace('.bkp', '.bz2'))]
 
     if commands:
         info('Selecting {} markers from "{}"\n'.format(len(commands), input_folder))
@@ -1290,7 +1289,7 @@ def gene_markers_selection_rec(x):
 
             # there should be at least min_num_proteins mapped
             if len(matches) >= min_num_proteins:
-                with open(out, 'w') as f:
+                with bz2.open(out, 'wt') as f:
                     f.write('{}\n'.format('\n'.join(['\t'.join(m) for m in matches])))
 
                 t1 = time.time()
@@ -1386,10 +1385,10 @@ def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
-    for f in glob.iglob(os.path.join(input_folder, '*.b6o')):
-        f_clean = os.path.basename(f).replace('.b6o', extension)
+    for f in glob.iglob(os.path.join(input_folder, '*.b6o.bz2')):
+        f_clean = os.path.basename(f).replace('.b6o.bz2', extension)
         src_file = os.path.join(inputs[f_clean], f_clean)
-        out_file = os.path.join(output_folder, f_clean)
+        out_file = os.path.join(output_folder, f_clean + '.bz2')
 
         if os.path.isfile(src_file) and (not os.path.isfile(out_file)):
             commands.append((out_file, src_file, f, min_num_markers, frameshifts))
@@ -1417,7 +1416,7 @@ def gene_markers_extraction_rec(x):
             contig2marker2b6o = {}
             info('Extracting "{}"\n'.format(b6o_file))
 
-            for l in open(b6o_file):
+            for l in bz2.open(b6o_file, 'rt'):
                 row = l.strip().split('\t')
                 contig = row[0]
                 marker = row[1]
@@ -1474,7 +1473,7 @@ def gene_markers_extraction_rec(x):
             len_out_file_seq = int(len(out_file_seq) / 3) if frameshifts else len(out_file_seq)
 
             if out_file_seq and (len_out_file_seq >= min_num_markers):
-                with open(out_file, 'w') as f:
+                with bz2.open(out_file, 'wt') as f:
                     SeqIO.write(out_file_seq, f, 'fasta')
 
                 t1 = time.time()
@@ -1562,10 +1561,10 @@ def inputs2markers(input_folder, output_folder, min_num_entries, extension, verb
             info('Inputs already translated into markers\n')
             return
 
-    for f in glob.iglob(os.path.join(input_folder, '*' + extension)):
-        inp, _ = os.path.splitext(os.path.basename(f))
+    for f in glob.iglob(os.path.join(input_folder, '*' + extension + '.bz2')):
+        inp, _ = os.path.splitext(os.path.basename(f).replace('.bz2', ''))
 
-        for idd, seq in SimpleFastaParser(open(f)):
+        for idd, seq in SimpleFastaParser(bz2.open(f, 'rt')):
             marker = idd.split(' ')[0].split(':')[0].split('_')[-1]
 
             if marker in markers2inputs:
@@ -2264,8 +2263,7 @@ def normalized_submat_scores(aa, submat):
     relation to protein structure and function. J Bacteriol 1996;178:
     1881-1894.
     """
-    aas = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S',
-           'T', 'V', 'W', 'Y']
+    aas = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
     aa = aa.upper()
     m = 0.0
 
@@ -2743,8 +2741,8 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
     check_and_create_folder(output_folder, create=True, verbose=verbose)
     commands = [(inp, output_folder, os.path.splitext(os.path.basename(inp))[0], verbose)
                 for inp in glob.iglob(os.path.join(input_folder, "*.aln"))
-                if not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.tsv')) and
-                   not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.pkl'))]
+                if not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.tsv.bz2')) and
+                   not os.path.exists(os.path.join(output_folder, os.path.splitext(os.path.basename(inp))[0] + '.pkl.bz2'))]
 
     if commands:
         info('Computing mutation rates for {} markers\n'.format(len(commands)))
@@ -2764,8 +2762,8 @@ def mutation_rates_rec(x):
     if not terminating.is_set():
         try:
             inp_aln, out_fld, fn, verbose = x
-            out_tsv = os.path.join(out_fld, fn + '.tsv')
-            out_pkl = os.path.join(out_fld, fn + '.pkl')
+            out_tsv = os.path.join(out_fld, fn + '.tsv.bz2')
+            out_pkl = os.path.join(out_fld, fn + '.pkl.bz2')
 
             if verbose:
                 info('Computing mutation rates of "{}"\n'.format(inp_aln))
@@ -2777,7 +2775,7 @@ def mutation_rates_rec(x):
             if verbose:
                 info('Serializing to "{}"\n'.format(out_pkl))
 
-            with open(out_pkl, 'wb') as f:
+            with bz2.open(out_pkl, 'wb') as f:
                 pickle.dump(dists, f, protocol=pickle.HIGHEST_PROTOCOL)
 
             out_tbl = [['ids'] + [inp[i].id for i in range(len(inp))]]  # header
@@ -2801,7 +2799,7 @@ def mutation_rates_rec(x):
             if verbose:
                 info('Writing output to "{}"\n'.format(out_tsv))
 
-            with open(out_tsv, 'w') as f:
+            with bz2.open(out_tsv, 'wt') as f:
                 f.write('\n'.join(['\t'.join(r) for r in out_tbl]))
         except Exception as e:
             terminating.set()
@@ -2815,7 +2813,7 @@ def mutation_rates_rec(x):
 
 
 def aggregate_mutation_rates(input_folder, output_file, verbose=False):
-    mutation_rates = glob.glob(os.path.join(input_folder, "*.pkl"))
+    mutation_rates = glob.glob(os.path.join(input_folder, "*.pkl.bz2"))
     aggregated = {}
 
     if not mutation_rates:
@@ -2830,7 +2828,7 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
         info('Aggregating {} mutation rates\n'.format(len(mutation_rates)))
 
     for mr in mutation_rates:
-        with open(mr, 'rb') as f:
+        with bz2.open(mr, 'rb') as f:
             mr_dists = pickle.load(f)
 
         for k, d in mr_dists.items():
