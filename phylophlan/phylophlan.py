@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.45'
-__date__ = '9 April 2020'
+__version__ = '0.46'
+__date__ = '20 April 2020'
 
 
 import os
@@ -636,6 +636,8 @@ def check_database(db_name, databases_folder, verbose=False):
     if not (is_dir or is_faa or is_faa_bz2 or is_tar):
         error('database "{}" not found in "{}"'.format(db_name, databases_folder))
         database_list(databases_folder, exit=True)
+
+    return True
 
 
 def database_list(databases_folder, exit=False, exit_value=0):
@@ -3166,28 +3168,27 @@ def phylophlan_main():
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
-    database_download = os.path.join(args.databases_folder, os.path.basename(DATABASE_DOWNLOAD_URL).replace('?dl=1', ''))
-    found = False
-    download(DATABASE_DOWNLOAD_URL, database_download, overwrite=args.update, verbose=args.verbose)
 
-    with open(database_download) as f:
-        for r in f:
-            if r.startswith('#'):
-                continue
+    if not check_database(args.database, args.databases_folder, verbose=args.verbose):
+        database_download = os.path.join(args.databases_folder, os.path.basename(DATABASE_DOWNLOAD_URL).replace('?dl=1', ''))
+        download(DATABASE_DOWNLOAD_URL, database_download, overwrite=args.update, verbose=args.verbose)
+        db_url, md5_url = None, None
 
-            db, db_url, md5_url = r.strip().split('\t')
+        with open(database_download) as f:
+            for r in f:
+                if r.startswith('#'):
+                    continue
 
-            if db == args.database:
-                found = True
-                break
+                rc = r.strip().split('\t')
 
-    if not found:
-        db, db_url = None, None
+                if rc[0] == args.database:
+                    db_url, md5_url = rc[1], rc[2]
+                    break
 
-    download_and_unpack_db(args.database, db_url, md5_url, args.databases_folder, update=args.update, verbose=args.verbose)
-    check_database(args.database, args.databases_folder, verbose=args.verbose)
-    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type,
-                                           configs, 'db_dna', 'db_aa', verbose=args.verbose)
+        download_and_unpack_db(args.database, db_url, md5_url, args.databases_folder, update=args.update, verbose=args.verbose)
+
+    db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type, configs, 'db_dna', 'db_aa',
+                                           verbose=args.verbose)
     if not args.db_type:
         args.db_type = db_type
 
