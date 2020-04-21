@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.46'
-__date__ = '20 April 2020'
+__version__ = '0.47'
+__date__ = '21 April 2020'
 
 
 import os
@@ -2375,12 +2375,12 @@ def build_gene_tree(configs, key, sub_mod, input_folder, output_folder, nproc=1,
             out = marker + '.tre'
             model = sub_mod[marker]
 
-        if (not os.path.isfile(os.path.join(output_folder, out))) and \
-           (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.' + out))) and \
-           (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.' + out))) and \
-           (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.' + out))) and \
-           (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.' + out))):
-            commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
+            if (not os.path.isfile(os.path.join(output_folder, out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_bestTree.' + out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_info.' + out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_log.' + out))) and \
+               (not os.path.isfile(os.path.join(output_folder, 'RAxML_result.' + out))):
+                commands.append((configs[key], model, inp, os.path.abspath(output_folder), out))
 
     if commands:
         info('Building {} gene trees\n'.format(len(commands)))
