@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.47'
-__date__ = '21 April 2020'
+__version__ = '0.48'
+__date__ = '22 April 2020'
 
 
 import os
@@ -18,7 +18,7 @@ import argparse as ap
 import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
-from Bio import SeqIO  # Biopython requires NumPy
+from Bio import SeqIO
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
@@ -31,7 +31,7 @@ import re
 import time
 import pickle
 from itertools import combinations
-import dendropy  # DendroPy
+import dendropy
 from urllib.request import urlretrieve
 import tarfile
 import hashlib
@@ -626,7 +626,7 @@ def check_dependencies(configs, nproc, verbose=False):
                   init_new_line=True, exit=True)
 
 
-def check_database(db_name, databases_folder, verbose=False):
+def check_database(db_name, databases_folder, exit=True, verbose=False):
     is_dir = os.path.isdir(os.path.join(databases_folder, db_name))
     is_faa = os.path.isfile(os.path.join(databases_folder, db_name + '.faa'))
     is_faa_bz2 = os.path.isfile(os.path.join(databases_folder, db_name + '.faa.bz2'))
@@ -634,8 +634,11 @@ def check_database(db_name, databases_folder, verbose=False):
               os.path.isfile(os.path.join(databases_folder, db_name + '.md5')))
 
     if not (is_dir or is_faa or is_faa_bz2 or is_tar):
-        error('database "{}" not found in "{}"'.format(db_name, databases_folder))
-        database_list(databases_folder, exit=True)
+        if exit:
+            error('database "{}" not found in "{}"'.format(db_name, databases_folder))
+            database_list(databases_folder, exit=True)
+        else:
+            return False
 
     return True
 
@@ -3169,7 +3172,7 @@ def phylophlan_main():
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
 
-    if not check_database(args.database, args.databases_folder, verbose=args.verbose):
+    if not check_database(args.database, args.databases_folder, exit=False, verbose=args.verbose):
         database_download = os.path.join(args.databases_folder, os.path.basename(DATABASE_DOWNLOAD_URL).replace('?dl=1', ''))
         download(DATABASE_DOWNLOAD_URL, database_download, overwrite=args.update, verbose=args.verbose)
         db_url, md5_url = None, None
@@ -3185,8 +3188,10 @@ def phylophlan_main():
                     db_url, md5_url = rc[1], rc[2]
                     break
 
-        download_and_unpack_db(args.database, db_url, md5_url, args.databases_folder, update=args.update, verbose=args.verbose)
+        if db_url and md5_url:
+            download_and_unpack_db(args.database, db_url, md5_url, args.databases_folder, update=args.update, verbose=args.verbose)
 
+    check_database(args.database, args.databases_folder, exit=True, verbose=args.verbose)
     db_type, db_dna, db_aa = init_database(args.database, args.databases_folder, args.db_type, configs, 'db_dna', 'db_aa',
                                            verbose=args.verbose)
     if not args.db_type:
