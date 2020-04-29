@@ -4,6 +4,8 @@ taxa2core_*.txt.bz2
 # phylophlan_get_reference.py
 taxa2genomes.txt
 taxa2genomes_*.txt.bz2
+# genbank genomes database
+assembly_summary_genbank.txt
 # markers databases
 phylophlan/phylophlan_databases
 # examples folders generated when running
@@ -16,7 +18,6 @@ phylophlan/examples/01_saureus/input_references
 phylophlan/examples/01_saureus/output_references
 phylophlan/examples/01_saureus/graphlan/isolates_annotated.xml
 phylophlan/examples/01_saureus/graphlan/saureus_isolates.png
-phylophlan/examples/01_saureus/test
 ## example 02 - Tree of life
 phylophlan/examples/02_tol/logs
 phylophlan/examples/02_tol/input_genomes
@@ -36,6 +37,8 @@ phylophlan/examples/04_ecoli/output_references
 phylophlan/examples/05_campylobacter/logs
 phylophlan/examples/05_campylobacter/input_bins
 phylophlan/examples/05_campylobacter/output_campylobacter
+## test example
+phylophlan/examples/test
 # wiki
 wiki
 # settings files
