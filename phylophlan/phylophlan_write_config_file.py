@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.13'
-__date__ = '8 April 2020'
+__version__ = '0.14'
+__date__ = '29 April 2020'
 
 
 import os
@@ -132,7 +132,7 @@ def find_executable_wrapper(exe, absolute=False, rollback=False):
     if (find1 is None) and (find2 is None):
         error('could not find "{}" ("{}") executable in your PATH environment variable'.format(exe, rollback), exit=True)
 
-    return (find1 if find1 else find2, find2 is None)
+    return (find1 if find1 else find2, find1 is None)
 
 
 # AVAILABLE OPTIONS:
