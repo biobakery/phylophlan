@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.48'
-__date__ = '22 April 2020'
+__version__ = '0.49'
+__date__ = '28 April 2020'
 
 
 import os
@@ -1499,8 +1499,8 @@ def fake_proteome(input_folder, output_folder, in_extension, out_extension, min_
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
-    for f in glob.iglob(os.path.join(input_folder, '*' + in_extension)):
-        out = os.path.join(output_folder, os.path.splitext(os.path.basename(f))[0] + out_extension)
+    for f in glob.iglob(os.path.join(input_folder, '*' + in_extension + '.bz2')):
+        out = os.path.join(output_folder, os.path.splitext(os.path.basename(f).replace('.bz2', ''))[0] + out_extension + '.bz2')
 
         if not os.path.isfile(out):
             commands.append((f, out, min_len_protein))
@@ -1527,7 +1527,7 @@ def fake_proteome_rec(x):
             proteome = []
             info('Generating "{}"\n'.format(inp))
 
-            for idd, seq in SimpleFastaParser(open(inp)):
+            for idd, seq in SimpleFastaParser(bz2.open(inp, 'rt')):
                 idd = idd.split(' ')[0]
                 s, e = idd.split(':')[-1].split('-')
 
@@ -1542,7 +1542,7 @@ def fake_proteome_rec(x):
                 if len(seq_t) >= min_len_protein:
                     proteome.append(SeqRecord(seq_t, id=idd, description=''))
 
-            with open(out, 'w') as f:
+            with bz2.open(out, 'wt') as f:
                 SeqIO.write(proteome, f, 'fasta')
 
             t1 = time.time()
