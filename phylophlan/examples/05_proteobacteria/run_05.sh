@@ -6,10 +6,10 @@
 
 # Download up to 1 reference genomes for each species of the Epsilonproteobacteria class
 phylophlan_get_reference.py \
-    -g g__Espilonproteobacteria \
+    -g g__Epsilonproteobacteria \
     -n -1 \
     -o input_bins \
-    --verbose 2>&1 | tee logs/phylophlan_get_reference__espilonproteobacteria.log
+    --verbose 2>&1 | tee logs/phylophlan_get_reference__epsilonproteobacteria.log
 
 # Download up to 1 reference genomes for each species of the Spirocaethes phylum to be used as an outgroup
 phylophlan_get_reference.py \
@@ -29,8 +29,8 @@ phylophlan.py \
     -d phylophlan \
     --diversity high \
     --accurate \
-    -f campylobacter_config.cfg \
-    -o output_campylobacter \
+    -f proteobacteria_config.cfg \
+    -o output_proteobacteria \
     --force_nucleotides \
     --nproc 4 \
     -t a \
