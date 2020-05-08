@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '0.06'
-__date__ = '20 February 2020'
+__version__ = '3.0.06'
+__date__ = '8 May 2020'
 
 
 import argparse as ap
