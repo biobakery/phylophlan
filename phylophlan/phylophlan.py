@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '0.49'
-__date__ = '28 April 2020'
+__version__ = '0.50'
+__date__ = '6 May 2020'
 
 
 import os
@@ -252,7 +252,7 @@ def read_configs(config_file, verbose=False):
     return configs
 
 
-def check_args(args, command_line_arguments, verbose=True):
+def check_args(args, command_line_arguments, verbose=False):
     if args.database:
         if os.path.isdir(args.database):
             if '--databases_folder' not in command_line_arguments:
