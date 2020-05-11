@@ -39,6 +39,9 @@ phylophlan/examples/05_campylobacter/input_bins
 phylophlan/examples/05_campylobacter/output_campylobacter
 ## test example
 phylophlan/examples/test
+## other internal runs
+phylophlan/paper_examples
+phylophlan/pcopri
 # wiki
 wiki
 # settings files
