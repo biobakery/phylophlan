@@ -2,6 +2,8 @@ import setuptools
 from io import open
 import sys
 from subprocess import call
+from os import path
+from os import mkdir
 
 
 if sys.version_info[0] < 3:
@@ -16,14 +18,13 @@ setuptools.setup(name='PhyloPhlAn',
                  author_email='f.asnicar@unitn.it',
                  url='http://github.com/biobakery/phylophlan',
                  license='license.txt',
-                 scripts=[],
+                 scripts=['phylophlan_write_default_configs.sh'],
                  packages=setuptools.find_packages(),
                  package_data={
                      'phylophlan': [
                          'phylophlan_configs/*',
                          'phylophlan_substitution_matrices/*',
-                         'phylophlan_substitution_models/*',
-                         'phylophlan_write_default_configs.sh'
+                         'phylophlan_substitution_models/*'
                  ]},
                  include_package_date=True,
                  entry_points={
@@ -42,6 +43,9 @@ setuptools.setup(name='PhyloPhlAn',
                  install_requires=install_reqs,
                  zip_safe=False)
 
-call(['sh',
-      'phylophlan/phylophlan_write_default_configs.sh',
-      sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])])
+p =  sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])
+
+if not path.isdir(p):
+    mkdir(p, mode=0o775)
+
+call(['sh', 'phylophlan/phylophlan_write_default_configs.sh', p])
