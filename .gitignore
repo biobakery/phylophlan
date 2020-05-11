@@ -42,8 +42,6 @@ phylophlan/examples/test
 ## other internal runs
 phylophlan/paper_examples
 phylophlan/pcopri
-# wiki
-wiki
 # settings files
 .vscode
 # temp files and folders
