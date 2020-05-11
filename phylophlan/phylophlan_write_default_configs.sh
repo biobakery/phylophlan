@@ -1,8 +1,6 @@
 #!/bin/bash
 
 
-# This script assumes to be executed by the setup.py script
-
 outd='.'
 
 if [ $# -eq 1 ]; then
@@ -14,7 +12,7 @@ if [ ! -d $outd ]; then
 fi;
 
 # supermatrix_nt.cfg
-python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_nt.cfg \
+phylophlan_write_config_file -o $outd/supermatrix_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -26,7 +24,7 @@ python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_nt.cfg \
     --verbose
 
 # supertree_nt.cfg
-python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_nt.cfg \
+phylophlan_write_config_file -o $outd/supertree_nt.cfg \
     -d n \
     --db_dna makeblastdb \
     --map_dna blastn \
@@ -39,7 +37,7 @@ python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_nt.cfg \
     --verbose
 
 # supermatrix_aa.cfg
-python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_aa.cfg \
+phylophlan_write_config_file -o $outd/supermatrix_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -52,7 +50,7 @@ python phylophlan/phylophlan_write_config_file.py -o $outd/supermatrix_aa.cfg \
     --verbose
 
 # supertree_aa.cfg
-python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_aa.cfg \
+phylophlan_write_config_file -o $outd/supertree_aa.cfg \
     -d a \
     --db_aa diamond \
     --map_dna diamond \
@@ -64,5 +62,3 @@ python phylophlan/phylophlan_write_config_file.py -o $outd/supertree_aa.cfg \
     --tree1 astral \
     --overwrite \
     --verbose
-
-exit 0;
