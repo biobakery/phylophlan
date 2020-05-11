@@ -3,7 +3,7 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.08'
+__version__ = '3.0.8'
 __date__ = '8 May 2020'
 
 
