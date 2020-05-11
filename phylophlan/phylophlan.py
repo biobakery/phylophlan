@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.50'
-__date__ = '8 May 2020'
+__version__ = '3.0.51'
+__date__ = '11 May 2020'
 
 
 import os
@@ -334,7 +334,7 @@ def check_args(args, command_line_arguments, verbose=False):
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=True, verbose=verbose)
+    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=False, verbose=verbose)
     check_and_create_folder(args.output, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
