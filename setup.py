@@ -18,15 +18,13 @@ setuptools.setup(name='PhyloPhlAn',
                  author_email='f.asnicar@unitn.it',
                  url='http://github.com/biobakery/phylophlan',
                  license='license.txt',
-                 scripts=['phylophlan_write_default_configs.sh'],
+                 scripts=['phylophlan/phylophlan_write_default_configs.sh'],
                  packages=setuptools.find_packages(),
                  package_data={
                      'phylophlan': [
-                         'phylophlan_configs/*',
                          'phylophlan_substitution_matrices/*',
                          'phylophlan_substitution_models/*'
                  ]},
-                 include_package_date=True,
                  entry_points={
                      'console_scripts': [
                          'phylophlan = phylophlan.phylophlan:phylophlan_main',
@@ -42,10 +40,3 @@ setuptools.setup(name='PhyloPhlAn',
                  long_description_content_type='text/markdown',
                  install_requires=install_reqs,
                  zip_safe=False)
-
-p =  sys.prefix + '/lib/python{}.{}/site-packages/phylophlan/phylophlan_configs'.format(sys.version_info[0], sys.version_info[1])
-
-if not path.isdir(p):
-    mkdir(p, mode=0o775)
-
-call(['sh', 'phylophlan/phylophlan_write_default_configs.sh', p])
