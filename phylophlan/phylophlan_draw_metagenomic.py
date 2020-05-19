@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.6'
-__date__ = '8 May 2020'
+__version__ = '3.0.7'
+__date__ = '19 May 2020'
 
 
 import argparse as ap
@@ -62,6 +62,12 @@ def read_params():
     p.add_argument('-s', '--separator', type=str, default='\t', help='The separator used in the mapping file')
     p.add_argument('--dpi', type=int, default=200, help='Dpi resolution of the images')
     p.add_argument('-f', type=str, default='svg', help='Images output format')
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_draw_metagenomic.py version {} ({})'.format(__version__, __date__),

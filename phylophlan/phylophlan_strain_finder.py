@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.8'
-__date__ = '8 May 2020'
+__version__ = '3.0.9'
+__date__ = '19 May 2020'
 
 
 import argparse as ap
@@ -73,6 +73,12 @@ def read_params():
     p.add_argument('--overwrite', action='store_true', default=False, help='Overwrite the output file if exists')
     p.add_argument('-s', '--separator', type=str, default='\t', choices=OUTPUT_EXTENSIONS.keys(),
                    help='Specify the separator to use in the output')
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help='Write more stuff')
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_strain_finder.py version {} ({})'.format(__version__, __date__),

@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.14'
-__date__ = '8 May 2020'
+__version__ = '3.0.15'
+__date__ = '19 May 2020'
 
 
 import os
@@ -103,6 +103,12 @@ def read_params():
                    help=('If specified sets parameters for phylogenetic analysis software so that they use '
                          'nucleotide sequences, even in the case of a database of amino acids'))
     p.add_argument('--overwrite', action='store_true', default=False, help="Overwrite output file if it exists")
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_write_config_file.py version {} ({})'.format(__version__, __date__),

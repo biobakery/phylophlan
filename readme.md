@@ -51,4 +51,5 @@ If you used PhyloPhlAn please cite the following paper:
 
 **Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0**  
 _Francesco Asnicar_, _Andrew Maltez Thomas_, _Francesco Beghini_, _Claudia Mengoni_, _Serena Manara_, _Paolo Manghi_, _Qiyun Zhu_, _Mattia Bolzan_, _Fabio Cumbo_, _Uyen May_, _Jon G. Sanders_, _Moreno Zolfo_, _Evguenia Kopylova_, _Edoardo Pasolli_, _Rob Knight_, _Siavash Mirarab_, _Curtis Huttenhower_, and _Nicola Segata_  
-In press
+Nat Commun 11, 2500 (2020)  
+DOI: [https://doi.org/10.1038/s41467-020-16366-7](https://doi.org/10.1038/s41467-020-16366-7)

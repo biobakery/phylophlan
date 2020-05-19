@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.51'
-__date__ = '11 May 2020'
+__version__ = '3.0.52'
+__date__ = '19 May 2020'
 
 
 import os
@@ -228,6 +228,12 @@ def read_params():
     group.add_argument('--proteome_extension', type=str, default=PROTEOME_EXTENSION, help="Extension for input proteomes")
 
     p.add_argument('--update', action='store_true', default=False, help="Update the databases file")
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Makes PhyloPhlAn verbose")
     p.add_argument('-v', '--version', action='version', version='PhyloPhlAn version {} ({})'.format(__version__, __date__),
                    help="Prints the current PhyloPhlAn version and exit")

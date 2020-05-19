@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.19'
-__date__ = '8 May 2020'
+__version__ = '3.0.20'
+__date__ = '19 May 2020'
 
 
 import sys
@@ -79,6 +79,12 @@ def read_params():
                    help='Specify the type of the database, where "n" stands for nucleotides and "a" for amino acids')
     p.add_argument('-x', '--output_extension', type=str, default=None, help="Set the database output extension")
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified and the output file exists it will be overwritten")
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_setup_database.py version {} ({})'.format(__version__, __date__),

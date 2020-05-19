@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.16'
-__date__ = '8 May 2020'
+__version__ = '3.0.17'
+__date__ = '19 May 2020'
 
 
 import sys
@@ -72,6 +72,12 @@ def read_params():
                    help='Specify how many reference genomes to download, where -1 stands for "all available"')
     p.add_argument('-m', '--genbank_mapping', type=str, default=os.path.basename(GB_ASSEMBLY_URL),
                    help='The local GenBank mapping file, if not found it will be automatically downloaded')
+    p.add_argument('--citation', action='version',
+                   version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
+                            'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using PhyloPhlAn 3.0. '
+                            'Nat Commun 11, 2500 (2020). '
+                            'https://doi.org/10.1038/s41467-020-16366-7'),
+                   help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_get_reference.py version {} ({})'.format(__version__, __date__),
