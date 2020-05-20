@@ -32,7 +32,7 @@ Then remember to check that the [Dependencies and Tools](https://github.com/biob
 # Tutorials
 
 * [PhyloPhlAn User manual](https://github.com/biobakery/phylophlan/wiki)
-* [PhyloPhlAn Tutorials](https://github.com/biobakery/biobakery/wiki/PhyloPhlAn)
+* [PhyloPhlAn Tutorials](https://github.com/biobakery/biobakery/wiki/PhyloPhlAn3)
 * [PhyloPhlAn Example 1: Phylogenetic characterization of isolate genomes of a given species (S. aureus)](https://github.com/biobakery/PhyloPhlAn/wiki/PhyloPhlAn-3.0:-Example-01:-S.-aureus)
 * [PhyloPhlAn Example 2: Prokaryotes Tree of life reconstruction](https://github.com/biobakery/PhyloPhlAn/wiki/PhyloPhlAn-3.0:-Example-02:-Tree-of-life)
 * [PhyloPhlAn Example 3: Metagenomic analysis of the Ethiopian cohort](https://github.com/biobakery/PhyloPhlAn/wiki/PhyloPhlAn-3.0:-Example-03:-Metagenomic-application)
