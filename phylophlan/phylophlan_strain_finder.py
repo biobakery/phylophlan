@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.9'
-__date__ = '19 May 2020'
+__version__ = '3.0.10'
+__date__ = '28 May 2020'
 
 
 import argparse as ap
@@ -117,11 +117,11 @@ def check_params(args, verbose=False):
                                            os.path.splitext(args.output)[1])
             info('Output file "{}" exists, new output filename is "{}"\n'.format(old, args.output))
 
-    if args.p_threshold < 0.0:
-        error('p_threshold should be a positive number', exit=True)
+    if args.phylo_thr < 0.0:
+        error('phylo_thr should be a positive number', exit=True)
 
-    if args.m_threshold < 0.0:
-        error('m_threshold should be a positive number', exit=True)
+    if args.mutrate_thr < 0.0:
+        error('mutrate_thr should be a positive number', exit=True)
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)))
@@ -191,7 +191,7 @@ def phylophlan_strain_finder():
         if any(l in x.get_terminals() for x in tested_valid):
             continue
 
-        r = (check_thr(get_parent(tree, l), l, tree, mydict, args.p_threshold, args.m_threshold, args.verbose))
+        r = (check_thr(get_parent(tree, l), l, tree, mydict, args.phylo_thr, args.mutrate_thr, args.verbose))
         tested_valid.append(r)
 
     if args.verbose:
@@ -202,8 +202,8 @@ def phylophlan_strain_finder():
     if isinstance(args.output, str):
         f = open(args.output, 'w')
 
-    print('#phylogenetic_threshold{}{}'.format(args.separator, args.p_threshold), file=f)
-    print('#mutation_rate_threshold{}{}'.format(args.separator, args.m_threshold), file=f)
+    print('#phylogenetic_threshold{}{}'.format(args.separator, args.phylo_thr), file=f)
+    print('#mutation_rate_threshold{}{}'.format(args.separator, args.mutrate_thr), file=f)
     print('#total_branch_length{}{}'.format(args.separator, tree.total_branch_length()), file=f)
     print(args.separator.join(['#subtree', 'min_dist', 'mean_dist', 'max_dist', 'min_mut',
                                'mean_mut', 'max_mut', 'distances', 'mutation_rates']), file=f)
