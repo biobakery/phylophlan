@@ -237,8 +237,8 @@ def phylophlan_strain_finder():
         d_mean = d_mean / count
         m_mean = m_mean / count
 
-        print((args.separator).join([subtree, str(d_min), str(d_mean), str(d_max), str(m_min), str(m_mean), str(m_max),
-                                     '|'.join(distances), '|'.join(m_rate)]), file=f)
+        print(args.separator.join([subtree, str(d_min), str(d_mean), str(d_max), str(m_min), str(m_mean), str(m_max),
+                                   '|'.join(distances), '|'.join(m_rate)]), file=f)
 
     if isinstance(args.output, str):
         if not f.closed:
