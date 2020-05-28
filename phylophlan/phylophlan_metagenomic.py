@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.32'
-__date__ = '19 May 2020'
+__version__ = '3.0.33'
+__date__ = '28 May 2020'
 
 
 import sys
@@ -539,10 +539,10 @@ def disting_rec(x):
 
 
 def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbose=False):
-    commands = []
+    cmd = []
     inps = sorted(glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"))
     inps_combs = itertools.combinations_with_replacement(inps, r=2)
-    out_pre, out_ext = os.path.splitext(output_file)
+    _, out_ext = os.path.splitext(output_file)
     out_f = os.path.join(output_prefix + "_dists", prj_name)
 
     for inp_a, inp_b in inps_combs:
@@ -634,6 +634,9 @@ def decompress_rec(x):
     if not terminating.is_set():
         try:
             bz2_file, msh_file, verbose = x
+
+            if verbose:
+                info('Decompressing "{}"\n'.format(bz2_file))
 
             with open(msh_file, 'wb') as msh_h, bz2.open(bz2_file, 'rb') as bz2_h:
                 for data in iter(lambda: bz2_h.read(100 * 1024), b''):
