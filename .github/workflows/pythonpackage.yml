@@ -1,0 +1,44 @@
+name: PhyloPhlAn
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    name: build (${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.6, 3.7, 3.8]
+    steps:
+    - uses: goanpeca/setup-miniconda@v1
+      with:
+        miniconda-version: 'latest'
+        auto-update-conda: true
+        python-version: ${{ matrix.python-version }}
+        channels: conda-forge,bioconda
+        activate-environment: TEMPLATE
+    - name: conda env setup
+      shell: bash -l {0}
+      run: |
+        conda info -a
+        conda install python=${{ matrix.python-version }} bioconda::phylophlan
+    - uses: actions/checkout@v2	
+    - name: package install
+      shell: bash -l {0}
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-dependency pytest-console-scripts
+        pip install . --ignore-installed --no-deps -vv
+    - name: Test with pytest
+      shell: bash -l {0}
+      run: |
+        pytest -s --script-launch-mode=subprocess
+    - name: Test example 01_saureus
+      shell: bash -l {0}
+      run: |
+        bash phylophlan/examples/01_saureus/run_01_mini.sh
+

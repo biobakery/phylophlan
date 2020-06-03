@@ -47,3 +47,4 @@ phylophlan/pcopri
 # temp files and folders
 __pycache__
 .nfs*
+tmp/

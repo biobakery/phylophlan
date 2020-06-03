@@ -78,6 +78,7 @@ def read_params():
     p.add_argument('-t', '--db_type', default=None, choices=DB_TYPE_CHOICES,
                    help='Specify the type of the database, where "n" stands for nucleotides and "a" for amino acids')
     p.add_argument('-x', '--output_extension', type=str, default=None, help="Set the database output extension")
+    p.add_argument('--max_proteins', type=int, default=None, help="Set a max number of proteins to download")
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified and the output file exists it will be overwritten")
     p.add_argument('--citation', action='version',
                    version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
@@ -260,7 +261,7 @@ def create_folder(output, verbose=False):
         info('Output "{}" folder present\n'.format(output))
 
 
-def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verbose=False):
+def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, max_proteins=None, verbose=False):
     core_proteins = {}
     url = None
     retry2download = []
@@ -292,6 +293,10 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
     elif len([k for k, v in core_proteins.items() if v is not None]) > 1:
         error('{} entries found for "{}":\n{}    please check the taxonomic label provided'
               .format(len(core_proteins), taxa_label, '    - {}\n'.join(core_proteins.keys())), exit=True)
+    if max_proteins is not None:
+        for k,v in core_proteins.items():
+            core_proteins[k] = v[:max_proteins]
+        info('Reducing the number of proteins to the max of {}\n'.format(max_proteins))
 
     for lbl, core_prots in core_proteins.items():
         if core_prots is None:
@@ -398,10 +403,10 @@ def phylophlan_setup_database():
 
     check_params(args, verbose=args.verbose)
     create_folder(args.output, verbose=args.verbose)
-
+    
     if args.get_core_proteins:
         taxa2core_file_latest = database_update(update=args.database_update, verbose=args.verbose)
-        get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension, verbose=args.verbose)
+        get_core_proteins(taxa2core_file_latest, args.get_core_proteins, args.output, args.output_extension, max_proteins=args.max_proteins, verbose=args.verbose)
 
     create_database(args.db_name, args.input, args.input_extension, os.path.join(args.output, args.db_name + args.output_extension),
                     args.overwrite, verbose=args.verbose)
