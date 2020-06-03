@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.52'
-__date__ = '19 May 2020'
+__version__ = '3.0.53'
+__date__ = '3 Jun 2020'
 
 
 import os
@@ -120,8 +120,8 @@ def read_params():
                    help=('Specify the type of the database of markers, where "n" stands for nucleotides and "a" for amino '
                          'acids. If not specified, PhyloPhlAn will automatically detect the type of database'))
     p.add_argument('-f', '--config_file', type=str, default=None,
-                   help=('The configuration file to load, four ready-to-use configuration files can be generated using the '
-                         '"write_default_configs.sh" script present in the "configs" folder'))
+                   help=('The configuration file to use. Four ready-to-use configuration files can be generated using the '
+                         '"phylophlan_write_default_configs.sh" script'))
     p.add_argument('--diversity', default=None, choices=DIVERSITY_CHOICES, required=True,
                    help=('Specify the expected diversity of the phylogeny, automatically adjust some parameters: '
                          '"low": for genus-/species-/strain-level phylogenies; '
