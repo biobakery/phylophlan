@@ -78,7 +78,7 @@ phylophlan_write_config_file -o references_config.cfg \
     --msa mafft \
     --trim trimal \
     --tree1 fasttree \
-    --tree2 raxml \
+    --tree2 fasttree \
     > /dev/null || exit 1
 
 echo "# Building the phylogeny of the 15 S. aureus genomes"
