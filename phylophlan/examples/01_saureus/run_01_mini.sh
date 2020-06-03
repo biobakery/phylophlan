@@ -2,14 +2,15 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd $SCRIPT_DIR || exit 1
+mkdir -p logs
 
 echo "# Downloading 10 S. aureus isolate genomes"
 rm -rf input_isolates
 mkdir -p input_isolates
 
 for i in $(cut -f4 135_saureus_isolates.tsv | sed 1d | head -n 11); do
-    o=`basename $i | cut -f1 -d'.'`;
-    wget $i -O input_isolates/${o}.fna.gz;
+    o=`basename $i | cut -f1 -d'.'`
+    wget $i -O input_isolates/${o}.fna.gz > /dev/null 2>&1
 done;
 
 echo "# Generating S. aureus database based on UniRef90"
@@ -17,7 +18,7 @@ phylophlan_setup_database \
     -g s__Staphylococcus_aureus \
     --max_proteins 100 \
     --overwrite \
-    --verbose || exit 1
+    > /dev/null || exit 1
 
 echo "# Writing default config"
 CONFIG_DIR='configs'
@@ -34,7 +35,8 @@ phylophlan_write_config_file -o isolates_config.cfg \
     --msa mafft \
     --trim trimal \
     --tree1 fasttree \
-    --tree2 raxml || exit 1
+    --tree2 raxml \
+    > /dev/null || exit 1
 
 echo "# Building the phylogeny of the 10 S. aureus strains"
 phylophlan \
@@ -54,16 +56,30 @@ phylophlan \
     --diversity low \
     --force_nucleotides \
     --nproc 2 \
-    --verbose || exit 1
+    > /dev/null || exit 1
 
 echo "# Adding 5 S. aureus reference genomes"
 phylophlan_get_reference \
     -g s__Staphylococcus_aureus \
     -o input_references \
     -n 5 \
-    --verbose || exit 1
+    > /dev/null || exit 1
 
 cp -a input_isolates/* input_references/ || exit 1
+
+echo "# Writing references config file"
+phylophlan_write_config_file -o references_config.cfg \
+    --overwrite \
+    -d a \
+    --force_nucleotides \
+    --db_aa diamond \
+    --map_aa diamond \
+    --map_dna diamond \
+    --msa mafft \
+    --trim trimal \
+    --tree1 fasttree \
+    --tree2 raxml \
+    > /dev/null || exit 1
 
 echo "# Building the phylogeny of the 15 S. aureus genomes"
 phylophlan \
@@ -74,10 +90,11 @@ phylophlan \
     --min_num_proteins 1 \
     --min_num_entries 4 \
     --min_num_markers 1 \
+    --configs_folder $CONFIG_DIR \
     -f references_config.cfg \
     --nproc 2 \
     --subsample twentyfivepercent \
     --diversity low \
     --fast \
-    --verbose || exit 1
+    > /dev/null || exit 1
 
