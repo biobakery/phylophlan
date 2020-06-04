@@ -81,22 +81,30 @@ phylophlan_write_config_file -o references_config.cfg \
     --tree2 raxml \
     > /dev/null || exit 1
 
-echo "# Building the phylogeny of the 15 S. aureus genomes"
-phylophlan \
-    -i input_references \
-    -o output_references \
-    -d s__Staphylococcus_aureus \
-    --trim greedy \
-    --not_variant_threshold 0.99 \
-    --remove_fragmentary_entries \
-    --fragmentary_threshold 0.67 \
-    -t a \
-    --min_num_proteins 1 \
-    --min_num_entries 4 \
-    --min_num_markers 1 \
-    --configs_folder $CONFIG_DIR \
-    -f references_config.cfg \
-    --nproc 2 \
-    --diversity low \
-    --fast \
-    > /dev/null || exit 1
+# echo "# Building the phylogeny of the 15 S. aureus genomes"
+# phylophlan.py \
+#     -i input_references \
+#     -o output_references \
+#     -d s__Staphylococcus_aureus \
+#     -t a \
+#     --configs_folder $CONFIG_DIR \
+#     -f references_config.cfg \
+#     --nproc 4 \
+#     --subsample twentyfivepercent \
+#     --diversity low \
+#     --fast \
+#     > /dev/null || exit 1
+
+# # Visualize the phylogenetic tree with GraPhlAn
+# # GraPhlAn is Python2-based and have different requirements than PhyloPhlAn
+# echo "GraPhlAn annotate"
+# graphlan_annotate.py \
+#     --annot graphlan/isolates_annotation.txt \
+#     output_isolates/RAxML_bestTree.input_isolates_refined.tre \
+#     graphlan/isolates_annotated.xml
+
+# echo "GraPhlAn draw"
+# graphlan.py \
+#     graphlan/isolates_annotated.xml \
+#     graphlan/saureus_isolates.png \
+#     --dpi 300
