@@ -78,7 +78,7 @@ phylophlan_write_config_file -o references_config.cfg \
     --msa mafft \
     --trim trimal \
     --tree1 fasttree \
-    --tree2 fasttree \
+    --tree2 raxml \
     > /dev/null || exit 1
 
 echo "# Building the phylogeny of the 15 S. aureus genomes"
@@ -86,6 +86,10 @@ phylophlan \
     -i input_references \
     -o output_references \
     -d s__Staphylococcus_aureus \
+    --trim greedy \
+    --not_variant_threshold 0.99 \
+    --remove_fragmentary_entries \
+    --fragmentary_threshold 0.67 \
     -t a \
     --min_num_proteins 1 \
     --min_num_entries 4 \
@@ -93,8 +97,6 @@ phylophlan \
     --configs_folder $CONFIG_DIR \
     -f references_config.cfg \
     --nproc 2 \
-    --subsample twentyfivepercent \
     --diversity low \
     --fast \
     > /dev/null || exit 1
-
