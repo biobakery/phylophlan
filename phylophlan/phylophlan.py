@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.52'
-__date__ = '19 May 2020'
+__version__ = '3.0.53'
+__date__ = '8 June 2020'
 
 
 import os
@@ -63,7 +63,7 @@ MIN_NUM_MARKERS = 1
 DB_TYPE_CHOICES = ['n', 'a']
 TRIM_CHOICES = ['gap_trim', 'gap_perc', 'not_variant', 'greedy']
 SUBSAMPLE_CHOICES = ['phylophlan', 'onethousand', 'sevenhundred', 'fivehundred', 'threehundred', 'onehundred',
-                     'fifty', 'twentyfive', 'tenpercent', 'twentyfivepercent', 'fiftypercent']
+                     'fifty', 'twentyfive', 'tenpercent', 'twentyfivepercent', 'fiftypercent', 'full']
 SCORING_FUNCTION_CHOICES = ['trident', 'muscle', 'random']
 DIVERSITY_CHOICES = ['low', 'medium', 'high']
 MIN_NUM_ENTRIES = 4
@@ -166,7 +166,7 @@ def read_params():
                    help='Specify the value used to consider a column not variant when "--trim not_variant" is specified')
     p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD,
                    help='Specify the value used to consider a column not variant when "--trim not_variant" is specified')
-    p.add_argument('--subsample', default=None, choices=SUBSAMPLE_CHOICES,
+    p.add_argument('--subsample', default='full', choices=SUBSAMPLE_CHOICES,
                    help=('The number of positions to retain from each single marker, available option are: '
                          '"phylophlan": specific number of positions for each PhyloPhlAn marker (only when "--database phylophlan"); '
                          '"onethousand": return the top 1000 positions; '
@@ -179,7 +179,7 @@ def read_params():
                          '"fiftypercent": return the top 50 percent positions; '
                          '"twentyfivepercent": return the top 25% positions; '
                          '"tenpercent": return the top 10% positions; '
-                         'If not specified, the complete alignment will be used').replace(r"%", r"%%"))
+                         '"full": full alignment.').replace(r"%", r"%%"))
     p.add_argument('--unknown_fraction', type=float, default=UNKNOWN_FRACTION,
                    help='Define the amount of unknowns ("X" and "-") allowed in each column of the MSA of the markers')
     p.add_argument('--scoring_function', default=None, choices=SCORING_FUNCTION_CHOICES,
@@ -425,12 +425,14 @@ def check_args(args, command_line_arguments, verbose=False):
                 submod_list(args.submod_folder, exit=True)
 
     # check subsample settings with pre-config ones
-    if args.subsample:
-        if '--subsample' in command_line_arguments:
-            if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
-                error('scoring function "phylophlan" is compatible only with "phylophlan" database', exit=True)
-    elif subsample:
+    if subsample and ('--subsample' not in command_line_arguments):
         args.subsample = subsample
+
+    if (args.database != 'phylophlan') and (args.subsample == 'phylophlan'):
+            error('subsample function "phylophlan" is compatible only with the "phylophlan" database', exit=True)
+
+    if args.subsample == 'full':
+        args.subsample = None
 
     # check database settings
     if (args.database == 'phylophlan') and (not args.sort):
@@ -440,21 +442,19 @@ def check_args(args, command_line_arguments, verbose=False):
             info('Setting "sort={}" because "database={}"\n'.format(args.sort, args.database))
 
     # check min_num_markers settings
-    if not args.min_num_markers:
+    if '--min_num_markers' not in command_line_arguments:
         if args.database == 'phylophlan':
             args.min_num_markers = 100
 
             if verbose:
                 info('Setting "min_num_markers={}" since no value has been specified and the "database={}"\n'
-                     .format(args.min_num_markers, args.database))
+                    .format(args.min_num_markers, args.database))
         elif args.database == 'amphora2':
             args.min_num_markers = 34
 
             if verbose:
                 info('Setting "min_num_markers={}" since no value has been specified and the "database={}"\n'
-                     .format(args.min_num_markers, args.database))
-        else:
-            args.min_num_markers = MIN_NUM_MARKERS
+                    .format(args.min_num_markers, args.database))
 
     # check not_variant_threshold settings
     if not_variant_threshold and ('--not_variant_threshold' not in command_line_arguments):
@@ -1201,8 +1201,7 @@ def clean_input_proteomes_rec(x):
         terminating.set()
 
 
-def gene_markers_identification(configs, key, inputs, output_folder, database_name, database, min_num_proteins,
-                                nproc=1, verbose=False):
+def gene_markers_identification(configs, key, inputs, output_folder, database_name, database, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
@@ -1210,7 +1209,7 @@ def gene_markers_identification(configs, key, inputs, output_folder, database_na
         out = os.path.splitext(inp)[0] + '.b6o.bkp'
 
         if not os.path.isfile(os.path.join(output_folder, out)):
-            commands.append((configs[key], os.path.join(inp_fol, inp), database, output_folder, out, min_num_proteins, verbose))
+            commands.append((configs[key], os.path.join(inp_fol, inp), database, output_folder, out, verbose))
 
     if commands:
         info('Mapping "{}" on {} inputs (key: "{}")\n'.format(database_name, len(commands), key))
@@ -1230,7 +1229,7 @@ def gene_markers_identification_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            params, inp, db, out_fld, out, min_num_proteins, verbose = x
+            params, inp, db, out_fld, out, verbose = x
             info('Mapping "{}"\n'.format(inp))
             cmd = compose_command(params, input_file=inp, database=db, output_path=out_fld, output_file=out)
             inp_f = None
@@ -1391,8 +1390,7 @@ def largest_cluster(f, nucleotides):
     return largest_clusters
 
 
-def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_num_markers,
-                            frameshifts=False, nproc=1, verbose=False):
+def gene_markers_extraction(inputs, input_folder, output_folder, extension, min_num_markers, frameshifts=False, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
@@ -1912,7 +1910,7 @@ def trim_not_variant_rec(x):
             for i in range(len(inp_aln[0])):
                 nrows = len(inp_aln) - inp_aln[:, i].count('-')
 
-                for aa, fq in Counter(inp_aln[:, i].replace('-', '')).items():
+                for _, fq in Counter(inp_aln[:, i].replace('-', '')).items():
                     if (fq / nrows) >= thr:
                         cols_to_remove.append(i)
                         break
@@ -2886,8 +2884,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'map_dna')
-        gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna, args.min_num_proteins,
-                                    nproc=args.nproc, verbose=args.verbose)
+        gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna, nproc=args.nproc, verbose=args.verbose)
         gene_markers_selection(inp_f, largest_cluster if (args.db_type == 'a') and (not args.force_nucleotides) else best_hit,
                                args.min_num_proteins, nucleotides=True if args.db_type == 'a' else False,
                                nproc=args.nproc, verbose=args.verbose)
@@ -2922,8 +2919,8 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
             if input_faa_clean:
                 inp_f = os.path.join(args.data_folder, 'map_aa')
-                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa,
-                                            args.min_num_proteins, nproc=args.nproc, verbose=args.verbose)
+                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa, 
+                                            nproc=args.nproc, verbose=args.verbose)
                 gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nucleotides=False,
                                        nproc=args.nproc, verbose=args.verbose)
                 out_f = os.path.join(args.data_folder, 'markers_aa')
