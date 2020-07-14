@@ -40,8 +40,8 @@ phylophlan/examples/05_campylobacter/output_campylobacter
 ## test example
 phylophlan/examples/test*
 ## other internal runs
-phylophlan/paper_examples
-phylophlan/pcopri
+phylophlan/examples/paper_examples
+phylophlan/examples/pcopri
 # settings files
 .vscode
 # temp files and folders
