@@ -2904,6 +2904,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                                 frameshifts=True if (args.db_type == 'a') and (not args.force_nucleotides) else False,
                                 nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
+        all_inputs = [os.path.splitext(os.path.basename(i))[0] for i in input_fna_clean]
 
     if (args.db_type == 'a') and (not args.force_nucleotides):
         if input_fna_clean:
@@ -2938,9 +2939,10 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                 gene_markers_extraction(input_faa_clean, inp_f, out_f, args.proteome_extension, args.min_num_markers,
                                         nproc=args.nproc, verbose=args.verbose)
                 inp_f = out_f
+                all_inputs += [os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean]
 
     # check if inputs is empty
-    if not (len(input_faa) + len(input_fna)):
+    if not (len(input_faa) + len(input_fna)) or not all_inputs:
         error('no inputs found, please check your params and inputs file extensions', exit=True)
 
     out_f = os.path.join(args.data_folder, 'markers')
@@ -3015,9 +3017,6 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         merging_gene_trees(inp_f, out_f, verbose=args.verbose)
         inp_f = out_f
     else:
-        if not all_inputs:
-            all_inputs = (os.path.splitext(os.path.basename(i))[0] for i in input_faa_clean)
-
         out_f = os.path.join(args.output, project_name + '_concatenated.aln')
         concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
