@@ -1147,10 +1147,12 @@ def check_input_proteomes_rec(x):
         terminating.set()
 
 
-def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
+def clean_inputs(inputs, output_folder, proteins=False, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
-    commands = [(inp, os.path.join(output_folder, os.path.basename(inp)))
+    commands = [(inp if os.path.isfile(inp) else os.path.join(inputs[inp], inp), 
+                 os.path.join(output_folder, os.path.basename(inp)), 
+                 proteins)
                 for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
 
     if commands:
@@ -1159,32 +1161,36 @@ def clean_input_proteomes(inputs, output_folder, nproc=1, verbose=False):
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(clean_input_proteomes_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(clean_inputs_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('clean_input_proteomes crashed', init_new_line=True, exit=True)
+                error('clean_inputs crashed', init_new_line=True, exit=True)
     else:
         info('Inputs already cleaned\n')
 
 
-def clean_input_proteomes_rec(x):
+def clean_inputs_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out = x
+            inp, out, prots = x
             inp_clean, _ = os.path.splitext(os.path.basename(inp))
             info('Cleaning "{}"\n'.format(inp))
 
-            # http://biopython.org/DIST/docs/api/Bio.Alphabet.IUPAC.ExtendedIUPACProtein-class.html
-            # B = "Asx"; Aspartic acid (R) or Asparagine (N)
-            # X = "Xxx"; Unknown or 'other' amino acid
-            # Z = "Glx"; Glutamic acid (E) or Glutamine (Q)
-            # J = "Xle"; Leucine (L) or Isoleucine (I), used in mass-spec (NMR)
-            # U = "Sec"; Selenocysteine
-            # O = "Pyl"; Pyrrolysine
-            output = (SeqRecord(Seq(e[1].replace('B', 'X').replace('Z', 'X').replace('J', 'X').replace('U', 'X').replace('O', 'X')),
-                                id='{}_{}'.format(inp_clean, counter), description='')
-                      for counter, e in enumerate(SimpleFastaParser(open(inp))) if e[1])
+            if prots:
+                # http://biopython.org/DIST/docs/api/Bio.Alphabet.IUPAC.ExtendedIUPACProtein-class.html
+                # B = "Asx"; Aspartic acid (R) or Asparagine (N)
+                # X = "Xxx"; Unknown or 'other' amino acid
+                # Z = "Glx"; Glutamic acid (E) or Glutamine (Q)
+                # J = "Xle"; Leucine (L) or Isoleucine (I), used in mass-spec (NMR)
+                # U = "Sec"; Selenocysteine
+                # O = "Pyl"; Pyrrolysine
+                output = (SeqRecord(Seq(e[1].replace('B', 'X').replace('Z', 'X').replace('J', 'X').replace('U', 'X').replace('O', 'X')),
+                                    id='{}_{}'.format(inp_clean, counter), description='')
+                          for counter, e in enumerate(SimpleFastaParser(open(inp))) if e[1])
+            else:
+                output = (SeqRecord(Seq(e[1]), id='{}_{}'.format(inp_clean, counter), description='')
+                          for counter, e in enumerate(SimpleFastaParser(open(inp))) if e[1])
 
             with open(out, 'w') as f:
                 SeqIO.write(output, f, "fasta")
@@ -2883,19 +2889,24 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension, verbose=args.verbose)
 
     if input_fna:
+        inp_f = os.path.join(args.data_folder, 'clean_dna')
+        clean_inputs(input_fna, inp_f, nproc=args.nproc, verbose=args.verbose)
+        input_fna_clean = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
+
         inp_f = os.path.join(args.data_folder, 'map_dna')
-        gene_markers_identification(configs, 'map_dna', input_fna, inp_f, args.database, db_dna, nproc=args.nproc, verbose=args.verbose)
+        gene_markers_identification(configs, 'map_dna', input_fna_clean, inp_f, args.database, db_dna, 
+                                    nproc=args.nproc, verbose=args.verbose)
         gene_markers_selection(inp_f, largest_cluster if (args.db_type == 'a') and (not args.force_nucleotides) else best_hit,
                                args.min_num_proteins, nucleotides=True if args.db_type == 'a' else False,
                                nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.data_folder, 'markers_dna')
-        gene_markers_extraction(input_fna, inp_f, out_f, args.genome_extension, args.min_num_markers,
+        gene_markers_extraction(input_fna_clean, inp_f, out_f, args.genome_extension, args.min_num_markers,
                                 frameshifts=True if (args.db_type == 'a') and (not args.force_nucleotides) else False,
                                 nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
     if (args.db_type == 'a') and (not args.force_nucleotides):
-        if input_fna:
+        if input_fna_clean:
             out_f = os.path.join(args.data_folder, 'fake_proteomes')
             fake_proteome(inp_f, out_f, args.genome_extension, args.proteome_extension, args.min_len_protein,
                           nproc=args.nproc, verbose=args.verbose)
@@ -2914,7 +2925,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
         if input_faa_checked:
             inp_f = os.path.join(args.data_folder, 'clean_aa')
-            clean_input_proteomes(input_faa_checked, inp_f, nproc=args.nproc, verbose=args.verbose)
+            clean_inputs(input_faa_checked, inp_f, proteins=True, nproc=args.nproc, verbose=args.verbose)
             input_faa_clean = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
 
             if input_faa_clean:
