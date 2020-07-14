@@ -2891,7 +2891,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'clean_dna')
         clean_inputs(input_fna, inp_f, nproc=args.nproc, verbose=args.verbose)
-        input_fna_clean = load_input_files(inp_f, inp_bz2, args.proteome_extension, verbose=args.verbose)
+        input_fna_clean = load_input_files(inp_f, inp_bz2, args.genome_extension, verbose=args.verbose)
 
         inp_f = os.path.join(args.data_folder, 'map_dna')
         gene_markers_identification(configs, 'map_dna', input_fna_clean, inp_f, args.database, db_dna, 
