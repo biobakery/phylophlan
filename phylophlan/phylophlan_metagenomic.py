@@ -476,7 +476,7 @@ def pasting(output_prefix, prj_name, verbose=False):
         info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
 
 
-def disting(output_prefix, prj_name, db, nproc=10, verbose=False):
+def disting(output_prefix, prj_name, db, nproc=1, verbose=False):
     commands = []
     inps = glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh")
 
@@ -510,7 +510,7 @@ def disting_rec(x):
                     info('Disting "{}"\n'.format(sgb_msh_idx))
 
                 for msh_idx in pasted_bins:
-                    cmd = ['mash', 'dist', sgb_msh_idx, msh_idx]
+                    cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
 
                     try:
                         sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL)
