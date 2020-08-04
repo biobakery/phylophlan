@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.20'
-__date__ = '19 May 2020'
+__version__ = '3.0.21'
+__date__ = '30 July 2020'
 
 
 import sys
@@ -118,7 +118,7 @@ def check_params(args, verbose=False):
                   exit=True)
 
         if not args.output:
-            args.output = args.get_core_proteins
+            args.output = args.get_core_proteins if os.path.isdir(args.get_core_proteins) else os.path.dirname(args.get_core_proteins)
 
             if verbose:
                 info('Setting output folder "{}"\n'.format(args.output))
@@ -127,6 +127,7 @@ def check_params(args, verbose=False):
 
             if verbose:
                 info('Setting output folder "{}"\n'.format(args.output))
+        error('ciao', exit=True)
 
         args.input = args.output
         args.input_extension = PROTEOME_EXTENSION
@@ -161,10 +162,7 @@ def check_params(args, verbose=False):
                   exit=True)
 
     if not args.output:
-        args.output = args.input
-
-        if os.path.isdir(args.input):
-            args.output = os.path.dirname(args.input)
+        args.output = args.input if os.path.isdir(args.input) else os.path.dirname(args.input)
 
         if verbose:
             info('Output folder not specified, setting to "{}"\n'.format(args.output))
@@ -364,16 +362,16 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
     if os.path.isdir(inputt):
         for marker in glob.iglob(os.path.join(inputt, '*' + input_ext + '*')):
             seqs += [SeqRecord(record.seq,
-                               id='_'.join([db_name.replace('_', '-').replace(':', ''),
-                                            record.id.replace('_', '-').replace(',', '-').replace(':', ''),
+                               id='_'.join([db_name.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
+                                            record.id.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
                                             str(count)]),
                                description='')
                      for count, record in enumerate(SeqIO.parse(bz2.open(marker, 'rt') if marker.endswith('.bz2')
                                                                 else open(marker), "fasta"))]
     else:
         seqs = [SeqRecord(record.seq,
-                          id='_'.join([db_name.replace('_', '-').replace(':', ''),
-                                       record.id.replace('_', '-').replace(',', '-').replace(':', ''),
+                          id='_'.join([db_name.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
+                                       record.id.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
                                        str(count)]),
                           description='')
                 for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt') if inputt.endswith('.bz2')
