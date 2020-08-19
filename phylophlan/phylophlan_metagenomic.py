@@ -757,6 +757,8 @@ def phylophlan_metagenomic():
             if r.startswith('#'):
                 metadata_rows.append(r.strip().split('\t'))
 
+        sketches_folder = args.output_prefix + "_sketches/inputs"
+        dists_folder = args.output_prefix + "_dists"
         mdidx = dict([(m, i) for i, m in enumerate(metadata_rows[-1][2:])])
         sgb_2_info = dict([(r.strip().split('\t')[1], r.strip().split('\t')[2:])
                            for r in bz2.open(args.mapping, 'rt')
@@ -771,8 +773,6 @@ def phylophlan_metagenomic():
         binn_2_fgb = None
         binn_2_refgen = None
         refgen_list = None
-        sketches_folder = args.output_prefix + "_sketches/inputs"
-        dists_folder = args.output_prefix + "_dists"
 
         if args.add_ggb:
             if args.verbose:
