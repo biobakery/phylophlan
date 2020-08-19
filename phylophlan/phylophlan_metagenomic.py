@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.33'
-__date__ = '28 May 2020'
+__version__ = '3.0.34'
+__date__ = '18 August 2020'
 
 
 import sys
@@ -763,6 +763,16 @@ def phylophlan_metagenomic():
                            if (r.strip().split('\t')[0] == 'SGB') and (not r.startswith('#'))])
         ggb_2_info = None
         fgb_2_info = None
+        sgb_2_ggb = {}
+        ggb_2_sgb = {}
+        sgb_2_fgb = {}
+        binn_2_sgb = dict([(b.replace('.msh', ''), dict()) for b in os.listdir(sketches_folder)])
+        binn_2_ggb = None
+        binn_2_fgb = None
+        binn_2_refgen = None
+        refgen_list = None
+        sketches_folder = args.output_prefix + "_sketches/inputs"
+        dists_folder = args.output_prefix + "_dists"
 
         if args.add_ggb:
             if args.verbose:
@@ -772,6 +782,15 @@ def phylophlan_metagenomic():
                                for r in bz2.open(args.mapping, 'rt')
                                if (r.strip().split('\t')[0] == 'GGB') and (not r.startswith('#'))])
 
+            # SGB <--> GGB
+            for ggb, ggb_info in ggb_2_info.items():
+                ggb_2_sgb[ggb] = [sgb.replace('SGB', '') for sgb in ggb_info[mdidx['List of reconstructed genomes']].split(',')]
+
+                for sgb in ggb_info[mdidx['List of reconstructed genomes']].split(','):
+                    sgb_2_ggb[sgb.replace('SGB', '')] = ggb
+
+            binn_2_ggb = copy.deepcopy(binn_2_sgb)
+
         if args.add_fgb:
             if args.verbose:
                 info('Loading FGB mapping file\n')
@@ -780,18 +799,12 @@ def phylophlan_metagenomic():
                                for r in bz2.open(args.mapping, 'rt')
                                if (r.strip().split('\t')[0] == 'FGB') and (not r.startswith('#'))])
 
-        sketches_folder = args.output_prefix + "_sketches/inputs"
-        dists_folder = args.output_prefix + "_dists"
-        binn_2_sgb = dict([(b.replace('.msh', ''), dict()) for b in os.listdir(sketches_folder)])
-        binn_2_ggb = None
-        binn_2_fgb = None
-        binn_2_refgen = None
-        refgen_list = None
+            # SGB --> FGB
+            for fgb, fgb_info in fgb_2_info.items():
+                for ggb in fgb_info[mdidx['List of reconstructed genomes']].split(','):
+                    for sgb in ggb_2_sgb[ggb.replace('GGB', '')]:
+                        sgb_2_fgb[sgb] = fgb
 
-        if args.add_ggb:
-            binn_2_ggb = copy.deepcopy(binn_2_sgb)
-
-        if args.add_fgb:
             binn_2_fgb = copy.deepcopy(binn_2_sgb)
 
         if args.add_ggb and args.add_fgb:
@@ -866,12 +879,19 @@ def phylophlan_metagenomic():
                                    '[u|k]_SGBid:taxa_level:taxonomy:avg_dist',
                                    '[u|k]_GGBid:taxa_level:taxonomy:avg_dist',
                                    '[u|k]_FGBid:taxa_level:taxonomy:avg_dist',
-                                   'reference_genome:dist']) + '\n')
+                                   'reference_genome:dist[|reference_genome:dist]']) + '\n')
 
                 for binn in binn_2_sgb:
                     sgb_id, sgb_dist = sorted(binn_2_sgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
-                    ggb_id, ggb_dist = sorted(binn_2_ggb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
-                    fgb_id, fgb_dist = sorted(binn_2_fgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
+
+                    if sgb_dist < 0.05:  # if SGB is assigned then output the GGB and FGB of the assigned SGB
+                        ggb_id = sgb_2_ggb[sgb_id]
+                        ggb_dist = binn_2_ggb[binn][ggb_id]
+                        fgb_id = sgb_2_fgb[sgb_id]
+                        fgb_dist = binn_2_fgb[binn][fgb_id]
+                    else:  # otherwise report the closest GGB and FGB found
+                        ggb_id, ggb_dist = sorted(binn_2_ggb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
+                        fgb_id, fgb_dist = sorted(binn_2_fgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
 
                     # closest ref.gens within 5% Mash distance of the closest ref.gen and no more than 100 in any case
                     refgen_sorted = list(sorted(binn_2_refgen[binn], key=lambda x: x[1]))
