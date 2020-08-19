@@ -884,7 +884,7 @@ def phylophlan_metagenomic():
                 for binn in binn_2_sgb:
                     sgb_id, sgb_dist = sorted(binn_2_sgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
 
-                    if sgb_dist < 0.05:  # if SGB is assigned then output the GGB and FGB of the assigned SGB
+                    if sgb_dist <= 0.05:  # if SGB is assigned then output the GGB and FGB of the assigned SGB
                         ggb_id = sgb_2_ggb[sgb_id]
                         ggb_dist = binn_2_ggb[binn][ggb_id]
                         fgb_id = sgb_2_fgb[sgb_id]
