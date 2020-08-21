@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.15'
-__date__ = '19 May 2020'
+__version__ = '3.0.16'
+__date__ = '21 August 2020'
 
 
 import os
@@ -425,7 +425,7 @@ def phylophlan_write_config_file():
                  'output_path': '-w',
                  'output': '-n',
                  'version': '-v',
-                 'command_line': '#program_name# #params# #threads# #database# #output_path# #input# #output#'}
+                 'command_line': '#program_name# #params# #threads# #output_path# #input# #output#'}
 
         if not rb:
             tree1['threads'] = '-T'
