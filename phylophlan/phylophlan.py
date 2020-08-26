@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.53'
-__date__ = '8 June 2020'
+__version__ = '3.0.54'
+__date__ = '26 August 2020'
 
 
 import os
@@ -917,7 +917,7 @@ def init_database_nt(database, databases_folder, params, key_dna, key_aa, verbos
     db_folder = os.path.join(databases_folder, database)
     db_aa = None
     db_dna = None
-    makeblastdb_exts = ['.nhr', '.nin', '.nog', '.nsd', '.nsi', '.nsq']
+    makeblastdb_exts = ['.nhr', '.nin', '.nsq']
 
     # assumed to be a fasta file containing the markers
     if os.path.isfile(db_fasta):
