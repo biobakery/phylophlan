@@ -208,7 +208,7 @@ def phylophlan_write_config_file():
         if 'blastn' in args.map_dna:
             exe, _ = find_executable_wrapper('blastn', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
-                       'params': '-outfmt 6 -max_target_seqs 1000000',
+                       'params': '-outfmt 6 -max_target_seqs 1000000 -perc_identity 75',
                        'input': '-query',
                        'database': '-db',
                        'output': '-out',
@@ -218,7 +218,7 @@ def phylophlan_write_config_file():
             exe, _ = find_executable_wrapper('tblastn', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
                        'params': ('-outfmt "6 saccver qaccver pident length mismatch gapopen sstart send qstart '
-                                  'qend evalue bitscore" -evalue 1e-50 -max_target_seqs 1000000'),
+                                  'qend evalue bitscore" -evalue 1e-50 -max_target_seqs 1000000 -perc_identity 50'),
                        'input': '-subject',
                        'database': '-query',
                        'output': '-out',
