@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.16'
-__date__ = '21 August 2020'
+__version__ = '3.0.17'
+__date__ = '1 September 2020'
 
 
 import os
@@ -208,7 +208,7 @@ def phylophlan_write_config_file():
         if 'blastn' in args.map_dna:
             exe, _ = find_executable_wrapper('blastn', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
-                       'params': '-outfmt 6 -max_target_seqs 1000000 -perc_identity 75',
+                       'params': '-outfmt 6 -evalue 0.1 -max_target_seqs 1000000 -perc_identity 75',
                        'input': '-query',
                        'database': '-db',
                        'output': '-out',

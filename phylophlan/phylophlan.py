@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.55'
-__date__ = '28 August 2020'
+__version__ = '3.0.56'
+__date__ = '2 September 2020'
 
 
 import os
@@ -3117,13 +3117,13 @@ def download_and_unpack_db(db_name, db_url, db_md5, folder, update=False, verbos
         error('database directory "{}" is not writeable, please modify the permissions'.format(folder), exit=True)
 
     # download database
-    # tar_file = os.path.join(folder, os.path.basename(db_url).replace('?dl=1', ''))
-    tar_file = os.path.join(folder, os.path.basename(db_url).replace('?download=1', ''))
+    db_url_clean = os.path.basename(db_url).replace('?dl=1', '').replace('?download=1', '')
+    tar_file = os.path.join(folder, db_url_clean)
     download(db_url, tar_file, overwrite=update, verbose=verbose)
 
     # download MD5 checksum
-    # md5_file = os.path.join(folder, os.path.basename(db_md5).replace('?dl=1', ''))
-    md5_file = os.path.join(folder, os.path.basename(db_md5).replace('?download=1', ''))
+    db_md5_clean = os.path.basename(db_md5).replace('?dl=1', '').replace('?download=1', '')
+    md5_file = os.path.join(folder, db_md5_clean)
     download(db_md5, md5_file, overwrite=update, verbose=verbose)
 
     md5_md5 = None
