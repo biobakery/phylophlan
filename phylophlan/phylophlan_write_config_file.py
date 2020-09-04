@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.17'
-__date__ = '1 September 2020'
+__version__ = '3.0.18'
+__date__ = '4 September 2020'
 
 
 import os
@@ -328,7 +328,7 @@ def phylophlan_write_config_file():
         if 'fasttree' in args.gene_tree1:
             exe, _ = find_executable_wrapper('FastTree', rollback='fasttree', absolute=args.absolute_path)
             gene_tree1 = {'program_name': exe,
-                          'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+                          'params': '-quiet -pseudo -spr 4 -mlacc 2 -slownni -fastest -no2nd -mlnni 4',
                           'output': '-out',
                           'command_line': '#program_name# #params# #output# #input#'}
 
@@ -406,7 +406,7 @@ def phylophlan_write_config_file():
     elif 'fasttree' in args.tree1:
         exe, rb = find_executable_wrapper('FastTreeMP', rollback='fasttree', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
-                 'params': '-quiet -mlacc 2 -slownni -spr 4 -fastest -mlnni 4 -no2nd',
+                 'params': '-quiet -pseudo -spr 4 -mlacc 2 -slownni -fastest -no2nd -mlnni 4',
                  'output': '-out',
                  'command_line': '#program_name# #params# #output# #input#'}
 
