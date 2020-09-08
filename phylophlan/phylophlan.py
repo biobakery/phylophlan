@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.56'
-__date__ = '2 September 2020'
+__version__ = '3.0.57'
+__date__ = '8 September 2020'
 
 
 import os
@@ -2883,10 +2883,11 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
 
 
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
-    all_inputs = None
+    all_inputs = []
     input_faa = {}
     inp_bz2 = os.path.join(args.data_folder, 'uncompressed')
     input_fna = load_input_files(args.input_folder, inp_bz2, args.genome_extension, verbose=args.verbose)
+    input_fna_clean = None
 
     if input_fna:
         inp_f = os.path.join(args.data_folder, 'clean_dna')
@@ -2904,7 +2905,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
                                 frameshifts=True if (args.db_type == 'a') and (not args.force_nucleotides) else False,
                                 nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
-        all_inputs = [os.path.splitext(os.path.basename(i))[0] for i in input_fna_clean]
+        all_inputs += [os.path.splitext(os.path.basename(i))[0] for i in input_fna_clean]
 
     if (args.db_type == 'a') and (not args.force_nucleotides):
         if input_fna_clean:
