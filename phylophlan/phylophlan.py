@@ -6,7 +6,7 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.57'
+__version__ = '3.0.58'
 __date__ = '8 September 2020'
 
 
@@ -3027,11 +3027,17 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
     if 'tree2' in configs:
         outt = project_name + '_resolved.tre'
-        resolve_polytomies(os.path.join(args.output, out_f), os.path.join(args.output, outt), nproc=args.nproc, verbose=args.verbose)
-        out_f = os.path.join(args.output, outt)
+        inp_tree = os.path.join(args.output, out_f)  # FastTree output phylogeny
 
-        refine_phylogeny(configs, 'tree2', inp_f, out_f, os.path.abspath(args.output), project_name + '_refined.tre',
-                         nproc=args.nproc, verbose=args.verbose)
+        if not os.path.isfile(inp_tree):
+            inp_tree += '.treefile'  # IQ-TREE output phylogeny
+
+        if not os.path.isfile(inp_tree):
+            error('output phylogeny from [tree1] not recognized', exit=True)
+
+        resolve_polytomies(inp_tree, os.path.join(args.output, outt), nproc=args.nproc, verbose=args.verbose)
+        refine_phylogeny(configs, 'tree2', inp_f, os.path.join(args.output, outt), os.path.abspath(args.output), 
+                         project_name + '_refined.tre', nproc=args.nproc, verbose=args.verbose)
 
 
 def byte_to_megabyte(byte):
