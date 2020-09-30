@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.21'
-__date__ = '30 July 2020'
+__version__ = '3.0.22'
+__date__ = '30 September 2020'
 
 
 import sys
@@ -127,7 +127,6 @@ def check_params(args, verbose=False):
 
             if verbose:
                 info('Setting output folder "{}"\n'.format(args.output))
-        error('ciao', exit=True)
 
         args.input = args.output
         args.input_extension = PROTEOME_EXTENSION
