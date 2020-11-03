@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.18'
-__date__ = '4 September 2020'
+__version__ = '3.0.19'
+__date__ = '3 November 2020'
 
 
 import os
@@ -277,7 +277,7 @@ def phylophlan_write_config_file():
                'command_line': '#program_name# #params# #input# > #output#'}
 
         for fld in ['/local-storage', '/tmp']:
-            if os.path.isdir(fld) and bool(os.stat(fld)[stat.ST_MODE] & stat.S_IWUSR):
+            if os.path.isdir(fld) and os.access(fld, os.W_OK) and os.access(fld, os.X_OK):
                 if 'environment' in msa:
                     break
 
