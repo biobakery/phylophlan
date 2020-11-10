@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.58'
-__date__ = '8 September 2020'
+__version__ = '3.0.59'
+__date__ = '10 November 2020'
 
 
 import os
@@ -1678,8 +1678,8 @@ def is_msa_empty(msa, path=None):
     msa_path = os.path.join(path, msa) if path else msa
 
     if os.path.isfile(msa_path):
-        if [True for aln in AlignIO.read(msa_path, "fasta") if len(aln.seq) <= 0]:
-            return True  # there is at least an empty sequence that shouldn't be there
+        if [True for aln in AlignIO.read(msa_path, "fasta") if len(str(aln.seq).replace('-', '')) <= 0]:
+            return True  # there is at least an empty sequence (or only gaps) that shouldn't be there
     else:
         error('file "{}" not found'.format(msa_path))
 
@@ -2016,8 +2016,12 @@ def remove_fragmentary_entries_rec(x):
                 with open(out, 'w') as f:
                     AlignIO.write(MultipleSeqAlignment(out_aln), f, 'fasta')
 
-                t1 = time.time()
-                info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
+                if is_msa_empty(out):  # sanity check
+                    info('Removing generated empty MSAs "{}"\n'.format(out))
+                    os.remove(out)
+                else:
+                    t1 = time.time()
+                    info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
             elif verbose:
                 info('"{}" discarded, not enough inputs ({}/{})\n'
                      .format(inp, len(out_aln), min_num_entries))
@@ -2163,8 +2167,12 @@ def subsample_rec(x):
             with open(out, 'w') as f:
                 AlignIO.write(MultipleSeqAlignment(out_aln), f, 'fasta')
 
-            t1 = time.time()
-            info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
+            if is_msa_empty(out):  # sanity check
+                info('Removing generated empty MSAs "{}"\n'.format(out))
+                os.remove(out)
+            else:
+                t1 = time.time()
+                info('"{}" generated in {}s\n'.format(out, int(t1 - t0)))
         except Exception as e:
             terminating.set()
             remove_file(out)
