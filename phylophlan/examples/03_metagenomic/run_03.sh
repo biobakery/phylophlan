@@ -7,8 +7,11 @@ mkdir -p input_metagenomic;
 tar -xjf ethiopian_mags.tar.bz2 -C input_metagenomic/;
 
 # Execute phylophlan_metagenomic
+# the parameter "-d SGB.Jan19" specify the first database released by MetaRefSGB and is just an example. The user can use the command: 
+# "phylophlan_metagenomic.py --database_list" to see the list of available databases
 phylophlan_metagenomic.py \
     -i input_metagenomic \
+    -d SGB.Jan19 \
     -o output_metagenomic \
     --nproc 4 \
     -n 1 \
