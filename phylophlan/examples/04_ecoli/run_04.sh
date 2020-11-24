@@ -3,6 +3,7 @@
 
 # Generate the phylogenetic markers database for E. coli based on the core set of UniRef90 proteins
 phylophlan_setup_database.py \
+    -o s__Escherichia_coli \
     -g s__Escherichia_coli \
     --verbose 2>&1 | tee logs/phylophlan_setup_database.log
 
