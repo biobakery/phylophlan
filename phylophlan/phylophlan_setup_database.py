@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.22'
-__date__ = '30 September 2020'
+__version__ = '3.0.23'
+__date__ = '27 November 2020'
 
 
 import sys
@@ -31,7 +31,8 @@ if sys.version_info[0] < 3:
 DB_TYPE_CHOICES = ['n', 'a']
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
-DOWNLOAD_URL = "https://www.dropbox.com/s/jrituki21vx6p30/taxa2core.txt?dl=1"
+#DOWNLOAD_URL = "https://www.dropbox.com/s/jrituki21vx6p30/taxa2core.txt?dl=1"
+DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/taxa2core.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):
@@ -118,7 +119,12 @@ def check_params(args, verbose=False):
                   exit=True)
 
         if not args.output:
-            args.output = args.get_core_proteins if os.path.isdir(args.get_core_proteins) else os.path.dirname(args.get_core_proteins)
+            output_tmp = os.path.dirname(args.get_core_proteins)
+
+            if output_tmp:
+                args.output = output_tmp
+            else:
+                args.output = args.get_core_proteins
 
             if verbose:
                 info('Setting output folder "{}"\n'.format(args.output))

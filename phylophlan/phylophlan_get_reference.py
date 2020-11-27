@@ -5,8 +5,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.17'
-__date__ = '19 May 2020'
+__version__ = '3.0.18'
+__date__ = '27 November 2020'
 
 
 import sys
@@ -23,7 +23,8 @@ if sys.version_info[0] < 3:
                     .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 DB_TYPE_CHOICES = ['n', 'a']
-DOWNLOAD_URL = "https://www.dropbox.com/s/gsnmn0xayx2rqrm/taxa2genomes.txt?dl=1"
+#DOWNLOAD_URL = "https://www.dropbox.com/s/gsnmn0xayx2rqrm/taxa2genomes.txt?dl=1"
+DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/taxa2genomes.txt"
 GB_ASSEMBLY_URL = "https://ftp.ncbi.nlm.nih.gov/genomes/ASSEMBLY_REPORTS/assembly_summary_genbank.txt"
 
 

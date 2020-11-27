@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.59'
-__date__ = '10 November 2020'
+__version__ = '3.0.60'
+__date__ = '27 November 2020'
 
 
 import os
@@ -73,7 +73,8 @@ NOT_VARIANT_THRESHOLD = 0.99
 GAP_PERC_THRESHOLD = 0.67
 FRAGMENTARY_THRESHOLD = 0.85
 UNKNOWN_FRACTION = 0.3
-DATABASE_DOWNLOAD_URL = "https://www.dropbox.com/s/x7cvma5bjzlllbt/phylophlan_databases.txt?dl=1"
+#DATABASE_DOWNLOAD_URL = "https://www.dropbox.com/s/x7cvma5bjzlllbt/phylophlan_databases.txt?dl=1"
+DATABASE_DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_databases.txt"
 
 
 def info(s, init_new_line=False, exit=False, exit_value=0):

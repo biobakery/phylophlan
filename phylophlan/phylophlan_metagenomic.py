@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.34'
-__date__ = '18 August 2020'
+__version__ = '3.0.35'
+__date__ = '27 November 2020'
 
 
 import sys
@@ -34,7 +34,8 @@ if sys.version_info[0] < 3:
                     .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
 HOW_MANY = "10"
-DOWNLOAD_URL = "https://www.dropbox.com/s/xdqm836d2w22npb/phylophlan_metagenomic.txt?dl=1"
+#DOWNLOAD_URL = "https://www.dropbox.com/s/xdqm836d2w22npb/phylophlan_metagenomic.txt?dl=1"
+DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_metagenomic.txt"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
