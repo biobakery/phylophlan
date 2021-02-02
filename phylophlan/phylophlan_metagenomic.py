@@ -658,45 +658,47 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
 
     if len(to_be_merged) == 1:
         os.rename(to_be_merged[0], output_file)
-    elif len(to_be_merged) == 3:
+    else:
         if verbose:
             info('[w] this operation can take several hours and hundreds of Giga of RAM\n')
 
-        t11 = [i for i in to_be_merged if '_1vs1' in i][0]
-        t12 = [i for i in to_be_merged if '_1vs2' in i][0]
-        t22 = [i for i in to_be_merged if '_2vs2' in i][0]
+        # Map pair-wise distance matrices
+        matrix_map = { }
+        for filepath in to_be_merged:
+            indexes = sorted([ int(i) for i in os.path.splitext(os.path.basename(filepath))[0].split("_")[-1].split("vs") ])
+            if indexes[0] not in matrix_map:
+                matrix_map[indexes[0]] = {}
+            matrix_map[indexes[0]][indexes[1]] = filepath
+            if indexes[1] not in matrix_map:
+                matrix_map[indexes[1]] = {}
+            matrix_map[indexes[1]][indexes[0]] = filepath
+        
+        # Concat pair-wise distance matrices
+        matrix = None
+        matrix_empty = True
+        for position1 in sorted(matrix_map.keys()):
+            row = None
+            row_empty = True
+            for position2 in sorted(matrix_map[position1].keys()):
+                if verbose:
+                    info('Loading "{}"\n'.format(matrix_map[position1][position2]))
+                partial = pd.read_csv( matrix_map[position1][position2], sep="\t", index_col=0 )
+                if position2 > position1:
+                    partial = partial.T
+                if row_empty:
+                    row = partial
+                    row_empty = False
+                else:
+                    row = pd.concat( [ row, partial ], axis=1 )
+            if matrix_empty:
+                matrix = row
+                matrix_empty = False
+            else:
+                matrix = pd.concat( [ matrix, row ] )
 
         if verbose:
-            info('Loading {}\n'.format(t11))
-
-        d11 = pd.read_csv(t11, sep='\t', index_col=0)
-
-        if verbose:
-            info('Loading {}\n'.format(t12))
-
-        d12 = pd.read_csv(t12, sep='\t', index_col=0)
-
-        if verbose:
-            info('Loading {}\n'.format(t22))
-
-        d22 = pd.read_csv(t22, sep='\t', index_col=0)
-
-        if verbose:
-            info('Merging {} with {}\n'.format(t11, t12))
-
-        d11_d12 = d11.merge(d12.T, how='outer', left_index=True, right_index=True)
-
-        if verbose:
-            info('Merging {} with {}\n'.format(t12, t22))
-
-            d12_d22 = d12.merge(d22, how='outer', left_index=True, right_index=True)
-
-        if verbose:
-            info('Writing "{}" outpuf file\n'.format(output_file))
-
-            d11_d12.append(d12_d22).to_csv(output_file, sep='\t')
-    else:
-        error('not yet implemented!', init_new_line=True, exit=True)
+            info('Writing "{}" output file\n'.format(output_file))
+        matrix.to_csv( output_file, sep="\t" )
 
 
 def phylophlan_metagenomic():
