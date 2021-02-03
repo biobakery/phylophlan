@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.35'
-__date__ = '27 November 2020'
+__version__ = '3.0.36'
+__date__ = '3 February 2021'
 
 
 import sys
@@ -663,33 +663,44 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
             info('[w] this operation can take several hours and hundreds of Giga of RAM\n')
 
         # Map pair-wise distance matrices
-        matrix_map = { }
+        matrix_map = {}
+
         for filepath in to_be_merged:
             indexes = sorted([ int(i) for i in os.path.splitext(os.path.basename(filepath))[0].split("_")[-1].split("vs") ])
+
             if indexes[0] not in matrix_map:
                 matrix_map[indexes[0]] = {}
+
             matrix_map[indexes[0]][indexes[1]] = filepath
+
             if indexes[1] not in matrix_map:
                 matrix_map[indexes[1]] = {}
+
             matrix_map[indexes[1]][indexes[0]] = filepath
         
         # Concat pair-wise distance matrices
         matrix = None
         matrix_empty = True
+
         for position1 in sorted(matrix_map.keys()):
             row = None
             row_empty = True
+
             for position2 in sorted(matrix_map[position1].keys()):
                 if verbose:
                     info('Loading "{}"\n'.format(matrix_map[position1][position2]))
+
                 partial = pd.read_csv( matrix_map[position1][position2], sep="\t", index_col=0 )
+
                 if position2 > position1:
                     partial = partial.T
+
                 if row_empty:
                     row = partial
                     row_empty = False
                 else:
                     row = pd.concat( [ row, partial ], axis=1 )
+
             if matrix_empty:
                 matrix = row
                 matrix_empty = False
@@ -698,6 +709,7 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
 
         if verbose:
             info('Writing "{}" output file\n'.format(output_file))
+
         matrix.to_csv( output_file, sep="\t" )
 
 
