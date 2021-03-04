@@ -276,13 +276,14 @@ def phylophlan_write_config_file():
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
 
-        for fld in ['/local-storage', '/tmp']:
-            if os.path.isdir(fld) and os.access(fld, os.W_OK) and os.access(fld, os.X_OK):
-                if 'environment' in msa:
-                    break
+        if not os.getenv('TMPDIR'):
+            for fld in ['/local-storage', '/tmp']:
+                if os.path.isdir(fld) and os.access(fld, os.W_OK) and os.access(fld, os.X_OK):
+                    if 'environment' in msa:
+                        break
 
-                msa['environment'] = 'TMPDIR={}'.format(fld)
-                break
+                    msa['environment'] = 'TMPDIR={}'.format(fld)
+                    break
     elif 'opal' in args.msa:
         exe, _ = find_executable_wrapper('opal', absolute=args.absolute_path)
         msa = {'program_name': exe,
