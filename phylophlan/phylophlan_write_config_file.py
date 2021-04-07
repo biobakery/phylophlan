@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.19'
-__date__ = '3 November 2020'
+__version__ = '3.0.20'
+__date__ = '30 March 2021'
 
 
 import os
@@ -124,8 +124,23 @@ def check_params(args, verbose=False):
         error('output file {} already exists, delete it or specify --overwrite'.format(args.output), exit=True)
 
     if (args.db_type == 'n') and (args.map_dna == 'diamond'):
-        error('Incompatible choices.\n    Please, select "blastn" instead in --map_dna, as there is no "diamond" '
-              'option for aligning against a nucleotide reference database', exit=True)
+        args.map_dna = 'blastn'
+        info('Setting "map_dna={}" because "diamond" has no option for aligning against a nucleotide database\n'.format(args.map_dna))
+
+    # --gene_tree2 should not be specified if --gene_tree1 is not specified
+    if args.gene_tree2 and not args.gene_tree1:
+        error('gene_tree2 is specified but gene_tree1 is not, please check the params', exit=True)
+
+    # if someone specifies --gene_tree1 (--gene_tree2 is optional) then --tree1 must be a consensus approach (can't be fasttree, raxml, or 
+    # iqtree), also --tree2 will not make sense as there won't be a MSA to pass to refine a consensus phylogeny (at least, not yet)
+    if args.gene_tree1:
+        if args.tree1 in ['fasttree', 'raxml', 'iqtree']:  # the list should be updated if new tools are adeed
+            error('"tree1={}" is not compatible with a gene tree pipeline as it should define a consensus approach'.format(args.tree1), 
+                  exit=True)
+
+        if args.tree2:
+            args.tree2 = None
+            info('Setting "tree2={}" because there is no refinment option for a gene tree pipeline\n'.format(args.tree2))
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)))
@@ -276,13 +291,14 @@ def phylophlan_write_config_file():
                'version': '--version',
                'command_line': '#program_name# #params# #input# > #output#'}
 
-        for fld in ['/local-storage', '/tmp']:
-            if os.path.isdir(fld) and os.access(fld, os.W_OK) and os.access(fld, os.X_OK):
-                if 'environment' in msa:
-                    break
+        if not os.getenv('TMPDIR'):
+            for fld in ['/local-storage', '/tmp']:
+                if os.path.isdir(fld) and os.access(fld, os.W_OK) and os.access(fld, os.X_OK):
+                    if 'environment' in msa:
+                        break
 
-                msa['environment'] = 'TMPDIR={}'.format(fld)
-                break
+                    msa['environment'] = 'TMPDIR={}'.format(fld)
+                    break
     elif 'opal' in args.msa:
         exe, _ = find_executable_wrapper('opal', absolute=args.absolute_path)
         msa = {'program_name': exe,
@@ -304,7 +320,7 @@ def phylophlan_write_config_file():
                'command_line': '#program_name# #params# #input# #output_path# #output#'}
 
         if (args.db_type == 'n' or args.force_nucleotides):
-            msa['params'] += ' -m dna',
+            msa['params'] += ' -m dna'
         elif args.db_type == 'a':
             msa['model'] += ' -m amino'
 
@@ -346,7 +362,7 @@ def phylophlan_write_config_file():
                           'version': '-v'}
 
             if (args.db_type == 'n' or args.force_nucleotides):
-                gene_tree1['params'] += ' -m GTRCAT',
+                gene_tree1['params'] += ' -m GTRCAT'
                 gene_tree1['command_line'] = '#program_name# #params# #output_path# #input# #output#'
             elif args.db_type == 'a':
                 gene_tree1['model'] = '-m'
@@ -361,7 +377,7 @@ def phylophlan_write_config_file():
                           'command_line': '#program_name# #params# #input# #output#'}
 
             if (args.db_type == 'n' or args.force_nucleotides):
-                gene_tree1['params'] += ' -m GTR',
+                gene_tree1['params'] += ' -m GTR'
             elif args.db_type == 'a':
                 gene_tree1['params'] = ' -m LG'
 
