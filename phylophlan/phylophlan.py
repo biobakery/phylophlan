@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.60'
-__date__ = '27 November 2020'
+__version__ = '3.0.61'
+__date__ = '29 April 2021'
 
 
 import os
@@ -646,6 +646,9 @@ def check_database(db_name, databases_folder, exit=True, verbose=False):
             database_list(databases_folder, exit=True)
         else:
             return False
+
+    if is_tar:
+        download_and_unpack_db(db_name, db_name + '.tar', db_name + '.md5', databases_folder, verbose=verbose)
 
     return True
 
