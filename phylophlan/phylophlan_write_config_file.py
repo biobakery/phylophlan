@@ -411,7 +411,7 @@ def phylophlan_write_config_file():
                  'output': '-o',
                  'version': '-i astral-4.11.1/test_data/song_mammals.424.gene.tre',
                  'command_line': '#program_name# #input# #output#'}
-        info('[w] using a template for ASTRAL as it should be manually installed from https://github.com/smirarab/ASTRAL and this config file should be manually updated\n')
+        info('[w] using a template for ASTRAL as it should be manually installed from https://github.com/smirarab/ASTRAL and this config file should be manually updated\n', init_new_line=True)
     if 'astrid' in args.tree1:
         exe, _ = find_executable_wrapper('ASTRID', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
