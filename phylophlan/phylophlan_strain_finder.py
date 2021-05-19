@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.10'
-__date__ = '28 May 2020'
+__version__ = '3.0.11'
+__date__ = '19 May 2021'
 
 
 import argparse as ap
@@ -88,9 +88,6 @@ def read_params():
 
 
 def check_params(args, verbose=False):
-    if verbose:
-        info('Checking for parameters...\n')
-
     if (not os.path.isfile(args.input)):
         error('input file {} does not exist'.format(args.input), exit=True)
 
@@ -151,7 +148,6 @@ def check_thr(p, l, tree, md, p_thr, m_thr, verbose=False):
                  'return {} as root of the subtree\n'.format(p, l))
 
         return l
-
     else:
         sons = [s.name for s in p.get_terminals()]
         tup = list(itertools.combinations(sons, 2))
@@ -172,12 +168,18 @@ def phylophlan_strain_finder():
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, args.verbose)
-    tree = Phylo.read(args.input, args.tree_format)
-
-    mut_rates = pd.read_csv(args.mutation_rates, sep='\t', header=0, index_col=0)
 
     if args.verbose:
-        info('Reading mutation_rates table...\n')
+        info('Loading phylogenetic tree...\n')
+
+    tree = Phylo.read(args.input, args.tree_format)
+
+    if args.verbose:
+        info('Loading mutation rates table...\n')
+
+    mut_rates = pd.read_csv(args.mutation_rates, sep='\t', header=0, index_col=0)
+    mut_rates.index = mut_rates.index.map(str)
+    mut_rates.columns = mut_rates.columns.map(str)
 
     mydict = dict([((r, c), float(mut_rates.at[r, c]))
                    for ir, r in enumerate(mut_rates.index)
