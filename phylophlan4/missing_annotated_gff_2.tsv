@@ -1,6 +1,0 @@
-#genome	datamap_path	GFF_path
-GCA_011806445	/resources/Nov20/MAGs/00000031/GCA_011806445.fna	/shares/CIBIO-Storage/CM/scratch/databases/MetaRefSGB/resources/Nov20/annotations/prokka-1.14/00000031/GCA_011806445/GCA_011806445.annotated_gff
-GCA_903970395	/resources/Nov20/MAGs/00000041/GCA_903970395.fna	/shares/CIBIO-Storage/CM/scratch/databases/MetaRefSGB/resources/Nov20/annotations/prokka-1.14/00000041/GCA_903970395/GCA_903970395.annotated_gff
-GCA_903970205	/resources/Nov20/MAGs/00000061/GCA_903970205.fna	/shares/CIBIO-Storage/CM/scratch/databases/MetaRefSGB/resources/Nov20/annotations/prokka-1.14/00000061/GCA_903970205/GCA_903970205.annotated_gff
-GCA_903970545	/resources/Nov20/MAGs/00000057/GCA_903970545.fna	/shares/CIBIO-Storage/CM/scratch/databases/MetaRefSGB/resources/Nov20/annotations/prokka-1.14/00000057/GCA_903970545/GCA_903970545.annotated_gff
-GCA_903642315	/resources/Nov20/MAGs/00000029/GCA_903642315.fna	/shares/CIBIO-Storage/CM/scratch/databases/MetaRefSGB/resources/Nov20/annotations/prokka-1.14/00000029/GCA_903642315/GCA_903642315.annotated_gff

@@ -9,14 +9,18 @@ for i in $(cut -f4 135_saureus_isolates.tsv | sed 1d); do
     wget $i -O input_isolates/${o}.fna.gz;
 done;
 
+# Find executables
+[[ -z $(which phylophlan_setup_database) ]] && ppa_setup_db="phylophlan_setup_database.py" || ppa_setup_db=$(which phylophlan_setup_database)
+[[ -z $(which phylophlan) ]] && ppa="phylophlan.py" || ppa=$(which phylophlan)
+[[ -z $(which phylophlan_get_reference) ]] && ppa_get_ref="phylophlan_get_reference.py" || ppa_get_ref=$(which phylophlan_get_reference)
+
+
 # Generate S. aureus database based on UniRef90
-phylophlan_setup_database.py \
-    -g s__Staphylococcus_aureus \
+$ppa_setup_db -g s__Staphylococcus_aureus \
     --verbose 2>&1 | tee logs/phylophlan_setup_database.log
 
 # Build the phylogeny of the 135 S. aureus strains
-phylophlan.py \
-    -i input_isolates \
+$ppa -i input_isolates \
     -o output_isolates \
     -d s__Staphylococcus_aureus \
     --trim greedy \
@@ -33,8 +37,7 @@ phylophlan.py \
     --verbose 2>&1 | tee logs/phylophlan__output_isolates.log
 
 # Add 1,000 S. aureus reference genomes
-phylophlan_get_reference.py \
-    -g s__Staphylococcus_aureus \
+$ppa_get_ref -g s__Staphylococcus_aureus \
     -o input_references \
     -n 1000 \
     --verbose 2>&1 | tee logs/phylophlan_get_reference.log
@@ -42,8 +45,7 @@ phylophlan_get_reference.py \
 cp -a input_isolates/* input_references/
 
 # Build the phylogeny of the 1,135 S. aureus genomes
-phylophlan.py \
-    -i input_references \
+$ppa -i input_references \
     -o output_references \
     -d s__Staphylococcus_aureus \
     -t a \
