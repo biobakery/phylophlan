@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.61'
-__date__ = '29 April 2021'
+__version__ = '3.0.62'
+__date__ = '11 June 2021'
 
 
 import os
@@ -531,7 +531,7 @@ def check_args(args, command_line_arguments, verbose=False):
         args.subsample = npos_function
 
     if verbose:
-        info('Arguments: {}\n'.format(vars(args)))
+        info('Arguments: {}\n\n'.format(vars(args)), init_new_line=True)
 
     return project_name
 

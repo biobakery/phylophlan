@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.20'
-__date__ = '30 March 2021'
+__version__ = '3.0.21'
+__date__ = '11 June 2021'
 
 
 import os
@@ -242,7 +242,7 @@ def phylophlan_write_config_file():
         elif 'diamond' in args.map_dna:
             exe, _ = find_executable_wrapper('diamond', absolute=args.absolute_path)
             map_dna = {'program_name': exe,
-                       'params': 'blastx --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35 -k 0',
+                       'params': 'blastx --quiet --threads 1 --outfmt 6 --more-sensitive --id 50 --max-hsps 35 -k 0 --query-gencode 11',
                        'input': '--query',
                        'database': '--db',
                        'output': '--out',
