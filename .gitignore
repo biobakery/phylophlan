@@ -40,6 +40,7 @@ phylophlan/examples/05_campylobacter/input_bins
 phylophlan/examples/05_campylobacter/output_campylobacter
 ## test example
 phylophlan/examples/test*
+phylophlan/examples/tutorial*
 ## other internal runs
 phylophlan/examples/paper_examples
 phylophlan/examples/pcopri
