@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.62'
-__date__ = '11 June 2021'
+__version__ = '3.0.63'
+__date__ = '5 July 2021'
 
 
 import os
@@ -1155,7 +1155,7 @@ def clean_inputs(inputs, output_folder, proteins=False, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
     commands = [(inp if os.path.isfile(inp) else os.path.join(inputs[inp], inp), 
-                 os.path.join(output_folder, os.path.basename(inp)), 
+                 os.path.join(output_folder, os.path.basename(inp).replace(':', '_')), 
                  proteins)
                 for inp in inputs if not os.path.isfile(os.path.join(output_folder, os.path.basename(inp)))]
 
@@ -1178,7 +1178,7 @@ def clean_inputs_rec(x):
         try:
             t0 = time.time()
             inp, out, prots = x
-            inp_clean, _ = os.path.splitext(os.path.basename(inp))
+            inp_clean, _ = os.path.splitext(os.path.basename(out))
             info('Cleaning "{}"\n'.format(inp))
 
             if prots:
