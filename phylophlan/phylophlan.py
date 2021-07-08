@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.63'
-__date__ = '5 July 2021'
+__version__ = '3.0.64'
+__date__ = '8 July 2021'
 
 
 import os
@@ -1691,7 +1691,7 @@ def is_msa_empty(msa, path=None):
             if len(str(aln.seq).replace('-', '')) <= 0:
                 n_seqs_empty += 1
 
-        if (n_seqs_empty / n_seqs_empty) >= 0.65:  # if more than 65% of only gaps and/or empty sequences, then remove the MSA
+        if (n_seqs_empty / n_seqs) >= 0.65:  # if more than 65% of only gaps and/or empty sequences, then remove the MSA
             return True
     else:
         error('file "{}" not found'.format(msa_path))
