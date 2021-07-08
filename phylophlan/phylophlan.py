@@ -1682,8 +1682,17 @@ def is_msa_empty(msa, path=None):
     msa_path = os.path.join(path, msa) if path else msa
 
     if os.path.isfile(msa_path):
-        if [True for aln in AlignIO.read(msa_path, "fasta") if len(str(aln.seq).replace('-', '')) <= 0]:
-            return True  # there is at least an empty sequence (or only gaps) that shouldn't be there
+        n_seqs = 0
+        n_seqs_empty = 0
+
+        for aln in AlignIO.read(msa_path, "fasta"):
+            n_seqs += 1
+
+            if len(str(aln.seq).replace('-', '')) <= 0:
+                n_seqs_empty += 1
+
+        if (n_seqs_empty / n_seqs_empty) >= 0.65:  # if more than 65% of only gaps and/or empty sequences, then remove the MSA
+            return True
     else:
         error('file "{}" not found'.format(msa_path))
 
