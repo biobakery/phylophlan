@@ -469,7 +469,7 @@ def pasting(output_prefix, prj_name, verbose=False):
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
         except Exception as e:
             error(str(e), init_new_line=True)
-            error('cannot execute command\n {}'.format(' '.join(cmd), init_new_line=True))
+            error('cannot execute command\n {}'.format(' '.join(cmd)), init_new_line=True)
             raise
 
     if verbose:
