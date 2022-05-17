@@ -331,7 +331,7 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
                     if dbentry['@type'] == "EMBL":
                         embl_accid = dbentry['property'][0]['@value']
                         urlretrieve(f"https://www.ebi.ac.uk/ena/browser/api/fasta/{embl_accid}",
-                                    f"{output}/{core_prot}.{output_extension}")
+                                    f"{output}/{core_prot}{output_extension}")
                         break
                 if embl_accid == "":
                     not_mapped.append(core_prot)
