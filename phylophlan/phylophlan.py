@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.64'
-__date__ = '8 July 2021'
+__version__ = '3.0.66'
+__date__ = '27 July 2022'
 
 
 import os
@@ -341,7 +341,7 @@ def check_args(args, command_line_arguments, verbose=False):
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=False, verbose=verbose)
+    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, verbose=verbose)
     check_and_create_folder(args.output, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
@@ -597,8 +597,11 @@ def check_and_create_folder(folder, try_local=False, create=False, exit=False, v
             return f
 
     if msg_err:
-        error(msg_err, exit=exit)
-        return None
+        if exit:
+            error(msg_err, exit=exit)
+            return None
+        else:
+            info('[w] ' + msg_err + '\n')
 
     if create:
         if not os.path.isdir(f):
@@ -3014,7 +3017,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
                              nproc=args.nproc, verbose=args.verbose)
 
-    if args.subsample:
+    if args.subsample and (not args.force_nucleotides):
         out_f = os.path.join(args.data_folder, 'sub')
         subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat + '.pkl'),
                   unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
