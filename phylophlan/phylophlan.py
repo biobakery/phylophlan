@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.66'
-__date__ = '27 July 2022'
+__version__ = '3.0.67'
+__date__ = '24 August 2022'
 
 
 import os
@@ -207,6 +207,8 @@ def read_params():
     p.add_argument('--force_nucleotides', action='store_true', default=False,
                    help=("If specified force PhyloPhlAn to use nucleotide sequences for the phylogenetic analysis,  "
                          "even in the case of a database of amino acids"))
+    p.add_argument('--convert_N2gap', action='store_true', default=False,
+                   help="If specified Ns will be forced to gaps (-) after the MSAs and only whit nucleotides MSAs")
 
     group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folder locations")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the input data")
@@ -2906,6 +2908,28 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
         f.write('\n'.join(['\t'.join(r) for r in out_tbl]))
 
 
+def convert_N2gap(input_folder, output_folder, verbose=False):
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
+
+    for msa in os.listdir(input_folder):
+        input_msa = os.path.join(input_folder, msa)
+        output_msa = os.path.join(output_folder, msa)
+
+        if os.path.exists(output_msa):
+            if verbose:
+                info(f'{output_msa}: Ns already converted into gaps (-)\n')
+
+            continue
+
+        with open(output_msa, 'w') as f:
+            if verbose:
+                info(f'Converting Ns from {input_msa} into gaps (-) to {output_msa}\n')
+
+            AlignIO.write(MultipleSeqAlignment([SeqRecord(Seq(aln.seq.replace('N', '-')), id=aln.id, description='')
+                                                for aln in AlignIO.read(input_msa, "fasta")]),
+                          f, "fasta")
+
+
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = []
     input_faa = {}
@@ -2986,6 +3010,16 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         mr_out_f = os.path.join(args.output, 'mutation_rates.tsv')
         mutation_rates(inp_f, mr_out_d, nproc=args.nproc, verbose=args.verbose)
         aggregate_mutation_rates(mr_out_d, mr_out_f, verbose=args.verbose)
+
+    # convert Ns to gaps (-), only with nucleotide MSAs
+    if args.convert_N2gap and args.force_nucleotides:
+        if args.verbose:
+            info('Converting Ns to gaps (-)\n')
+
+        out_f = os.path.join(args.data_folder, 'msas_no_Ns')
+        convert_N2gap(inp_f, out_f, verbose=args.verbose)
+        inp_f = out_f
+        pass
 
     if args.trim:
         if ('trim' in configs) and ((args.trim == 'gap_trim') or (args.trim == 'greedy')):
