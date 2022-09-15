@@ -416,7 +416,7 @@ def phylophlan_write_config_file():
         exe, _ = find_executable_wrapper('ASTRID', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'input': '-i',
-                 'params': '-m auto',
+                 'params': '--auto',
                  'output': '-o',
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}
