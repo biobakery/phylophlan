@@ -7,8 +7,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.36'
-__date__ = '3 February 2021'
+__version__ = '3.0.37'
+__date__ = '3 March 2023'
 
 
 import sys
@@ -514,7 +514,7 @@ def disting_rec(x):
                     cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
 
                     try:
-                        sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL)
+                        sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': '1'}))
                     except Exception as e:
                         terminating.set()
                         fout.close()
@@ -555,7 +555,7 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
             cmd = ['mash', 'dist', '-t', '-p', str(nproc), inp_a, inp_b]
 
             try:
-                sb.check_call(cmd, stdout=open(out_t, 'w'), stderr=sb.DEVNULL)
+                sb.check_call(cmd, stdout=open(out_t, 'w'), stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': str(nproc)}))
             except Exception as e:
                 remove_file(out_t, verbose=verbose)
                 error(str(e), init_new_line=True)

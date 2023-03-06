@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.21'
-__date__ = '11 June 2021'
+__version__ = '3.0.22'
+__date__ = '15 September 2022'
 
 
 import os
@@ -416,7 +416,7 @@ def phylophlan_write_config_file():
         exe, _ = find_executable_wrapper('ASTRID', absolute=args.absolute_path)
         tree1 = {'program_name': exe,
                  'input': '-i',
-                 'params': '-m auto',
+                 'params': '--auto',
                  'output': '-o',
                  'version': '--help',
                  'command_line': '#program_name# #input# #params# #output#'}

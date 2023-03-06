@@ -1,6 +1,6 @@
 {% set name = "phylophlan" %}
-{% set version = "3.0.2" %}
-{% set sha256 = "c342116662bbfbb49f0665291fc7c0be5a0d04a02a7be2da81de0322eb2256b4" %}
+{% set version = "3.0.3" %}
+{% set sha256 = "a6a4123aabb564c583edf53804f682ecb8c2f614720104b0b576a315f57019a8" %}
 
 package:
   name: "{{ name|lower }}"
@@ -39,6 +39,7 @@ requirements:
     - raxml >=8.2.10
     - iqtree >=1.6.6
     - mash
+    - requests
 
 test:
   commands:

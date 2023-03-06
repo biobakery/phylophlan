@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.64'
-__date__ = '8 July 2021'
+__version__ = '3.0.67'
+__date__ = '24 August 2022'
 
 
 import os
@@ -207,6 +207,8 @@ def read_params():
     p.add_argument('--force_nucleotides', action='store_true', default=False,
                    help=("If specified force PhyloPhlAn to use nucleotide sequences for the phylogenetic analysis,  "
                          "even in the case of a database of amino acids"))
+    p.add_argument('--convert_N2gap', action='store_true', default=False,
+                   help="If specified Ns will be forced to gaps (-) after the MSAs and only whit nucleotides MSAs")
 
     group = p.add_argument_group(title="Folder paths", description="Parameters for setting the folder locations")
     group.add_argument('--input_folder', type=str, default=INPUT_FOLDER, help="Path to the folder containing the input data")
@@ -341,7 +343,7 @@ def check_args(args, command_line_arguments, verbose=False):
         return None
 
     check_and_create_folder(args.input_folder, exit=True, verbose=verbose)
-    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, exit=False, verbose=verbose)
+    args.configs_folder = check_and_create_folder(args.configs_folder, try_local=True, verbose=verbose)
     check_and_create_folder(args.output, create=True, exit=True, verbose=verbose)
     check_and_create_folder(args.data_folder, create=True, exit=True, verbose=verbose)
 
@@ -597,8 +599,11 @@ def check_and_create_folder(folder, try_local=False, create=False, exit=False, v
             return f
 
     if msg_err:
-        error(msg_err, exit=exit)
-        return None
+        if exit:
+            error(msg_err, exit=exit)
+            return None
+        else:
+            info('[w] ' + msg_err + '\n')
 
     if create:
         if not os.path.isdir(f):
@@ -2903,6 +2908,28 @@ def aggregate_mutation_rates(input_folder, output_file, verbose=False):
         f.write('\n'.join(['\t'.join(r) for r in out_tbl]))
 
 
+def convert_N2gap(input_folder, output_folder, verbose=False):
+    check_and_create_folder(output_folder, create=True, verbose=verbose)
+
+    for msa in os.listdir(input_folder):
+        input_msa = os.path.join(input_folder, msa)
+        output_msa = os.path.join(output_folder, msa)
+
+        if os.path.exists(output_msa):
+            if verbose:
+                info(f'{output_msa}: Ns already converted into gaps (-)\n')
+
+            continue
+
+        with open(output_msa, 'w') as f:
+            if verbose:
+                info(f'Converting Ns from {input_msa} into gaps (-) to {output_msa}\n')
+
+            AlignIO.write(MultipleSeqAlignment([SeqRecord(Seq(aln.seq.replace('N', '-')), id=aln.id, description='')
+                                                for aln in AlignIO.read(input_msa, "fasta")]),
+                          f, "fasta")
+
+
 def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa):
     all_inputs = []
     input_faa = {}
@@ -2984,6 +3011,16 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         mutation_rates(inp_f, mr_out_d, nproc=args.nproc, verbose=args.verbose)
         aggregate_mutation_rates(mr_out_d, mr_out_f, verbose=args.verbose)
 
+    # convert Ns to gaps (-), only with nucleotide MSAs
+    if args.convert_N2gap and args.force_nucleotides:
+        if args.verbose:
+            info('Converting Ns to gaps (-)\n')
+
+        out_f = os.path.join(args.data_folder, 'msas_no_Ns')
+        convert_N2gap(inp_f, out_f, verbose=args.verbose)
+        inp_f = out_f
+        pass
+
     if args.trim:
         if ('trim' in configs) and ((args.trim == 'gap_trim') or (args.trim == 'greedy')):
             out_f = os.path.join(args.data_folder, 'trim_gap_trim')
@@ -3014,7 +3051,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
     all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
                              nproc=args.nproc, verbose=args.verbose)
 
-    if args.subsample:
+    if args.subsample and (not args.force_nucleotides):
         out_f = os.path.join(args.data_folder, 'sub')
         subsample(inp_f, out_f, args.subsample, args.scoring_function, os.path.join(args.submat_folder, args.submat + '.pkl'),
                   unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
