@@ -107,6 +107,8 @@ def read_params():
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
                    help="Prints the current phylophlan_metagenomic.py version and exit")
+    #p.add_argument('--db_pref', type=str, default=DATABASE_FOLDER, help="Path to the prefiltering databases")
+
     return p.parse_args()
 
 
@@ -149,6 +151,7 @@ def check_params(args, verbose=False):
 
         if not args.mapping.endswith('.txt.bz2'):
             args.mapping += '.txt.bz2'
+        
 
     if not os.path.isdir(args.input):
         error('"{}" folder not found, -i/--input must be a folder'.format(args.input), exit=True)
@@ -197,6 +200,8 @@ def check_params(args, verbose=False):
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
+    create_folder(args.output_prefix + '_prefiltering', verbose=True)
+    create_folder(args.output_prefix + '_prefiltering/pref_dbs', verbose=True)
 
     if args.add_ggb and args.add_fgb:
         args.how_many = 1
@@ -390,7 +395,6 @@ def sketching(input_folder, input_extension, output_prefix, nproc=1, verbose=Fal
     else:
         info('No inputs found!\n')
 
-
 def sketching_rec(x):
     if not terminating.is_set():
         try:
@@ -454,10 +458,11 @@ def pasting(output_prefix, prj_name, verbose=False):
     for inpc in glob.iglob(output_prefix + "_sketches/{}_inputs_list_*.txt".format(prj_name)):
         chunk = int(inpc[::-1].split('.')[1].split('_')[0][::-1])
         outc = outf.format(chunk)
-
+    
         if os.path.isfile('{}.msh'.format(outc)):
             if verbose:
                 info('"{}.msh" already exists\n'.format(outc))
+                remove_file(inpc, output_prefix + "_sketches")
             continue
 
         if verbose:
@@ -467,6 +472,7 @@ def pasting(output_prefix, prj_name, verbose=False):
 
         try:
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            remove_file(inpc, output_prefix + "_sketches")
         except Exception as e:
             error(str(e), init_new_line=True)
             error('cannot execute command\n {}'.format(' '.join(cmd)), init_new_line=True)
@@ -476,42 +482,40 @@ def pasting(output_prefix, prj_name, verbose=False):
         t1 = time.time()
         info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
 
-
-def disting(output_prefix, prj_name, db, nproc=1, verbose=False):
+# disting with prefiltering dbs
+def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True): 
     commands = []
-    inps = glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh")
 
-    for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
-        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
-        commands.append((inps, sgb_msh_idx, dist_file, verbose))
+    for inps in glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"):
+        dist_file = os.path.join(output_prefix + "_prefiltering/pref_dbs", os.path.basename(inps).replace('.msh', '.tsv'))
+        commands.append((inps, db_pref, dist_file, verbose))
 
     if commands:
         terminating = mp.Event()
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(prefiltering_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('disting crashed', init_new_line=True, exit=True)
+                error('prefiltering crashed', init_new_line=False, exit=False)
     else:
-        info('Mash dist already computed!\n')
-
-
-def disting_rec(x):
+        info('Prefiltering mash dist already computed!\n')
+    
+def prefiltering_rec(x):
     if not terminating.is_set():
         try:
-            pasted_bins, sgb_msh_idx, dist_file, verbose = x
-
+            msh_idx, db_pref, dist_file, verbose = x
+            
             if not os.path.isfile(dist_file):
                 fout = open(dist_file, 'w')
 
                 if verbose:
                     t0 = time.time()
-                    info('Disting "{}"\n'.format(sgb_msh_idx))
+                    info('Disting "{}" with prefiltering database\n'.format(msh_idx))
 
-                for msh_idx in pasted_bins:
-                    cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
+                for db in os.listdir(db_pref):
+                    cmd = ['mash', 'dist', '-p', '1', os.path.join(db_pref, db), msh_idx]
 
                     try:
                         sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': '1'}))
@@ -525,11 +529,130 @@ def disting_rec(x):
 
                 if verbose:
                     t1 = time.time()
+                    info('Prefiltering dist for "{}" computed in {}s\n'.format(db_pref, int(t1 - t0)))
+
+                fout.close()
+            
+            elif verbose:
+                    info('"{}" already present\n'.format(dist_file))
+            
+            remove_file(msh_idx)
+
+        except Exception as e:
+            terminating.set()
+            error(str(e), init_new_line=True)
+            error('error while disting\n    {} \n with prefiltering database'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
+    else:
+        terminating.set()
+
+# pasting inputs per sgb
+def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbose=True): 
+    outf = output_prefix + "_prefiltering/" + "{}_paste"
+    inpf = output_prefix + "_prefiltering/{}_genomes_inputs_list.txt"
+
+    for i in os.listdir(os.path.join(output_prefix + "_prefiltering/pref_dbs")):
+        table = pd.read_csv(os.path.join(output_prefix + "_prefiltering/pref_dbs"+'/'+i), sep='\t',names=['sgb','mag','dist','pvalue','hits'])
+        
+        table=table[table['dist'] < 0.2]
+        table['sgb'] = table['sgb'].map(lambda x: x.split("__")[0].strip('genomes/SGB'))
+        table['mag'] = table['mag'].map(lambda x: x.split('/')[-1].strip('.'+input_extension) + '.msh')
+
+        input_list=list(table['mag'].unique())
+        for sgb in chocophlan_list:
+            genomes = [output_prefix+'_sketches/inputs/'+ g for g in table['mag'][table['sgb']==sgb].values]
+            input_list = [x for x in input_list if output_prefix+'_sketches/inputs/' + x not in genomes]
+
+            outs = outf.format(sgb)
+            inpg=inpf.format(sgb)   
+
+            with open(inpg, 'w') as f:
+                f.write('\n'.join(genomes))
+
+            if os.path.isfile('{}.msh'.format(outs)):
+                if verbose:
+                    info('"{}.msh" already exists\n'.format(outs))
+                    remove_file(inpg, output_prefix + "_prefiltering")
+                continue
+
+            if verbose:
+                info('Pasting "{}.msh"\n'.format(outs))
+
+            cmd = ['mash', 'paste', '-l', outs, inpg]
+
+            try:
+                sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+                remove_file(inpg, output_prefix + "_prefiltering")
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('cannot execute command\n {}'.format(' '.join(cmd)), init_new_line=True)
+                raise
+
+        with open('unassigned.txt', 'w') as f:
+            for mag in input_list:
+                f.write(f"{mag.strip('.msh')} is likely close to the SGB in full database, but SGB in not available in ChochoPhlAn\n")
+
+        if verbose:
+            t1 = time.time()
+            info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
+
+def disting(output_prefix, db, nproc=1, verbose=True): 
+    commands = []
+
+    for inps in glob.glob(output_prefix + "_prefiltering/" + "*_paste.msh"):
+        sgb_msh_idx=os.path.join(db, '{}.msh')
+        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(inps).replace('_paste.msh', '.tsv'))
+        commands.append((inps, sgb_msh_idx, dist_file, verbose))
+
+    if commands:
+        terminating = mp.Event()
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('disting crashed', init_new_line=True, exit=False)
+    else:
+        info('Mash dist already computed!\n')
+
+
+def disting_rec(x):
+    if not terminating.is_set():
+        try:
+            msh_idx, sgb_msh_idx, dist_file, verbose = x
+            sgb_msh_idx=sgb_msh_idx.format(msh_idx.split('/')[-1].split('_')[0].strip('SGB'))
+
+            if not os.path.isfile(dist_file):
+                fout = open(dist_file, 'w')
+
+                if verbose:
+                    t0 = time.time()
+                    info('Disting "{}"\n'.format(sgb_msh_idx))
+
+                cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
+
+                try:
+                    sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': '1'}))
+                except Exception as e:
+                    terminating.set()
+                    fout.close()
+                    remove_file(dist_file, verbose=verbose)
+                    error(str(e), init_new_line=True)
+                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                    raise
+
+                if verbose:
+                    t1 = time.time()
                     info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
 
                 fout.close()
+
             elif verbose:
                 info('"{}" already present\n'.format(dist_file))
+
+            remove_file(msh_idx)
+
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -723,6 +846,9 @@ def phylophlan_metagenomic():
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
 
+    prj_name=os.path.basename(args.output_prefix)
+
+
     if not args.only_input:  # if mashing vs. the SGBs
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
                 not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
@@ -741,6 +867,10 @@ def phylophlan_metagenomic():
 
         args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
+        args.db_pref = os.path.join(args.database_folder, 'dbs_pref')
+
+        with open(os.path.join(args.database_folder, 'chocophlan_list.txt')) as f:
+            args.chocophlan_list = f.read().splitlines()
 
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
@@ -749,8 +879,11 @@ def phylophlan_metagenomic():
                                               nproc=args.nproc, verbose=args.verbose)
         args.database = args.output_prefix + '_sketches'
 
+
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
+    prefiltering(args.output_prefix, prj_name, args.db_pref , nproc=1, verbose=True)
+    prefiltering_pasting(args.output_prefix, args.input_extension, args.chocophlan_list, verbose=True)
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
@@ -759,7 +892,7 @@ def phylophlan_metagenomic():
         output_file = output_file.replace(".tsv", "_" + timestamp + ".tsv")
 
     if not args.only_input:  # if mashing vs. the SGBs
-        disting(args.output_prefix, os.path.basename(args.output_prefix), args.database,
+        disting(args.output_prefix, args.database,
                 nproc=args.nproc, verbose=args.verbose)
 
         # SGBs mapping file
@@ -835,7 +968,7 @@ def phylophlan_metagenomic():
             info('Loading mash dist files\n')
 
         for sgb in os.listdir(dists_folder):
-            sgbid = sgb.replace('.tsv', '')
+            sgb_id = sgb.replace('.tsv', '')
             binn_2_dists = dict([(binn, []) for binn in binn_2_sgb])
 
             with open(os.path.join(dists_folder, sgb), 'rt') as f:
@@ -847,11 +980,23 @@ def phylophlan_metagenomic():
                     if args.add_ggb and args.add_fgb:
                         sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
 
-                        if sgb_member in refgen_list:
-                            binn_2_refgen[binn].append((sgb_member, float(rc[2])))
+                        #if sgb_member in refgen_list:
+                        binn_2_refgen[binn].append((sgb_member, float(rc[2])))
 
             for binn, dists in binn_2_dists.items():
-                binn_2_sgb[binn][sgbid] = np.mean(dists)
+                if dists:
+                    binn_2_sgb[binn][sgb_id] = np.mean(dists)
+
+        # remove mags with no SGBs in ChocoPhlAn
+        if args.add_ggb or args.add_fgb:
+            for binn, dists in copy.deepcopy(binn_2_sgb).items():
+                if dists == {}:
+                    binn_2_sgb.pop(binn)
+                    if args.add_ggb: binn_2_ggb.pop(binn)
+                    if args.add_fgb: binn_2_fgb.pop(binn)
+            for binn, dists in copy.deepcopy(binn_2_refgen).items():
+                if dists == []:
+                    binn_2_refgen.pop(binn)
 
         if args.add_ggb:
             if args.verbose:
@@ -864,8 +1009,9 @@ def phylophlan_metagenomic():
                                     if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
                 tot_sgbs = sum(sgb_2_count.values())
 
-                for binn in binn_2_sgb:
-                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id]) for sgb_id, sgb_sum in sgb_2_count.items()])
+                for binn in binn_2_sgb: 
+                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id]) for sgb_id, sgb_sum in sgb_2_count.items()
+                                                    if sgb_id in binn_2_sgb[binn].keys()])
 
         if args.add_fgb:
             if args.verbose:
@@ -925,12 +1071,20 @@ def phylophlan_metagenomic():
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
                 for binn, sgb_dists in binn_2_sgb.items():
-                    f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][5],
-                                                                        i[0],
-                                                                        sgb_2_info[i[0]][6],
-                                                                        sgb_2_info[i[0]][7],
-                                                                        i[1])
-                                                for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
+                    if sgb_dists:
+                        f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][5],
+                                                                            i[0],
+                                                                            sgb_2_info[i[0]][6],
+                                                                            sgb_2_info[i[0]][7],
+                                                                            i[1])
+                                                    for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
+            
+            if os.path.isfile('unassigned.txt'):
+                with open('unassigned.txt') as infile:
+                    f.write(infile.read())
+
+                remove_file('unassigned.txt', verbose=True)
+
 
     else:  # input vs. input mode
         disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file,
