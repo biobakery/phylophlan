@@ -151,7 +151,6 @@ def check_params(args, verbose=False):
 
         if not args.mapping.endswith('.txt.bz2'):
             args.mapping += '.txt.bz2'
-        
 
     if not os.path.isdir(args.input):
         error('"{}" folder not found, -i/--input must be a folder'.format(args.input), exit=True)
@@ -458,7 +457,7 @@ def pasting(output_prefix, prj_name, verbose=False):
     for inpc in glob.iglob(output_prefix + "_sketches/{}_inputs_list_*.txt".format(prj_name)):
         chunk = int(inpc[::-1].split('.')[1].split('_')[0][::-1])
         outc = outf.format(chunk)
-    
+
         if os.path.isfile('{}.msh'.format(outc)):
             if verbose:
                 info('"{}.msh" already exists\n'.format(outc))
@@ -501,12 +500,13 @@ def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True):
                 error('prefiltering crashed', init_new_line=False, exit=False)
     else:
         info('Prefiltering mash dist already computed!\n')
-    
+
+
 def prefiltering_rec(x):
     if not terminating.is_set():
         try:
             msh_idx, db_pref, dist_file, verbose = x
-            
+
             if not os.path.isfile(dist_file):
                 fout = open(dist_file, 'w')
 
@@ -553,16 +553,14 @@ def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbos
 
     for i in os.listdir(os.path.join(output_prefix + "_prefiltering/pref_dbs")):
         table = pd.read_csv(os.path.join(output_prefix + "_prefiltering/pref_dbs"+'/'+i), sep='\t',names=['sgb','mag','dist','pvalue','hits'])
-        
         table=table[table['dist'] < 0.2]
         table['sgb'] = table['sgb'].map(lambda x: x.split("__")[0].strip('genomes/SGB'))
         table['mag'] = table['mag'].map(lambda x: x.split('/')[-1].strip('.'+input_extension) + '.msh')
-
         input_list=list(table['mag'].unique())
+
         for sgb in chocophlan_list:
             genomes = [output_prefix+'_sketches/inputs/'+ g for g in table['mag'][table['sgb']==sgb].values]
             input_list = [x for x in input_list if output_prefix+'_sketches/inputs/' + x not in genomes]
-
             outs = outf.format(sgb)
             inpg=inpf.format(sgb)   
 
@@ -595,6 +593,7 @@ def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbos
         if verbose:
             t1 = time.time()
             info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
+
 
 def disting(output_prefix, db, nproc=1, verbose=True): 
     commands = []
@@ -847,7 +846,6 @@ def phylophlan_metagenomic():
     check_dependencies(verbose=args.verbose)
 
     prj_name=os.path.basename(args.output_prefix)
-
 
     if not args.only_input:  # if mashing vs. the SGBs
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
