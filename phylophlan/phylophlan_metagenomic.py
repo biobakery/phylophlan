@@ -2,13 +2,14 @@
 
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+              'Katarina Mladenovic (katarina.mladenovic@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Fabio Cumbo (fabio.cumbo@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.37'
-__date__ = '3 March 2023'
+__version__ = '3.0.38'
+__date__ = '27 April 2023'
 
 
 import sys
