@@ -867,7 +867,7 @@ def phylophlan_metagenomic():
 
         args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
-        args.db_pref = os.path.join(args.database_folder, 'dbs_pref')
+        args.db_pref = os.path.join(args.database_folder, args.database + '_pref')
 
         with open(os.path.join(args.database_folder, 'chocophlan_list.txt')) as f:
             args.chocophlan_list = f.read().splitlines()
