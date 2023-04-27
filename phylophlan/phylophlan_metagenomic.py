@@ -879,7 +879,6 @@ def phylophlan_metagenomic():
                                               nproc=args.nproc, verbose=args.verbose)
         args.database = args.output_prefix + '_sketches'
 
-
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
     prefiltering(args.output_prefix, prj_name, args.db_pref , nproc=1, verbose=True)
