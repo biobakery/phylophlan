@@ -430,7 +430,7 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
 
     if output_extension == GENOME_EXTENSION:
         # use Uniprot XML scheme to retrieve nucleotide sequences via ENA
-        schema = xmlschema.XMLSchema("https://www.uniprot.org/docs/uniprot.xsd")
+        schema = xmlschema.XMLSchema("https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot.xsd")
 
     for r in bz2.open(taxa2core_file, 'rt'):
         if r.startswith('#'):
@@ -472,15 +472,18 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
                 # Download the nucleotide sequences
                 urlretrieve(f"https://www.uniprot.org/uniprot/{core_prot}.xml",
                             f"{output}/{core_prot}.xml")
-                accid_entry = schema.to_dict(f'{output}/{core_prot}.xml')
-                embl_accid = ""
-                for dbentry in accid_entry['entry'][0]['dbReference']:
-                    if dbentry['@type'] == "EMBL":
-                        embl_accid = dbentry['property'][0]['@value']
-                        urlretrieve(f"https://www.ebi.ac.uk/ena/browser/api/fasta/{embl_accid}",
-                                    f"{output}/{core_prot}{output_extension}")
-                        break
-                if embl_accid == "":
+                try:
+                    accid_entry = schema.to_dict(f'{output}/{core_prot}.xml')
+                    embl_accid = ""
+                    for dbentry in accid_entry['entry'][0]['dbReference']:
+                        if dbentry['@type'] == "EMBL":
+                            embl_accid = dbentry['property'][0]['@value']
+                            urlretrieve(f"https://www.ebi.ac.uk/ena/browser/api/fasta/{embl_accid}",
+                                        f"{output}/{core_prot}{output_extension}")
+                            break
+                    if embl_accid == "":
+                        not_mapped.append(core_prot)
+                except xmlschema.XMLSchemaChildrenValidationError:
                     not_mapped.append(core_prot)
                 os.remove(f'{output}/{core_prot}.xml')
 
