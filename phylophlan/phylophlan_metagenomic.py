@@ -27,6 +27,7 @@ import datetime
 import itertools
 import copy
 import pandas as pd
+import csv
 
 
 if sys.version_info[0] < 3:
@@ -624,7 +625,7 @@ def disting_rec(x):
             sgb_msh_idx=sgb_msh_idx.format(msh_idx.split('/')[-1].split('_')[0].strip('SGB'))
 
             if not os.path.isfile(dist_file):
-                fout = open(dist_file, 'w')
+                fout = open(dist_file, 'a')
 
                 if verbose:
                     t0 = time.time()
@@ -684,6 +685,20 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
                 error(str(e), init_new_line=True)
                 error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                 raise
+
+def group_assignment(output_prefix, db, groups_map_path, nproc=1, verbose=True):
+    groups_dict={}
+    with open(groups_map_path) as fd:
+        rd = csv.reader(fd, delimiter=",")
+        for row in rd:
+            for sgb in row:
+                groups_dict[sgb]=row[0]
+
+    # save dict as file
+    with open(os.path.join(db, "groups_dict.csv"), "w", newline="") as fp:
+        writer = csv.DictWriter(fp, fieldnames=groups_dict.keys())
+        writer.writeheader()
+        writer.writerow(groups_dict)
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -850,20 +865,20 @@ def phylophlan_metagenomic():
 
 
     if not args.only_input:  # if mashing vs. the SGBs
-        if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
-                not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
-                not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
-            sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
-            download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
-            urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
-                    if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
+        #if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
+        #        not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
+        #        not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
+        #    sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
+        #    download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
+        #    urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
+        #            if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
 
-            if len(urls) != 3:
-                error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
-                      exit=True)
+        #    if len(urls) != 3:
+        #        error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
+        #              exit=True)
 
-            for url, filename in urls:
-                download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
+        #    for url, filename in urls:
+        #        download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
 
         args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
@@ -871,6 +886,8 @@ def phylophlan_metagenomic():
 
         with open(os.path.join(args.database_folder, 'chocophlan_list.txt')) as f:
             args.chocophlan_list = f.read().splitlines()
+
+        args.groups_map = os.path.join(args.database_folder, 'Jan21_merging.tsv')
 
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
@@ -892,8 +909,8 @@ def phylophlan_metagenomic():
         output_file = output_file.replace(".tsv", "_" + timestamp + ".tsv")
 
     if not args.only_input:  # if mashing vs. the SGBs
-        disting(args.output_prefix, args.database,
-                nproc=args.nproc, verbose=args.verbose)
+        disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
+        group_assignment(args.output_prefix, args.database_folder, args.groups_map, nproc=args.nproc, verbose=args.verbose)
 
         # SGBs mapping file
         if args.verbose:
@@ -986,8 +1003,7 @@ def phylophlan_metagenomic():
             for binn, dists in binn_2_dists.items():
                 if dists:
                     binn_2_sgb[binn][sgb_id] = np.mean(dists)
-
-        # remove mags with no SGBs in ChocoPhlAn
+    
         if args.add_ggb or args.add_fgb:
             for binn, dists in copy.deepcopy(binn_2_sgb).items():
                 if dists == {}:
@@ -1044,11 +1060,11 @@ def phylophlan_metagenomic():
 
                 for binn in binn_2_sgb:
                     sgb_id, sgb_dist = sorted(binn_2_sgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
-
+                                         
                     if sgb_dist <= 0.05:  # if SGB is assigned then output the GGB and FGB of the assigned SGB
-                        ggb_id = sgb_2_ggb[sgb_id]
+                        ggb_id = sgb_2_ggb[sgb_id.split('_')[0]]
                         ggb_dist = binn_2_ggb[binn][ggb_id]
-                        fgb_id = sgb_2_fgb[sgb_id]
+                        fgb_id = sgb_2_fgb[sgb_id.split('_')[0]]
                         fgb_dist = binn_2_fgb[binn][fgb_id]
                     else:  # otherwise report the closest GGB and FGB found
                         ggb_id, ggb_dist = sorted(binn_2_ggb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
@@ -1059,9 +1075,17 @@ def phylophlan_metagenomic():
                     refgen_closest_thr = refgen_sorted[0][1] + (refgen_sorted[0][1] * 0.05)
                     refgens_closest = [i for i in refgen_sorted if i[1] <= refgen_closest_thr][:100]
 
+                    # group_assignment
+                    with open(os.path.join(args.database_folder, "groups_dict.csv"), 'r') as infile:
+                        csvreader = csv.reader(infile)
+                        row1 = next(csvreader) 
+                        row2 = next(csvreader)
+                        if sgb_id in row1: 
+                            sgb_id=row2[row1.index(sgb_id)]+'_group'
+
                     f.write('\t'.join([binn,
-                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id][5], sgb_id, sgb_2_info[sgb_id][6],
-                                                               sgb_2_info[sgb_id][7], sgb_dist),
+                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id.split('_')[0]][5], sgb_id, sgb_2_info[sgb_id.split('_')[0]][6],
+                                                               sgb_2_info[sgb_id.split('_')[0]][7], sgb_dist),
                                        "{}_{}:{}:{}:{}".format(ggb_2_info[ggb_id][5], ggb_id, ggb_2_info[ggb_id][6],
                                                                ggb_2_info[ggb_id][7], ggb_dist),
                                        "{}_{}:{}:{}:{}".format(fgb_2_info[fgb_id][5], fgb_id, fgb_2_info[fgb_id][6],
@@ -1070,15 +1094,32 @@ def phylophlan_metagenomic():
             else:
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
-                for binn, sgb_dists in binn_2_sgb.items():
-                    if sgb_dists:
-                        f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][5],
+                # group_assignment
+                with open(os.path.join(args.database_folder, "groups_dict.csv"), 'r') as infile:
+                    csvreader = csv.reader(infile)
+                    row1 = next(csvreader) 
+                    row2 = next(csvreader)
+                    for binn, sgb_dists in binn_2_sgb.items():
+                        if sgb_dists:
+                            for i in sorted(sgb_dists.items(), key=lambda x: x[1]):
+                                sgb_id=i[0]
+                                if sgb_id in row1: 
+                                    sgb_id=row2[row1.index(sgb_id)]+'_group'
+                                    if sgb_id not in sgb_dists.keys():
+                                        sgb_dists[sgb_id]=i[1]
+                                        sgb_dists.pop(i[0])
+                                    else:
+                                        if sgb_dists[sgb_id] < i[1]:
+                                            sgb_dists[sgb_id] = i[1]
+                                        sgb_dists.pop(i[0])
+                                         
+                            f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0].split('_')[0]][5],
                                                                             i[0],
-                                                                            sgb_2_info[i[0]][6],
-                                                                            sgb_2_info[i[0]][7],
+                                                                            sgb_2_info[i[0].split('_')[0]][6],
+                                                                            sgb_2_info[i[0].split('_')[0]][7],
                                                                             i[1])
                                                     for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
-            
+
             if os.path.isfile('unassigned.txt'):
                 with open('unassigned.txt') as infile:
                     f.write(infile.read())
