@@ -864,20 +864,20 @@ def phylophlan_metagenomic():
     prj_name=os.path.basename(args.output_prefix)
 
     if not args.only_input:  # if mashing vs. the SGBs
-        #if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
-        #        not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
-        #        not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
-        #    sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
-        #    download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
-        #    urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
-        #            if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
+        if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
+                not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
+                not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
+            sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
+            download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
+            urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
+                    if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
 
-        #    if len(urls) != 3:
-        #        error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
-        #              exit=True)
+            if len(urls) != 3:
+                error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
+                      exit=True)
 
-        #    for url, filename in urls:
-        #        download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
+            for url, filename in urls:
+                download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
 
         args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
