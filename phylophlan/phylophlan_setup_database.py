@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.24'
-__date__ = '10 September 2022'
+__version__ = '3.0.25'
+__date__ = '27 March 2023'
 
 
 import sys
@@ -525,7 +525,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
     else:
         seqs = [SeqRecord(record.seq,
                           id='_'.join([db_name.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
-                                       record.id.replace('_', '-').replace(',', '-').replace(':', '').replace('|', '-'),
+                                       record.id.replace('_', '-').replace(',', '-').replace(':', '').split('|')[0].replace('|', '-'),
                                        str(count)]),
                           description='')
                 for count, record in enumerate(SeqIO.parse(bz2.open(inputt, 'rt') if inputt.endswith('.bz2')

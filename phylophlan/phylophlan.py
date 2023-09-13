@@ -6,8 +6,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.67'
-__date__ = '24 August 2022'
+__version__ = '3.0.68'
+__date__ = '13 September 2023'
 
 
 import os
@@ -70,7 +70,7 @@ MIN_NUM_ENTRIES = 4
 GENOME_EXTENSION = '.fna'
 PROTEOME_EXTENSION = '.faa'
 NOT_VARIANT_THRESHOLD = 0.99
-GAP_PERC_THRESHOLD = 0.67
+GAP_PERC_THRESHOLD = 0.8
 FRAGMENTARY_THRESHOLD = 0.85
 UNKNOWN_FRACTION = 0.3
 #DATABASE_DOWNLOAD_URL = "https://www.dropbox.com/s/x7cvma5bjzlllbt/phylophlan_databases.txt?dl=1"
@@ -371,7 +371,6 @@ def check_args(args, command_line_arguments, verbose=False):
     fragmentary_threshold = None
     gap_perc_threshold = None
     not_variant_threshold = None
-    remove_fragmentary_entries = True
 
     if args.diversity == 'low':
         # accurate
@@ -382,7 +381,7 @@ def check_args(args, command_line_arguments, verbose=False):
             trim = 'greedy'
             subsample = 'fivehundred'
             scoring_function = 'trident'
-            gap_perc_threshold = 0.67
+            gap_perc_threshold = 0.8
             fragmentary_threshold = 0.85
 
     if args.diversity == 'medium':
@@ -397,13 +396,13 @@ def check_args(args, command_line_arguments, verbose=False):
             trim = 'greedy'
             subsample = 'fifty'
             fragmentary_threshold = 0.75
-            gap_perc_threshold = 0.75
+            gap_perc_threshold = 0.85
             not_variant_threshold = 0.97
 
     if args.diversity == 'high':
         trim = 'greedy'
         scoring_function = 'trident'
-        gap_perc_threshold = 0.85
+        gap_perc_threshold = 0.9
 
         if args.accurate:
             subsample = 'twentyfive'
@@ -477,6 +476,10 @@ def check_args(args, command_line_arguments, verbose=False):
                  '"--remove_fragmentary_entries" have been specified, setting '
                  '"fragmentary_threshold={}"\n'.format(args.fragmentary_threshold))
 
+    # check gap_perc_threshold settings
+    if gap_perc_threshold and ('--gap_perc_threshold' not in command_line_arguments):
+        args.gap_perc_threshold = gap_perc_threshold
+
     # check trim settings
     if trim and ('--trim' not in command_line_arguments):
         args.trim = trim
@@ -490,13 +493,12 @@ def check_args(args, command_line_arguments, verbose=False):
         error('-f/--config_file must be specified')
         config_list(args.configs_folder, exit=True, exit_value=1)
 
-    if os.path.isfile(args.config_file):
-        pass
-    elif os.path.isfile(os.path.join(args.configs_folder, args.config_file)):
-        args.config_file = os.path.join(args.configs_folder, args.config_file)
-    else:
-        error('configuration file "{}" not found'.format(args.config_file))
-        config_list(args.configs_folder, exit=True, exit_value=1)
+    if not os.path.isfile(args.config_file):
+        if os.path.isfile(os.path.join(args.configs_folder, args.config_file)):
+            args.config_file = os.path.join(args.configs_folder, args.config_file)
+        else:
+            error('configuration file "{}" not found'.format(args.config_file))
+            config_list(args.configs_folder, exit=True, exit_value=1)
 
     # checking substitution matrix
     if args.subsample and (not args.submat):
@@ -1798,7 +1800,7 @@ def trim_gap_trim_rec(x):
         terminating.set()
 
 
-def trim_gap_perc(inputt, output_folder, gap_perc_threshold, nproc=1, verbose=False):
+def trim_gap_perc(inputt, output_folder, gap_perc_threshold, ninputs, nproc=1, verbose=False):
     commands = []
     check_and_create_folder(output_folder, create=True, verbose=verbose)
 
@@ -1807,20 +1809,20 @@ def trim_gap_perc(inputt, output_folder, gap_perc_threshold, nproc=1, verbose=Fa
             out = os.path.join(output_folder, os.path.basename(inp))
 
             if not os.path.isfile(out):
-                commands.append((inp, out, gap_perc_threshold, verbose))
+                commands.append((inp, out, gap_perc_threshold, ninputs, verbose))
 
         if not commands:  # aligned with UPP?
             for inp in glob.iglob(os.path.join(inputt, '*.aln_alignment_masked.fasta')):
                 out = os.path.join(output_folder, os.path.basename(inp).replace('_alignment_masked.fasta', ''))
 
                 if not os.path.isfile(out):
-                    commands.append((inp, out, gap_perc_threshold, verbose))
+                    commands.append((inp, out, gap_perc_threshold, ninputs, verbose))
     elif os.path.isfile(inputt):
         base, ext = os.path.splitext(inputt)
         out = base + '.trim_gap_perc' + ext
 
         if not os.path.isfile(out):
-            commands.append((inputt, out, gap_perc_threshold, verbose))
+            commands.append((inputt, out, gap_perc_threshold, ninputs, verbose))
     else:
         error('unrecognized input "{}" is not a folder nor a file'.format(inputt), exit=True)
 
@@ -1842,14 +1844,15 @@ def trim_gap_perc_rec(x):
     if not terminating.is_set():
         try:
             t0 = time.time()
-            inp, out, thr, verbose = x
+            inp, out, thr, totn, verbose = x
             info('Trimming gappy columns "{}"\n'.format(inp))
             inp_aln = AlignIO.read(inp, "fasta")
             cols_to_remove = []
             sub_aln = []
 
             for i in range(len(inp_aln[0])):
-                if gap_cost(inp_aln[:, i], norm=True) >= thr:
+                # compute the fraction of gaps wrt the full set on inputs and not just the (sub)set of the current MSA
+                if (totn - len(inp_aln[:, i]) + gap_cost(inp_aln[:, i], norm=False)) >= int(thr * totn):
                         cols_to_remove.append(i)
 
             for aln in inp_aln:
@@ -2027,7 +2030,7 @@ def remove_fragmentary_entries_rec(x):
             out_aln = []
 
             for aln in inp_aln:
-                if gap_cost(aln.seq) < frag_thr:
+                if gap_cost(aln.seq, norm=True) < frag_thr:
                     out_aln.append(aln)
 
             if len(out_aln) >= min_num_entries:
@@ -2250,7 +2253,7 @@ def fiftypercent(marker, len_seq):
 def trident(seq, submat, alpha=1, beta=0.5, gamma=3):
     return ((1 - symbol_diversity(seq))**alpha *
             (1 - stereochemical_diversity(seq, submat))**beta *
-            (1 - gap_cost(seq))**gamma)
+            (1 - gap_cost(seq, norm=True))**gamma)
 
 
 def muscle(seq, submat):
@@ -3019,7 +3022,6 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         out_f = os.path.join(args.data_folder, 'msas_no_Ns')
         convert_N2gap(inp_f, out_f, verbose=args.verbose)
         inp_f = out_f
-        pass
 
     if args.trim:
         if ('trim' in configs) and ((args.trim == 'gap_trim') or (args.trim == 'greedy')):
@@ -3028,8 +3030,12 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
             inp_f = out_f
 
         if (args.trim == 'gap_perc') or (args.trim == 'greedy'):
+            if (len(input_faa) + len(input_fna)) != len(all_inputs):
+                all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_gap_perc_input_list.pkl'),
+                                         nproc=args.nproc, verbose=args.verbose)
+
             out_f = os.path.join(args.data_folder, 'trim_gap_perc')
-            trim_gap_perc(inp_f, out_f, args.gap_perc_threshold, nproc=args.nproc, verbose=args.verbose)
+            trim_gap_perc(inp_f, out_f, args.gap_perc_threshold, len(all_inputs), nproc=args.nproc, verbose=args.verbose)
             inp_f = out_f
 
         if (args.trim == 'not_variant') or (args.trim == 'greedy'):
@@ -3046,10 +3052,6 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold,
                                    args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
-
-    # compute inputs list
-    all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
-                             nproc=args.nproc, verbose=args.verbose)
 
     if args.subsample and (not args.force_nucleotides):
         out_f = os.path.join(args.data_folder, 'sub')
@@ -3076,6 +3078,9 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         merging_gene_trees(inp_f, out_f, verbose=args.verbose)
         inp_f = out_f
     else:
+        # compute inputs list
+        all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
+                                 nproc=args.nproc, verbose=args.verbose)
         out_f = os.path.join(args.output, project_name + '_concatenated.aln')
         concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
         inp_f = out_f
