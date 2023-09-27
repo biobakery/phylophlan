@@ -3153,13 +3153,6 @@ def strainphlan_phylogeny_reconstruction(project_name, configs, args):
                                    args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
         inp_f = out_f
 
-    if args.subsample and (not args.force_nucleotides):
-        out_f = os.path.join(args.data_folder, 'sub')
-        subsample(inp_f, out_f, args.subsample, args.scoring_function,
-                  os.path.join(args.submat_folder, args.submat + '.pkl'),
-                  unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
-        inp_f = out_f
-
     if 'gene_tree1' in configs:
         sub_mod = load_substitution_model(args.maas)
         out_f = os.path.join(args.data_folder, 'gene_tree1')
