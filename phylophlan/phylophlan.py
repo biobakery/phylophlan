@@ -128,6 +128,7 @@ def read_params():
                          '"low": for genus-/species-/strain-level phylogenies; '
                          '"medium": for class-/order-level phylogenies; '
                          '"high": for phylum-/tree-of-life size phylogenies'))
+    p.add_argument('--strainphlan', action='store_true', default=False, help="The inputs are aligned markers from StrainPhlAn")
 
     group = p.add_mutually_exclusive_group()
     group.add_argument('--accurate', action='store_true', default=False,
@@ -291,9 +292,9 @@ def check_args(args, command_line_arguments, verbose=False):
         submod_list(args.submod_folder, exit=True)
     elif (not args.input) and (not args.clean):
         error('either -i/--input or -c/--clean must be specified', exit=True)
-    elif not args.database:
+    elif not args.database and not args.strainphlan:
         error('-d/--database must be specified')
-        database_list(args.databases_folder, exit=True)
+        database_list(args.databases_folder, exit=True, exit_value=1)
 
     input_folder_setted = False
 
@@ -2946,7 +2947,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
         input_fna_clean = load_input_files(inp_f, inp_bz2, args.genome_extension, verbose=args.verbose)
 
         inp_f = os.path.join(args.data_folder, 'map_dna')
-        gene_markers_identification(configs, 'map_dna', input_fna_clean, inp_f, args.database, db_dna, 
+        gene_markers_identification(configs, 'map_dna', input_fna_clean, inp_f, args.database, db_dna,
                                     nproc=args.nproc, verbose=args.verbose)
         gene_markers_selection(inp_f, largest_cluster if (args.db_type == 'a') and (not args.force_nucleotides) else best_hit,
                                args.min_num_proteins, nucleotides=True if args.db_type == 'a' else False,
@@ -2983,7 +2984,7 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
 
             if input_faa_clean:
                 inp_f = os.path.join(args.data_folder, 'map_aa')
-                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa, 
+                gene_markers_identification(configs, 'map_aa', input_faa_clean, inp_f, args.database, db_aa,
                                             nproc=args.nproc, verbose=args.verbose)
                 gene_markers_selection(inp_f, best_hit, args.min_num_proteins, nucleotides=False,
                                        nproc=args.nproc, verbose=args.verbose)
@@ -3099,7 +3100,108 @@ def standard_phylogeny_reconstruction(project_name, configs, args, db_dna, db_aa
             error('output phylogeny from [tree1] not recognized', exit=True)
 
         resolve_polytomies(inp_tree, os.path.join(args.output, outt), nproc=args.nproc, verbose=args.verbose)
-        refine_phylogeny(configs, 'tree2', inp_f, os.path.join(args.output, outt), os.path.abspath(args.output), 
+        refine_phylogeny(configs, 'tree2', inp_f, os.path.join(args.output, outt), os.path.abspath(args.output),
+                         project_name + '_refined.tre', nproc=args.nproc, verbose=args.verbose)
+
+
+
+
+def strainphlan_phylogeny_reconstruction(project_name, configs, args):
+    inp_f = args.input_folder
+    out_f = os.path.join(args.data_folder, 'markers')
+    inputs2markers(inp_f, out_f, args.min_num_entries, args.genome_extension, verbose=args.verbose)
+    inp_f = out_f
+
+    for f in os.listdir(out_f):
+        os.rename(os.path.join(out_f, f), os.path.join(out_f, f.replace('.fna', '.aln')))
+
+
+    if args.mutation_rates:
+        mr_out_d = os.path.join(args.output, 'mutation_rates')
+        mr_out_f = os.path.join(args.output, 'mutation_rates.tsv')
+        mutation_rates(inp_f, mr_out_d, nproc=args.nproc, verbose=args.verbose)
+        aggregate_mutation_rates(mr_out_d, mr_out_f, verbose=args.verbose)
+
+    if args.trim:
+        if ('trim' in configs) and ((args.trim == 'gap_trim') or (args.trim == 'greedy')):
+            out_f = os.path.join(args.data_folder, 'trim_gap_trim')
+            trim_gap_trim(configs, 'trim', inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+            inp_f = out_f
+
+        if (args.trim == 'gap_perc') or (args.trim == 'greedy'):
+            all_inputs = inputs_list(inp_f, '.aln',
+                                     os.path.join(args.data_folder, project_name + '_gap_perc_input_list.pkl'),
+                                     nproc=args.nproc, verbose=args.verbose)
+
+            out_f = os.path.join(args.data_folder, 'trim_gap_perc')
+            trim_gap_perc(inp_f, out_f, args.gap_perc_threshold, len(all_inputs), nproc=args.nproc,
+                          verbose=args.verbose)
+            inp_f = out_f
+
+        if (args.trim == 'not_variant') or (args.trim == 'greedy'):
+            out_f = os.path.join(args.data_folder, 'trim_not_variant')
+            trim_not_variant(inp_f, out_f, args.not_variant_threshold, nproc=args.nproc, verbose=args.verbose)
+            inp_f = out_f
+
+    if args.remove_fragmentary_entries or args.remove_only_gaps_entries:
+        out_f = os.path.join(args.data_folder, 'only_gaps')
+
+        if args.remove_fragmentary_entries:
+            out_f = os.path.join(args.data_folder, 'fragmentary')
+
+        remove_fragmentary_entries(inp_f, args.data_folder, out_f, args.fragmentary_threshold,
+                                   args.min_num_entries, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
+
+    if args.subsample and (not args.force_nucleotides):
+        out_f = os.path.join(args.data_folder, 'sub')
+        subsample(inp_f, out_f, args.subsample, args.scoring_function,
+                  os.path.join(args.submat_folder, args.submat + '.pkl'),
+                  unknown_fraction=args.unknown_fraction, nproc=args.nproc, verbose=args.verbose)
+        inp_f = out_f
+
+    if 'gene_tree1' in configs:
+        sub_mod = load_substitution_model(args.maas)
+        out_f = os.path.join(args.data_folder, 'gene_tree1')
+        build_gene_tree(configs, 'gene_tree1', sub_mod, inp_f, out_f, nproc=args.nproc, verbose=args.verbose)
+
+        if 'gene_tree2' in configs:
+            outt = os.path.join(args.data_folder, 'gene_tree1_polytomies')
+            resolve_polytomies(out_f, outt, nproc=args.nproc, verbose=args.verbose)
+            out_f = outt
+
+            outt = os.path.join(args.data_folder, 'gene_tree2')
+            refine_gene_tree(configs, 'gene_tree2', sub_mod, inp_f, out_f, outt, nproc=args.nproc, verbose=args.verbose)
+            out_f = outt
+
+        inp_f = out_f
+        out_f = os.path.join(args.data_folder, 'gene_trees.tre')
+        merging_gene_trees(inp_f, out_f, verbose=args.verbose)
+        inp_f = out_f
+    else:
+        # compute inputs list
+        all_inputs = inputs_list(inp_f, '.aln', os.path.join(args.data_folder, project_name + '_input_list.pkl'),
+                                 nproc=args.nproc, verbose=args.verbose)
+        out_f = os.path.join(args.output, project_name + '_concatenated.aln')
+        concatenate(all_inputs, inp_f, out_f, sort=args.sort, verbose=args.verbose)
+        inp_f = out_f
+
+    out_f = project_name + '.tre'
+    build_phylogeny(configs, 'tree1', inp_f, os.path.abspath(args.output), out_f, nproc=args.nproc,
+                    verbose=args.verbose)
+
+    if 'tree2' in configs:
+        outt = project_name + '_resolved.tre'
+        inp_tree = os.path.join(args.output, out_f)  # FastTree output phylogeny
+
+        if not os.path.isfile(inp_tree):
+            inp_tree += '.treefile'  # IQ-TREE output phylogeny
+
+        if not os.path.isfile(inp_tree):
+            error('output phylogeny from [tree1] not recognized', exit=True)
+
+        resolve_polytomies(inp_tree, os.path.join(args.output, outt), nproc=args.nproc, verbose=args.verbose)
+        refine_phylogeny(configs, 'tree2', inp_f, os.path.join(args.output, outt), os.path.abspath(args.output),
                          project_name + '_refined.tre', nproc=args.nproc, verbose=args.verbose)
 
 
@@ -3256,6 +3358,11 @@ def phylophlan_main():
     configs = read_configs(args.config_file, verbose=args.verbose)
     check_configs(configs, verbose=args.verbose)
     check_dependencies(configs, args.nproc, verbose=args.verbose)
+
+    if args.strainphlan:
+        strainphlan_phylogeny_reconstruction(project_name, configs, args)
+        return
+
 
     if not check_database(args.database, args.databases_folder, exit=False, verbose=args.verbose):
         database_download = os.path.join(args.databases_folder, os.path.basename(DATABASE_DOWNLOAD_URL).replace('?dl=1', ''))
