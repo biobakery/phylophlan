@@ -8,8 +8,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.38'
-__date__ = '27 April 2023'
+__version__ = '3.0.39'
+__date__ = '28 September 2023'
 
 
 import sys
@@ -396,6 +396,7 @@ def sketching(input_folder, input_extension, output_prefix, nproc=1, verbose=Fal
     else:
         info('No inputs found!\n')
 
+
 def sketching_rec(x):
     if not terminating.is_set():
         try:
@@ -483,8 +484,11 @@ def pasting(output_prefix, prj_name, verbose=False):
         t1 = time.time()
         info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
 
-# disting with prefiltering dbs
-def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True): 
+
+def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True):
+    """
+    disting with prefiltering dbs
+    """
     commands = []
 
     for inps in glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"):
@@ -548,8 +552,11 @@ def prefiltering_rec(x):
     else:
         terminating.set()
 
-# pasting inputs per sgb
-def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbose=True): 
+
+def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbose=True):
+    """
+    pasting inputs per sgb
+    """
     outf = output_prefix + "_prefiltering/" + "{}_paste"
     inpf = output_prefix + "_prefiltering/{}_genomes_inputs_list.txt"
 
@@ -686,19 +693,39 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
                 error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                 raise
 
-def group_assignment(output_prefix, db, groups_map_path, nproc=1, verbose=True):
-    groups_dict={}
-    with open(groups_map_path) as fd:
-        rd = csv.reader(fd, delimiter=",")
-        for row in rd:
-            for sgb in row:
-                groups_dict[sgb]=row[0]
 
-    # save dict as file
-    with open(os.path.join(db, "groups_dict.csv"), "w", newline="") as fp:
-        writer = csv.DictWriter(fp, fieldnames=groups_dict.keys())
-        writer.writeheader()
-        writer.writerow(groups_dict)
+def group_assignment(output_prefix, db, groups_map, nproc=1, verbose=True):
+    """
+    `groups_map` is a tab-separated file of the format:
+       SGB_ID<tab>SGB_ID[<tab>SGB_ID]*
+
+    the fisrt SGB ID is the representative SGB ID of the group
+    the list of the row describes all members of that group (representative included)
+
+    Example:
+        1397<tab>1395
+        17162<tab>17159<tab>17164<tab>17158
+
+    this function will return a dictionary like the following:
+        {'SGB1397': 'SGB1397_group',
+         'SGB1395': 'SGB1397_group',
+         'SGB17162': 'SGB17162_group',
+         'SGB17159': 'SGB17162_group',
+         'SGB17164': 'SGB17162_group',
+         'SGB17158': 'SGB17162_group'}
+
+    mapping each SGB to the group its belong to.
+    """
+    sgb_2_group = {}
+
+    with bz2.open(groups_map) as f:
+        for row in f:
+            sgb_repr = row.strip().split('\t')[0]
+
+            for sgb in row.strip().split('\t'):
+                sgb_2_group[f'SGB{sgb}'] = f'SGB{sgb_repr}_group'
+
+    return sgb_2_group
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -866,6 +893,7 @@ def phylophlan_metagenomic():
     if not args.only_input:  # if mashing vs. the SGBs
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
                 not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
+                not os.path.exists(os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')) or
                 not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
             sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
             download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
@@ -879,14 +907,11 @@ def phylophlan_metagenomic():
             for url, filename in urls:
                 download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
 
-        args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
+        groups_map = os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')
         args.db_pref = os.path.join(args.database_folder, args.database + '_pref')
-
-        with open(os.path.join(args.database_folder, 'chocophlan_list.txt')) as f:
-            args.chocophlan_list = f.read().splitlines()
-
-        args.groups_map = os.path.join(args.database_folder, 'Jan21_merging.tsv')
+        args.database = os.path.join(args.database_folder, args.database)  # keep this at the end otherwise args.database wil l be the full path
+        chocophlan_list = [i.replace('.msh', '') for i in os.listdir(args.database)]
 
         check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
@@ -898,7 +923,7 @@ def phylophlan_metagenomic():
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
     prefiltering(args.output_prefix, prj_name, args.db_pref , nproc=1, verbose=True)
-    prefiltering_pasting(args.output_prefix, args.input_extension, args.chocophlan_list, verbose=True)
+    prefiltering_pasting(args.output_prefix, args.input_extension, chocophlan_list, verbose=True)
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
@@ -908,7 +933,7 @@ def phylophlan_metagenomic():
 
     if not args.only_input:  # if mashing vs. the SGBs
         disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
-        group_assignment(args.output_prefix, args.database_folder, args.groups_map, nproc=args.nproc, verbose=args.verbose)
+        sgb_2_group = group_assignment(args.output_prefix, args.database_folder, groups_map, nproc=args.nproc, verbose=args.verbose)
 
         # SGBs mapping file
         if args.verbose:
