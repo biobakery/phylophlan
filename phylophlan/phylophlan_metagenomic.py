@@ -1132,7 +1132,7 @@ def phylophlan_metagenomic():
                                         sgb_dists[sgb_id]=i[1]
                                         sgb_dists.pop(i[0])
                                     else:
-                                        if sgb_dists[sgb_id] < i[1]:
+                                        if sgb_dists[sgb_id] > i[1]:
                                             sgb_dists[sgb_id] = i[1]
                                         sgb_dists.pop(i[0])
                                          
