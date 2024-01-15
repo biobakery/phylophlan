@@ -483,11 +483,7 @@ def pasting(output_prefix, prj_name, verbose=False):
 
 def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True):
     """
-<<<<<<< HEAD
     disting with prefiltering dbs ( dbs have to be created from representative genomes containing SGB ID in filename )
-=======
-    disting with prefiltering dbs
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
     """
     commands = []
 
@@ -553,11 +549,7 @@ def prefiltering_rec(x):
         terminating.set()
 
 
-<<<<<<< HEAD
 def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, database, verbose=True):
-=======
-def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, verbose=True):
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
     """
     pasting inputs per sgb
     """
@@ -728,11 +720,7 @@ def group_assignment(output_prefix, db, groups_map, nproc=1, verbose=True):
     """
     sgb_2_group = {}
 
-<<<<<<< HEAD
     with bz2.open(groups_map, 'rt') as f:
-=======
-    with bz2.open(groups_map) as f:
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
         for row in f:
             sgb_repr = row.strip().split('\t')[0]
 
@@ -907,13 +895,8 @@ def phylophlan_metagenomic():
     if not args.only_input:  # if mashing vs. the SGBs
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
                 not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
-<<<<<<< HEAD
                 not os.path.exists(os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')) ):
                # not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
-=======
-                not os.path.exists(os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')) or
-                not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
             sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
             download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
             urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
@@ -928,16 +911,11 @@ def phylophlan_metagenomic():
         args.mapping = os.path.join(args.database_folder, args.mapping)
         groups_map = os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')
         args.db_pref = os.path.join(args.database_folder, args.database + '_pref')
-<<<<<<< HEAD
         args.database = os.path.join(args.database_folder, args.database)  # keep this at the end otherwise args.database will be the full path
 
         if ( os.path.exists(os.path.join(args.database_folder, args.database + '.md5')) or not os.path.exists(os.path.join(args.database_folder, args.database)) ):
             check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
         untar_and_decompress(args.database + '.tar', args.database, args.database_folder, nproc=args.nproc, verbose=args.verbose)
-=======
-        args.database = os.path.join(args.database_folder, args.database)  # keep this at the end otherwise args.database wil l be the full path
-        chocophlan_list = [i.replace('.msh', '') for i in os.listdir(args.database)]
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
 
         chocophlan_list = [i.replace('.msh', '') for i in os.listdir(args.database)]
     else:  # mashing inputs against themselves
@@ -947,13 +925,8 @@ def phylophlan_metagenomic():
 
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
-<<<<<<< HEAD
     prefiltering(args.output_prefix, prj_name, args.db_pref , args.nproc, verbose=True)
     prefiltering_pasting(args.output_prefix, args.input_extension, chocophlan_list, os.path.basename(args.database), verbose=True)
-=======
-    prefiltering(args.output_prefix, prj_name, args.db_pref , nproc=1, verbose=True)
-    prefiltering_pasting(args.output_prefix, args.input_extension, chocophlan_list, verbose=True)
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
@@ -1143,7 +1116,6 @@ def phylophlan_metagenomic():
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
                 # group_assignment
-<<<<<<< HEAD
                 for binn, sgb_dists in binn_2_sgb.items():
                     if sgb_dists:
                         for i in sorted(sgb_dists.items(), key=lambda x: x[1]):
@@ -1160,27 +1132,6 @@ def phylophlan_metagenomic():
 
 
                         f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0].split('_')[0]][5],
-=======
-                with open(os.path.join(args.database_folder, "groups_dict.csv"), 'r') as infile:
-                    csvreader = csv.reader(infile)
-                    row1 = next(csvreader) 
-                    row2 = next(csvreader)
-                    for binn, sgb_dists in binn_2_sgb.items():
-                        if sgb_dists:
-                            for i in sorted(sgb_dists.items(), key=lambda x: x[1]):
-                                sgb_id=i[0]
-                                if sgb_id in row1: 
-                                    sgb_id=row2[row1.index(sgb_id)]+'_group'
-                                    if sgb_id not in sgb_dists.keys():
-                                        sgb_dists[sgb_id]=i[1]
-                                        sgb_dists.pop(i[0])
-                                    else:
-                                        if sgb_dists[sgb_id] > i[1]:
-                                            sgb_dists[sgb_id] = i[1]
-                                        sgb_dists.pop(i[0])
-                                         
-                            f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0].split('_')[0]][5],
->>>>>>> 9612e34f30e545c7ffcab8340f3267f4866a8993
                                                                             i[0],
                                                                             sgb_2_info[i[0].split('_')[0]][6],
                                                                             sgb_2_info[i[0].split('_')[0]][7],
