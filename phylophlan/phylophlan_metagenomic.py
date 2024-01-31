@@ -558,20 +558,23 @@ def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, databa
 
     for i in os.listdir(os.path.join(output_prefix + "_prefiltering/pref_dbs")):
         table = pd.read_csv(os.path.join(output_prefix + "_prefiltering/pref_dbs"+'/'+i), sep='\t',names=['sgb','mag','dist','pvalue','hits'])
+        mags_full = list(table['mag'].unique())
+
         table=table[table['dist'] < 0.2]
         table['sgb'] = table['sgb'].map(lambda x: x.split("__")[0].replace('genomes/SGB', "") )
         table['mag'] = table['mag'].map(lambda x: x.split('/')[-1].rsplit('.', 1)[0] + '.msh')
-        input_list = list(table['mag'].unique())
+        input_mags = list(table['mag'].unique())
+        diff = list(filter(lambda x: x.split('/')[-1].rsplit('.', 1)[0] + '.msh' not in input_mags, mags_full))
 
-	# filter out mags who's closest SGB is not in Chocophlan and put them in unnasigned.txt
-        for mag in input_list:
+	# filter out mags who's closest SGB is not in Chocophlan and put them in unassigned.txt
+        for mag in input_mags:
             mag_tbl = table[table['mag']==mag].sort_values('dist')
             if mag_tbl.iloc[0]['sgb'] not in chocophlan_list:
                 table.drop(table[table['mag'] == mag].index, inplace=True)
 
         for sgb in chocophlan_list:
             genomes = [output_prefix+'_sketches/inputs/'+ g for g in table['mag'][table['sgb']==sgb].values]
-            input_list = [x for x in input_list if output_prefix+'_sketches/inputs/' + x not in genomes]
+            input_mags = [x for x in input_mags if output_prefix+'_sketches/inputs/' + x not in genomes]
             outs = outf.format(sgb)
             inpg = inpf.format(sgb)
 
@@ -598,8 +601,10 @@ def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, databa
                 raise
 
         with open('unassigned.txt', 'w') as f:
-            for mag in input_list:
-                f.write(f"{mag.strip('.msh')} is likely close to an SGB present in the full database but not available in the {database} database\n")
+            for mag in input_mags:
+                f.write(f"{mag.strip('.msh')} is close to an SGB not present in the {database} database\n")
+            for mag in diff:
+                f.write(f"{mag.split('/')[-1].rsplit('.', 1)[0].strip('.msh')} is not close to any SGB present in the {database} database\n")
 
         if verbose:
             t1 = time.time()
