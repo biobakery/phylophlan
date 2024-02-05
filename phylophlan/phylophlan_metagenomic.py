@@ -2,13 +2,14 @@
 
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
+              'Katarina Mladenovic (katarina.mladenovic@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Fabio Cumbo (fabio.cumbo@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.37'
-__date__ = '3 March 2023'
+__version__ = '3.0.39'
+__date__ = '28 September 2023'
 
 
 import sys
@@ -27,15 +28,16 @@ import datetime
 import itertools
 import copy
 import pandas as pd
+import csv
 
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
                     .format(__version__, sys.version_info[0], sys.version_info[1], sys.version_info[2]))
 
-HOW_MANY = "10"
+HOW_MANY = "8"
 #DOWNLOAD_URL = "https://www.dropbox.com/s/xdqm836d2w22npb/phylophlan_metagenomic.txt?dl=1"
-DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_metagenomic.txt"
+DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_metagenomic_new.txt"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -90,12 +92,9 @@ def read_params():
                    help="Path to the folder that contains the database file")
     p.add_argument('--only_input', action='store_true', default=False,
                    help="If specified provides a distance matrix between only the input genomes provided")
-    p.add_argument('--add_ggb', action='store_true', default=False,
-                   help=("If specified adds GGB assignments. If specified with --add_fgb, then -n/--how_many will be set to 1"
-                         " and will be adding a column that reports the closest reference genome"))
-    p.add_argument('--add_fgb', action='store_true', default=False,
-                   help=("If specified adds FGB assignments. If specified with --add_ggb, then -n/--how_many will be set to 1"
-                         " and will be adding a column that reports the closest reference genome"))
+    p.add_argument('--add_ggb_fgb', action='store_true', default=False,
+                   help=("If specified adds GGB and FGB assignments. It will be adding a column for each "
+                         " that reports the closest reference genome, -n/--how_many will be set to 1"))
     p.add_argument('--overwrite', action='store_true', default=False, help="If specified overwrite the output file if exists")
     p.add_argument('--citation', action='version',
                    version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
@@ -107,13 +106,14 @@ def read_params():
     p.add_argument('-v', '--version', action='version',
                    version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
                    help="Prints the current phylophlan_metagenomic.py version and exit")
+
     return p.parse_args()
 
 
 def database_list(databases_folder, update=False, exit=False, exit_value=0):
     sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
     download(DOWNLOAD_URL, sgbs_url, overwrite=update, verbose=False)
-    urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '').replace('.txt.bz2', '')
+    urls = set([r.strip().split('\t')[-1].replace('.md5', '').replace('.tar', '')
                 for r in open(sgbs_url)
                 if not r.startswith('#') and (len(r.split('\t')) == 2) and ('tutorial' not in r)])
 
@@ -197,12 +197,14 @@ def check_params(args, verbose=False):
     create_folder(args.output_prefix + '_sketches', verbose=args.verbose)
     create_folder(args.output_prefix + '_sketches/inputs', verbose=args.verbose)
     create_folder(args.output_prefix + '_dists', verbose=args.verbose)
+    create_folder(args.output_prefix + '_prefiltering', verbose=True)
+    create_folder(args.output_prefix + '_prefiltering/pref_dbs', verbose=True)
 
-    if args.add_ggb and args.add_fgb:
+    if args.add_ggb_fgb:
         args.how_many = 1
 
         if verbose:
-            info('Both --add_ggb and --add_fgb specified, setting -n/--how_many to "{}"'.format(args.how_many))
+            info('--add_ggb_fgb specified, setting -n/--how_many to "{}"'.format(args.how_many))
 
     if verbose:
         info('Arguments: {}\n'.format(vars(args)), init_new_line=True)
@@ -234,7 +236,7 @@ class ReportHook():
 
     def report(self, blocknum, block_size, total_size):
         """
-        Print download progress message
+v        Print download progress message
         """
 
         if blocknum == 0:
@@ -458,6 +460,7 @@ def pasting(output_prefix, prj_name, verbose=False):
         if os.path.isfile('{}.msh'.format(outc)):
             if verbose:
                 info('"{}.msh" already exists\n'.format(outc))
+                remove_file(inpc, output_prefix + "_sketches")
             continue
 
         if verbose:
@@ -467,6 +470,7 @@ def pasting(output_prefix, prj_name, verbose=False):
 
         try:
             sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+            remove_file(inpc, output_prefix + "_sketches")
         except Exception as e:
             error(str(e), init_new_line=True)
             error('cannot execute command\n {}'.format(' '.join(cmd)), init_new_line=True)
@@ -477,41 +481,43 @@ def pasting(output_prefix, prj_name, verbose=False):
         info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
 
 
-def disting(output_prefix, prj_name, db, nproc=1, verbose=False):
+def prefiltering(output_prefix, prj_name, db_pref, nproc=1, verbose=True):
+    """
+    disting with prefiltering dbs ( dbs have to be created from representative genomes containing SGB ID in filename )
+    """
     commands = []
-    inps = glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh")
 
-    for sgb_msh_idx in glob.iglob(os.path.join(db, '*.msh')):
-        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(sgb_msh_idx).replace('.msh', '.tsv'))
-        commands.append((inps, sgb_msh_idx, dist_file, verbose))
+    for inps in glob.glob(output_prefix + "_sketches/" + prj_name + "_paste_*.msh"):
+        dist_file = os.path.join(output_prefix + "_prefiltering/pref_dbs", os.path.basename(inps).replace('.msh', '.tsv'))
+        commands.append((inps, db_pref, dist_file, verbose, nproc))
 
     if commands:
         terminating = mp.Event()
 
         with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
             try:
-                [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
+                [_ for _ in pool.imap_unordered(prefiltering_rec, commands, chunksize=1)]
             except Exception as e:
                 error(str(e), init_new_line=True)
-                error('disting crashed', init_new_line=True, exit=True)
+                error('prefiltering crashed', init_new_line=False, exit=False)
     else:
-        info('Mash dist already computed!\n')
+        info('Prefiltering mash dist already computed!\n')
 
 
-def disting_rec(x):
+def prefiltering_rec(x):
     if not terminating.is_set():
         try:
-            pasted_bins, sgb_msh_idx, dist_file, verbose = x
+            msh_idx, db_pref, dist_file, verbose, nproc = x
 
             if not os.path.isfile(dist_file):
                 fout = open(dist_file, 'w')
 
                 if verbose:
                     t0 = time.time()
-                    info('Disting "{}"\n'.format(sgb_msh_idx))
+                    info('Disting "{}" with prefiltering database\n'.format(msh_idx))
 
-                for msh_idx in pasted_bins:
-                    cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
+                for db in os.listdir(db_pref):
+                    cmd = ['mash', 'dist', '-p', str(nproc), os.path.join(db_pref, db), msh_idx]
 
                     try:
                         sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': '1'}))
@@ -525,11 +531,143 @@ def disting_rec(x):
 
                 if verbose:
                     t1 = time.time()
+                    info('Prefiltering dist for "{}" computed in {}s\n'.format(db_pref, int(t1 - t0)))
+
+                fout.close()
+
+            elif verbose:
+                    info('"{}" already present\n'.format(dist_file))
+
+#            remove_file(msh_idx)
+
+        except Exception as e:
+            terminating.set()
+            error(str(e), init_new_line=True)
+            error('error while disting\n    {} \n with prefiltering database'.format('\n    '.join([str(a) for a in x])), init_new_line=True)
+            raise
+    else:
+        terminating.set()
+
+
+def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, database, verbose=True):
+    """
+    pasting inputs per sgb
+    """
+    outf = output_prefix + "_prefiltering/" + "{}_paste"
+    inpf = output_prefix + "_prefiltering/{}_genomes_inputs_list.txt"
+
+    for i in os.listdir(os.path.join(output_prefix + "_prefiltering/pref_dbs")):
+        table = pd.read_csv(os.path.join(output_prefix + "_prefiltering/pref_dbs"+'/'+i), sep='\t',names=['sgb','mag','dist','pvalue','hits'])
+        mags_full = list(table['mag'].unique())
+
+        table=table[table['dist'] < 0.2]
+        table['sgb'] = table['sgb'].map(lambda x: x.split("__")[0].replace('genomes/SGB', "") )
+        table['mag'] = table['mag'].map(lambda x: x.split('/')[-1].rsplit('.', 1)[0] + '.msh')
+        input_mags = list(table['mag'].unique())
+        diff = list(filter(lambda x: x.split('/')[-1].rsplit('.', 1)[0] + '.msh' not in input_mags, mags_full))
+
+	# filter out mags who's closest SGB is not in Chocophlan and put them in unassigned.txt
+        for mag in input_mags:
+            mag_tbl = table[table['mag']==mag].sort_values('dist')
+            if mag_tbl.iloc[0]['sgb'] not in chocophlan_list:
+                table.drop(table[table['mag'] == mag].index, inplace=True)
+
+        for sgb in chocophlan_list:
+            genomes = [output_prefix+'_sketches/inputs/'+ g for g in table['mag'][table['sgb']==sgb].values]
+            input_mags = [x for x in input_mags if output_prefix+'_sketches/inputs/' + x not in genomes]
+            outs = outf.format(sgb)
+            inpg = inpf.format(sgb)
+
+            with open(inpg, 'w') as f:
+                f.write('\n'.join(genomes))
+
+            if os.path.isfile('{}.msh'.format(outs)):
+                if verbose:
+                    info('"{}.msh" already exists\n'.format(outs))
+                    remove_file(inpg, output_prefix + "_prefiltering")
+                continue
+
+            if verbose:
+                info('Pasting "{}.msh"\n'.format(outs))
+
+            cmd = ['mash', 'paste', '-l', outs, inpg]
+
+            try:
+                sb.check_call(cmd, stdout=sb.DEVNULL, stderr=sb.DEVNULL)
+                remove_file(inpg, output_prefix + "_prefiltering")
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('cannot execute command\n {}'.format(' '.join(cmd)), init_new_line=True)
+                raise
+
+        with open('unassigned.txt', 'w') as f:
+            for mag in input_mags:
+                f.write(f"{mag.strip('.msh')} is close to an SGB not present in the {database} database\n")
+            for mag in diff:
+                f.write(f"{mag.split('/')[-1].rsplit('.', 1)[0].strip('.msh')} is not close to any SGB present in the {database} database\n")
+
+        if verbose:
+            t1 = time.time()
+            info('Inputs pasted in {}s\n'.format(int(t1 - t0)))
+
+
+def disting(output_prefix, db, nproc=1, verbose=True): 
+    commands = []
+
+    for inps in glob.glob(output_prefix + "_prefiltering/" + "*_paste.msh"):
+        sgb_msh_idx=os.path.join(db, '{}.msh')
+        dist_file = os.path.join(output_prefix + "_dists", os.path.basename(inps).replace('_paste.msh', '.tsv'))
+        commands.append((inps, sgb_msh_idx, dist_file, verbose))
+
+    if commands:
+        terminating = mp.Event()
+
+        with mp.Pool(initializer=initt, initargs=(terminating,), processes=nproc) as pool:
+            try:
+                [_ for _ in pool.imap_unordered(disting_rec, commands, chunksize=1)]
+            except Exception as e:
+                error(str(e), init_new_line=True)
+                error('disting crashed', init_new_line=True, exit=False)
+    else:
+        info('Mash dist already computed!\n')
+
+
+def disting_rec(x):
+    if not terminating.is_set():
+        try:
+            msh_idx, sgb_msh_idx, dist_file, verbose = x
+            sgb_msh_idx=sgb_msh_idx.format(msh_idx.split('/')[-1].split('_')[0].strip('SGB'))
+
+            if not os.path.isfile(dist_file):
+                fout = open(dist_file, 'a')
+
+                if verbose:
+                    t0 = time.time()
+                    info('Disting "{}"\n'.format(sgb_msh_idx))
+
+                cmd = ['mash', 'dist', '-p', '1', sgb_msh_idx, msh_idx]
+
+                try:
+                    sb.check_call(cmd, stdout=fout, stderr=sb.DEVNULL, env=os.environ.copy().update({'OMP_NUM_THREADS': '1'}))
+                except Exception as e:
+                    terminating.set()
+                    fout.close()
+                    remove_file(dist_file, verbose=verbose)
+                    error(str(e), init_new_line=True)
+                    error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
+                    raise
+
+                if verbose:
+                    t1 = time.time()
                     info('Dist for "{}" computed in {}s\n'.format(sgb_msh_idx, int(t1 - t0)))
 
                 fout.close()
+
             elif verbose:
                 info('"{}" already present\n'.format(dist_file))
+
+            remove_file(msh_idx)
+
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -561,6 +699,40 @@ def disting_input_vs_input(output_prefix, prj_name, output_file, nproc=1, verbos
                 error(str(e), init_new_line=True)
                 error('cannot execute command\n    {}'.format(' '.join(cmd)), init_new_line=True)
                 raise
+
+
+def group_assignment(output_prefix, db, groups_map, nproc=1, verbose=True):
+    """
+    `groups_map` is a tab-separated file of the format:
+       SGB_ID<tab>SGB_ID[<tab>SGB_ID]*
+
+    the fisrt SGB ID is the representative SGB ID of the group
+    the list of the row describes all members of that group (representative included)
+
+    Example:
+        1397<tab>1395
+        17162<tab>17159<tab>17164<tab>17158
+
+    this function will return a dictionary like the following:
+        {'SGB1397': 'SGB1397_group',
+         'SGB1395': 'SGB1397_group',
+         'SGB17162': 'SGB17162_group',
+         'SGB17159': 'SGB17162_group',
+         'SGB17164': 'SGB17162_group',
+         'SGB17158': 'SGB17162_group'}
+
+    mapping each SGB to the group its belong to.
+    """
+    sgb_2_group = {}
+
+    with bz2.open(groups_map, 'rt') as f:
+        for row in f:
+            sgb_repr = row.strip().split('\t')[0]
+
+            for sgb in row.strip().split('\t'):
+                sgb_2_group[f'SGB{sgb}'] = f'SGB{sgb_repr}_group'
+
+    return sgb_2_group
 
 
 def check_md5(tar_file, md5_file, verbose=False):
@@ -595,15 +767,14 @@ def check_md5(tar_file, md5_file, verbose=False):
               "to re-download them. If this happens again, please report this error.", exit=True)
 
 
-def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
+def untar_and_decompress(tar_file, database, database_folder, nproc=1, verbose=False):
     # untar
-    if not os.path.isdir(folder):
+    if not os.path.isdir(database):
         try:
             if verbose:
                 info('Untar {} mash database\n'.format(tar_file))
-
             tarfile_handle = tarfile.open(tar_file)
-            tarfile_handle.extractall(path=folder)
+            tarfile_handle.extractall(path=database_folder)
             tarfile_handle.close()
         except EnvironmentError:
             error('Warning: Unable to extract "{}".\n'.format(tar_file))
@@ -611,9 +782,9 @@ def untar_and_decompress(tar_file, folder, nproc=1, verbose=False):
         info('Mash database already untarred\n')
 
     # uncompress mash indexes
-    commands = [(os.path.join(folder, f), os.path.join(folder, f.replace('.bz2', '')), verbose)
-                for f in os.listdir(folder)
-                if not os.path.isfile(os.path.join(folder, f.replace('.bz2', '')))]
+    commands = [(os.path.join(database, f), os.path.join(database, f.replace('.bz2', '')), verbose)
+                for f in os.listdir(database)
+                if not os.path.isfile(os.path.join(database, f.replace('.bz2', '')))]
 
     if commands:
         if verbose:
@@ -642,6 +813,7 @@ def decompress_rec(x):
             with open(msh_file, 'wb') as msh_h, bz2.open(bz2_file, 'rb') as bz2_h:
                 for data in iter(lambda: bz2_h.read(100 * 1024), b''):
                     msh_h.write(data)
+            remove_file(bz2_file)
         except Exception as e:
             terminating.set()
             error(str(e), init_new_line=True)
@@ -677,7 +849,7 @@ def merging(output_prefix, prj_name, output_file, verbose=False):
                 matrix_map[indexes[1]] = {}
 
             matrix_map[indexes[1]][indexes[0]] = filepath
-        
+
         # Concat pair-wise distance matrices
         matrix = None
         matrix_empty = True
@@ -723,27 +895,34 @@ def phylophlan_metagenomic():
     check_params(args, verbose=args.verbose)
     check_dependencies(verbose=args.verbose)
 
+    prj_name=os.path.basename(args.output_prefix)
+
     if not args.only_input:  # if mashing vs. the SGBs
         if (    not os.path.exists(os.path.join(args.database_folder, args.database)) or
                 not os.path.exists(os.path.join(args.database_folder, args.mapping)) or
-                not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
+                not os.path.exists(os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')) ):
+               # not os.path.exists(os.path.join(args.database_folder, args.database + '.md5'))    ):
             sgbs_url = os.path.basename(DOWNLOAD_URL).replace('?dl=1', '')
             download(DOWNLOAD_URL, sgbs_url, verbose=args.verbose)
             urls = [tuple(r.strip().split('\t')) for r in open(sgbs_url)
                     if not r.startswith('#') and (args.database in r) and (len(r.split('\t')) == 2)]
-
-            if len(urls) != 3:
+            if len(urls) != 2:
                 error('invalid number of URLs for "{}" in the downloaded file'.format(args.database),
                       exit=True)
 
             for url, filename in urls:
                 download(url, os.path.join(args.database_folder, filename), verbose=args.verbose)
 
-        args.database = os.path.join(args.database_folder, args.database)
         args.mapping = os.path.join(args.database_folder, args.mapping)
+        groups_map = os.path.join(args.database_folder, f'{args.database}_groups.tsv.bz2')
+        args.db_pref = os.path.join(args.database_folder, args.database + '_pref')
+        args.database = os.path.join(args.database_folder, args.database)  # keep this at the end otherwise args.database will be the full path
 
-        check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
-        untar_and_decompress(args.database + '.tar', args.database, nproc=args.nproc, verbose=args.verbose)
+        if ( os.path.exists(os.path.join(args.database_folder, args.database + '.md5')) or not os.path.exists(os.path.join(args.database_folder, args.database)) ):
+            check_md5(args.database + '.tar', args.database + '.md5', verbose=args.verbose)
+        untar_and_decompress(args.database + '.tar', args.database, args.database_folder, nproc=args.nproc, verbose=args.verbose)
+
+        chocophlan_list = [i.replace('.msh', '') for i in os.listdir(args.database)]
     else:  # mashing inputs against themselves
         sketching_inputs_for_input_input_dist(args.input, args.input_extension, args.output_prefix,
                                               nproc=args.nproc, verbose=args.verbose)
@@ -751,6 +930,8 @@ def phylophlan_metagenomic():
 
     sketching(args.input, args.input_extension, args.output_prefix, nproc=args.nproc, verbose=args.verbose)
     pasting(args.output_prefix, os.path.basename(args.output_prefix), verbose=args.verbose)
+    prefiltering(args.output_prefix, prj_name, args.db_pref , args.nproc, verbose=True)
+    prefiltering_pasting(args.output_prefix, args.input_extension, chocophlan_list, os.path.basename(args.database), verbose=True)
 
     output_file = args.output_prefix + ('.tsv' if not args.only_input else '_distmat.tsv')
 
@@ -759,8 +940,8 @@ def phylophlan_metagenomic():
         output_file = output_file.replace(".tsv", "_" + timestamp + ".tsv")
 
     if not args.only_input:  # if mashing vs. the SGBs
-        disting(args.output_prefix, os.path.basename(args.output_prefix), args.database,
-                nproc=args.nproc, verbose=args.verbose)
+        disting(args.output_prefix, args.database, nproc=args.nproc, verbose=args.verbose)
+        sgb_2_group = group_assignment(args.output_prefix, args.database_folder, groups_map, nproc=args.nproc, verbose=args.verbose)
 
         # SGBs mapping file
         if args.verbose:
@@ -789,7 +970,7 @@ def phylophlan_metagenomic():
         binn_2_refgen = None
         refgen_list = None
 
-        if args.add_ggb:
+        if args.add_ggb_fgb:
             if args.verbose:
                 info('Loading GGB mapping file\n')
 
@@ -806,7 +987,6 @@ def phylophlan_metagenomic():
 
             binn_2_ggb = copy.deepcopy(binn_2_sgb)
 
-        if args.add_fgb:
             if args.verbose:
                 info('Loading FGB mapping file\n')
 
@@ -822,7 +1002,7 @@ def phylophlan_metagenomic():
 
             binn_2_fgb = copy.deepcopy(binn_2_sgb)
 
-        if args.add_ggb and args.add_fgb:
+        if args.add_ggb_fgb:
             if args.verbose:
                 info('Loading reference genomes list\n')
 
@@ -835,7 +1015,7 @@ def phylophlan_metagenomic():
             info('Loading mash dist files\n')
 
         for sgb in os.listdir(dists_folder):
-            sgbid = sgb.replace('.tsv', '')
+            sgb_id = sgb.replace('.tsv', '')
             binn_2_dists = dict([(binn, []) for binn in binn_2_sgb])
 
             with open(os.path.join(dists_folder, sgb), 'rt') as f:
@@ -844,16 +1024,28 @@ def phylophlan_metagenomic():
                     binn = os.path.splitext(os.path.basename(rc[1]))[0]
                     binn_2_dists[binn].append(float(rc[2]))
 
-                    if args.add_ggb and args.add_fgb:
+                    if args.add_ggb_fgb:
                         sgb_member = os.path.splitext(os.path.basename(rc[0]))[0]
 
-                        if sgb_member in refgen_list:
-                            binn_2_refgen[binn].append((sgb_member, float(rc[2])))
+                        #if sgb_member in refgen_list:
+                        binn_2_refgen[binn].append((sgb_member, float(rc[2])))
 
             for binn, dists in binn_2_dists.items():
-                binn_2_sgb[binn][sgbid] = np.mean(dists)
+                if dists:
+                    binn_2_sgb[binn][sgb_id] = np.mean(dists)
 
-        if args.add_ggb:
+        if args.add_ggb_fgb:
+            for binn, dists in copy.deepcopy(binn_2_sgb).items():
+                if dists == {}:
+                    binn_2_sgb.pop(binn)
+                    if args.add_ggb_fgb:
+                        binn_2_ggb.pop(binn)
+                        binn_2_fgb.pop(binn)
+            for binn, dists in copy.deepcopy(binn_2_refgen).items():
+                if dists == []:
+                    binn_2_refgen.pop(binn)
+
+        if args.add_ggb_fgb:
             if args.verbose:
                 info('Computing GGB distances\n')
 
@@ -864,10 +1056,10 @@ def phylophlan_metagenomic():
                                     if info_list[mdidx['List of reconstructed genomes']].strip() != '-']])
                 tot_sgbs = sum(sgb_2_count.values())
 
-                for binn in binn_2_sgb:
-                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id]) for sgb_id, sgb_sum in sgb_2_count.items()])
+                for binn in binn_2_sgb: 
+                    binn_2_ggb[binn][ggb_id] = sum([((sgb_sum / tot_sgbs) * binn_2_sgb[binn][sgb_id]) for sgb_id, sgb_sum in sgb_2_count.items()
+                                                    if sgb_id in binn_2_sgb[binn].keys()])
 
-        if args.add_fgb:
             if args.verbose:
                 info('Computing FGB distances\n')
 
@@ -886,7 +1078,7 @@ def phylophlan_metagenomic():
             args.how_many = len(glob.glob(os.path.join(args.database, '*.msh')))
 
         with open(output_file, 'w') as f:
-            if args.add_ggb and args.add_fgb:
+            if args.add_ggb_fgb:
                 f.write('#last SGB id {}\n'.format(sorted(sgb_2_info, key=int, reverse=True)[0]))
                 f.write('#last GGB id {}\n'.format(sorted(ggb_2_info, key=int, reverse=True)[0]))
                 f.write('#last FGB id {}\n'.format(sorted(fgb_2_info, key=int, reverse=True)[0]))
@@ -900,9 +1092,9 @@ def phylophlan_metagenomic():
                     sgb_id, sgb_dist = sorted(binn_2_sgb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
 
                     if sgb_dist <= 0.05:  # if SGB is assigned then output the GGB and FGB of the assigned SGB
-                        ggb_id = sgb_2_ggb[sgb_id]
+                        ggb_id = sgb_2_ggb[sgb_id.split('_')[0]]
                         ggb_dist = binn_2_ggb[binn][ggb_id]
-                        fgb_id = sgb_2_fgb[sgb_id]
+                        fgb_id = sgb_2_fgb[sgb_id.split('_')[0]]
                         fgb_dist = binn_2_fgb[binn][fgb_id]
                     else:  # otherwise report the closest GGB and FGB found
                         ggb_id, ggb_dist = sorted(binn_2_ggb[binn].items(), key=lambda x: x[1])[:args.how_many][0]
@@ -913,9 +1105,13 @@ def phylophlan_metagenomic():
                     refgen_closest_thr = refgen_sorted[0][1] + (refgen_sorted[0][1] * 0.05)
                     refgens_closest = [i for i in refgen_sorted if i[1] <= refgen_closest_thr][:100]
 
+                    # group_assignment
+                    if sgb_id in sgb_2_group:
+                        sgb_id=sgb_2_group[sgb_id]
+
                     f.write('\t'.join([binn,
-                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id][5], sgb_id, sgb_2_info[sgb_id][6],
-                                                               sgb_2_info[sgb_id][7], sgb_dist),
+                                       "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id.split('_')[0]][5], sgb_id, sgb_2_info[sgb_id.split('_')[0]][6],
+                                                               sgb_2_info[sgb_id.split('_')[0]][7], sgb_dist),
                                        "{}_{}:{}:{}:{}".format(ggb_2_info[ggb_id][5], ggb_id, ggb_2_info[ggb_id][6],
                                                                ggb_2_info[ggb_id][7], ggb_dist),
                                        "{}_{}:{}:{}:{}".format(fgb_2_info[fgb_id][5], fgb_id, fgb_2_info[fgb_id][6],
@@ -924,13 +1120,35 @@ def phylophlan_metagenomic():
             else:
                 f.write('\t'.join(['#input_bin'] + ['[u|k]_[S|G|F]GBid:taxa_level:taxonomy:avg_dist'] * args.how_many) + '\n')
 
+                # group_assignment
                 for binn, sgb_dists in binn_2_sgb.items():
-                    f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0]][5],
-                                                                        i[0],
-                                                                        sgb_2_info[i[0]][6],
-                                                                        sgb_2_info[i[0]][7],
-                                                                        i[1])
-                                                for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
+                    if sgb_dists:
+                        for i in sorted(sgb_dists.items(), key=lambda x: x[1]):
+                            sgb_id=i[0]
+                            if sgb_id in sgb_2_group:
+                                sgb_id=sgb_2_group[sgb_id]
+                                if sgb_id not in sgb_dists.keys():
+                                    sgb_dists[sgb_id]=i[1]
+                                    sgb_dists.pop(i[0])
+                                else:
+                                    if sgb_dists[sgb_id] > i[1]:
+                                        sgb_dists[sgb_id] = i[1]
+                                    sgb_dists.pop(i[0])
+
+
+                        f.write('\t'.join([binn] + ["{}_{}:{}:{}:{}".format(sgb_2_info[i[0].split('_')[0]][5],
+                                                                            i[0],
+                                                                            sgb_2_info[i[0].split('_')[0]][6],
+                                                                            sgb_2_info[i[0].split('_')[0]][7],
+                                                                            i[1])
+                                                    for i in sorted(sgb_dists.items(), key=lambda x: x[1])[:args.how_many]]) + '\n')
+
+            if os.path.isfile('unassigned.txt'):
+                with open('unassigned.txt') as infile:
+                    f.write(infile.read())
+
+                remove_file('unassigned.txt', verbose=True)
+
 
     else:  # input vs. input mode
         disting_input_vs_input(args.output_prefix, os.path.basename(args.output_prefix), output_file,
@@ -946,3 +1164,6 @@ if __name__ == '__main__':
     t1 = time.time()
     info('Total elapsed time {}s\n'.format(int(t1 - t0)))
     sys.exit(0)
+
+
+
