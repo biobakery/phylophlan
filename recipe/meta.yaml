@@ -1,6 +1,6 @@
 {% set name = "phylophlan" %}
-{% set version = "3.0.3" %}
-{% set sha256 = "a6a4123aabb564c583edf53804f682ecb8c2f614720104b0b576a315f57019a8" %}
+{% set version = "3.1" %}
+{% set sha256 = "48d8f9fd4ffe35e02efd2014c43e8ad40325bc62fb62592406ebc9a50063a744" %}
 
 package:
   name: "{{ name|lower }}"
@@ -46,7 +46,7 @@ test:
     - phylophlan --version
     - phylophlan_draw_metagenomic --version
     - phylophlan_get_reference --version
-    - phylophlan_metagenomic --version
+    - phylophlan_assign_sgbs --version
     - phylophlan_setup_database --version
     - phylophlan_strain_finder --version
     - phylophlan_write_config_file --version
