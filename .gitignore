@@ -44,6 +44,8 @@ phylophlan/examples/tutorial*
 ## other internal runs
 phylophlan/examples/paper_examples
 phylophlan/examples/pcopri
+## any other files inside examples
+phylophlan/examples/*.*
 # settings files
 .vscode
 # temp files and folders

@@ -8,8 +8,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.39'
-__date__ = '28 September 2023'
+__version__ = '3.0.40'
+__date__ = '5 February 2024'
 
 
 import sys
@@ -37,7 +37,7 @@ if sys.version_info[0] < 3:
 
 HOW_MANY = "8"
 #DOWNLOAD_URL = "https://www.dropbox.com/s/xdqm836d2w22npb/phylophlan_metagenomic.txt?dl=1"
-DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_metagenomic_new.txt"
+DOWNLOAD_URL = "http://cmprod1.cibio.unitn.it/databases/PhyloPhlAn/phylophlan_SGB_databases.txt"
 DATABASE_FOLDER = 'phylophlan_databases/'
 
 
@@ -64,7 +64,7 @@ def error(s, init_new_line=False, exit=False, exit_value=1):
 
 
 def read_params():
-    p = ap.ArgumentParser(description=("The phylophlan_metagenomic.py script assign SGB and taxonomy to a given set of input genomes. "
+    p = ap.ArgumentParser(description=("The phylophlan_assign_sgbs.py script assigns the SGB and taxonomy to a given set of input genomes. "
                                        "Outputs can be of three types: (1) for each input genomes returns the list of the closest "
                                        "-n/--how_many SGBs sorted by average Mash distance; (2) for each input genomes returns the "
                                        "closest SGB, GGB, FGB, and reference genomes; (3) returns a all vs. all matrix with all the "
@@ -72,7 +72,7 @@ def read_params():
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str,
-                   help="Input folder containing the metagenomic bins to be indexed")
+                   help="Input folder containing genomes and/or metagenome-assembled genomes (MAGs) to be indexed")
     p.add_argument('-o', '--output_prefix', type=str, default=None,
                    help=("Prefix used for the output folders: indexed bins, distance estimations. If not specified, "
                          "the input folder will be used"))
@@ -104,8 +104,8 @@ def read_params():
                    help="Show citation")
     p.add_argument('--verbose', action='store_true', default=False, help="Prints more stuff")
     p.add_argument('-v', '--version', action='version',
-                   version='phylophlan_metagenomic.py version {} ({})'.format(__version__, __date__),
-                   help="Prints the current phylophlan_metagenomic.py version and exit")
+                   version='phylophlan_assign_sgbs.py version {} ({})'.format(__version__, __date__),
+                   help="Prints the current phylophlan_assign_sgbs.py version and exit")
 
     return p.parse_args()
 
@@ -730,7 +730,7 @@ def group_assignment(output_prefix, db, groups_map, nproc=1, verbose=True):
             sgb_repr = row.strip().split('\t')[0]
 
             for sgb in row.strip().split('\t'):
-                sgb_2_group[f'SGB{sgb}'] = f'SGB{sgb_repr}_group'
+                sgb_2_group[sgb] = f'{sgb_repr}_group'
 
     return sgb_2_group
 
@@ -889,7 +889,7 @@ def phylophlan_metagenomic():
     args = read_params()
 
     if args.verbose:
-        info('phylophlan_metagenomic.py version {} ({})\n'.format(__version__, __date__))
+        info('phylophlan_assign_sgbs.py version {} ({})\n'.format(__version__, __date__))
         info('Command line: {}\n\n'.format(' '.join(sys.argv)), init_new_line=True)
 
     check_params(args, verbose=args.verbose)
@@ -1107,7 +1107,7 @@ def phylophlan_metagenomic():
 
                     # group_assignment
                     if sgb_id in sgb_2_group:
-                        sgb_id=sgb_2_group[sgb_id]
+                        sgb_id = sgb_2_group[sgb_id]
 
                     f.write('\t'.join([binn,
                                        "{}_{}:{}:{}:{}".format(sgb_2_info[sgb_id.split('_')[0]][5], sgb_id, sgb_2_info[sgb_id.split('_')[0]][6],
