@@ -1,6 +1,6 @@
 {% set name = "phylophlan" %}
 {% set version = "3.1" %}
-{% set sha256 = "48d8f9fd4ffe35e02efd2014c43e8ad40325bc62fb62592406ebc9a50063a744" %}
+{% set sha256 = "9428a8fceb2626325fb6b93cc47143b100183c314f50eb96b32467e42a5bc4ad" %}
 
 package:
   name: "{{ name|lower }}"
