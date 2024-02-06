@@ -13,7 +13,7 @@ if sys.version_info[0] < 3:
 install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "pandas", "seaborn"]
 
 setuptools.setup(name='PhyloPhlAn',
-                 version='3.0.3',
+                 version='3.1',
                  author='Francesco Asnicar',
                  author_email='f.asnicar@unitn.it',
                  url='http://github.com/biobakery/phylophlan',
@@ -30,7 +30,7 @@ setuptools.setup(name='PhyloPhlAn',
                          'phylophlan = phylophlan.phylophlan:phylophlan_main',
                          'phylophlan_draw_metagenomic = phylophlan.phylophlan_draw_metagenomic:phylophlan_draw_metagenomic',
                          'phylophlan_get_reference = phylophlan.phylophlan_get_reference:phylophlan_get_reference',
-                         'phylophlan_metagenomic = phylophlan.phylophlan_metagenomic:phylophlan_metagenomic',
+                         'phylophlan_assign_sgbs = phylophlan.phylophlan_assign_sgbs:phylophlan_metagenomic',
                          'phylophlan_setup_database = phylophlan.phylophlan_setup_database:phylophlan_setup_database',
                          'phylophlan_strain_finder = phylophlan.phylophlan_strain_finder:phylophlan_strain_finder',
                          'phylophlan_write_config_file = phylophlan.phylophlan_write_config_file:phylophlan_write_config_file'
