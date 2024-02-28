@@ -557,6 +557,9 @@ def prefiltering_pasting(output_prefix, input_extension, chocophlan_list, databa
     inpf = output_prefix + "_prefiltering/{}_genomes_inputs_list.txt"
 
     for i in os.listdir(os.path.join(output_prefix + "_prefiltering/pref_dbs")):
+        if verbose:
+            t0 = time.time()
+            info('Pasting inputs\n')
         table = pd.read_csv(os.path.join(output_prefix + "_prefiltering/pref_dbs"+'/'+i), sep='\t',names=['sgb','mag','dist','pvalue','hits'])
         mags_full = list(table['mag'].unique())
 
