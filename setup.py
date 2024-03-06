@@ -13,7 +13,7 @@ if sys.version_info[0] < 3:
 install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "pandas", "seaborn"]
 
 setuptools.setup(name='PhyloPhlAn',
-                 version='3.1',
+                 version='3.1.1',
                  author='Francesco Asnicar',
                  author_email='f.asnicar@unitn.it',
                  url='http://github.com/biobakery/phylophlan',

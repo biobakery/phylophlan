@@ -1,20 +1,20 @@
 {% set name = "phylophlan" %}
-{% set version = "3.1" %}
-{% set sha256 = "9428a8fceb2626325fb6b93cc47143b100183c314f50eb96b32467e42a5bc4ad" %}
+{% set version = "3.1.1" %}
 
 package:
   name: "{{ name|lower }}"
   version: "{{ version }}"
 
 source:
-  # path: ..
-  url: https://github.com/biobakery/phylophlan/archive/{{ version }}.tar.gz
-  sha256: "{{ sha256 }}"
+  path: ..
+  # url: https://github.com/biobakery/phylophlan/archive/{{ version }}.tar.gz
+  # sha256: "{{ sha256 }}"
 
 build:
   noarch: python
-  number: 0
   script: "{{ PYTHON }} -m pip install . --ignore-installed --no-deps -vv"
+  run_exports:
+    - {{ pin_subpackage('phylophlan', max_pin='x.x') }}
 
 requirements:
   host:
