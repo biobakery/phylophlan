@@ -8,8 +8,8 @@ __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Paolo Manghi (paolo.manghi@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-__version__ = '3.0.40'
-__date__ = '5 February 2024'
+__version__ = '3.1.40'
+__date__ = '6 March 2024'
 
 
 import sys
