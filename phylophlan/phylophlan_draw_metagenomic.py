@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.1.7'
-__date__ = '6 March 2024'
+__version__ = '3.1.8'
+__date__ = '11 March 2024'
 
 
 import argparse as ap
@@ -52,7 +52,7 @@ def read_params():
     p = ap.ArgumentParser(description=("The phylophlan_draw_metagenomic.py script takes as input the output table generated form the "
                                        "phylophlan_metagenomic.py script and produces two heatmap figures: (1) presence/absence heatmap "
                                        "of the SGBs and the metagenomic samples of the recontructed input genomes; and (2) heatmap "
-                                       "showing the amount of kSGB, uSGB, and unassinged for each metagenome"),
+                                       "showing the amount of kSGB, uSGB, and unassigned for each metagenome"),
                           formatter_class=ap.ArgumentDefaultsHelpFormatter)
 
     p.add_argument('-i', '--input', type=str, required=True, help='The input file generated from phylophlan_metagenomic.py')
@@ -242,7 +242,7 @@ def phylophlan_draw_metagenomic():
             elif md.startswith('u'):
                 df2.at['uSGBs', x] += 1
 
-            df2.at['unassigned', x] = len(unass_dict[x])
+        df2.at['unassigned', x] = len(unass_dict[x])
 
     if args.verbose:
         info('Writing to output file {}_counts.{}\n'.format(args.output, args.f))
