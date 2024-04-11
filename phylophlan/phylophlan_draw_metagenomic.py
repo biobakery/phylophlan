@@ -3,8 +3,8 @@
 
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it)')
-__version__ = '3.0.7'
-__date__ = '19 May 2020'
+__version__ = '3.1.7'
+__date__ = '6 March 2024'
 
 
 import argparse as ap
@@ -105,6 +105,10 @@ def read_input(inputt, map_dict, verbose=False):
     with open(inputt) as f:
         for r in f:
             if r.startswith('#'):
+                continue
+
+            # Skip if line is a message / doesn't contain the expected columns
+            if len(r.strip().split('\t')) < 2:
                 continue
 
             rc = r.strip().split('\t')
