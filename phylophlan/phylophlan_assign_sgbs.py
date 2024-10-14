@@ -37,7 +37,8 @@ import pandas as pd
 from utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, mash_paste, mash_dist_block, \
     run_parallel, load_pwd_pandas, load_pandas_series, skani_paste, skani_dist_block, tqdm, load_skani_as_pwd, \
     skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, path_get_lock, \
-    run_command_with_lock, run_command, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock
+    run_command_with_lock, run_command, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock, \
+    get_threads_per_run
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
@@ -61,6 +62,7 @@ PREFILTER_DIST_THRESHOLD = 0.2
 SGB_ASSIGNMENT_ANI = 95
 GGB_ASSIGNMENT_DIST = 0.15
 FGB_ASSIGNMENT_DIST = 0.3
+NOVEL_SGB_PREFIX = 'SGBX'
 
 SMALL_SGB_THRESHOLD = 100 * 100
 CHUNK_SIZE_IN = 1000
@@ -131,7 +133,7 @@ def check_dependencies():
             error(f"{program} is not installed or not present in the system path", do_exit=1)
 
 
-def prefiltering(args, database_path, centroids, input_mash_sketches, genome_names):
+def prefiltering(args, database_path, centroids, centroid_to_sgb, input_mash_sketches, genome_names):
     genome_centroid_pairs_file = args.output_directory / 'genome_centroid_pairs.tsv'
     dists_dir_centroids = args.output_directory / 'mash_dists_input_centroids'
     if genome_centroid_pairs_file.exists():
@@ -164,12 +166,16 @@ def prefiltering(args, database_path, centroids, input_mash_sketches, genome_nam
             assert set(df.index) == set(centroids)
             processed_genomes.extend(df.columns.to_list())
             a, b = np.where(df.values <= PREFILTER_DIST_THRESHOLD)
-            for c, g in zip(df.index[a], df.columns[b]):
-                genome_centroid_pairs.append((g, c))
+            for c, g, d in zip(df.index[a], df.columns[b], df.values[a,b]):
+                genome_centroid_pairs.append((g, c, d))
 
         assert set(processed_genomes) == set(genome_names)
 
-        df_genome_centroid_pairs = pd.DataFrame.from_records(genome_centroid_pairs, columns=['genome', 'centroid'])
+        df_genome_centroid_pairs = pd.DataFrame.from_records(genome_centroid_pairs,
+                                                             columns=['genome', 'centroid', 'distance'])
+
+        df_genome_centroid_pairs['sgb_id'] = df_genome_centroid_pairs['centroid'].map(centroid_to_sgb)
+
         df_genome_centroid_pairs.to_csv(genome_centroid_pairs_file, sep='\t', index=False)
 
 
@@ -224,7 +230,7 @@ def dist_against_sgbs(args, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
             return sgb_id_, r
 
         info('  Running small SGBs')
-        nproc_per_run = max(args.nproc_cpu, args.nproc_io) // args.nproc_io
+        nproc_per_run = get_threads_per_run(args.nproc_cpu, args.nproc_io)
         results_small = run_parallel(f, small_sgbs, nproc=args.nproc_io, ordered=False)
 
         info('  Running big SGBs')
@@ -240,14 +246,14 @@ def dist_against_sgbs(args, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
                 df = load_skani_as_pwd(dist_file, refs=sgb_to_genomes_db[sgb_id])
 
                 closest_genomes = df.idxmax()
-                closest_dists = df.max()
-                avg_dists = df.mean()
+                closest_anis = df.max()
+                avg_anis = df.mean()
 
-                for g, closest_genome, closest_dist, avg_dist in zip(df.columns, closest_genomes.values,
-                                                                     closest_dists.values, avg_dists.values):
-                    if avg_dist >= SGB_ASSIGNMENT_ANI and \
-                            (g not in genome_assignment or genome_assignment[g][1] < avg_dist):
-                        genome_assignment[g] = (sgb_id, avg_dist, closest_dist)  # not assigned or this is closer
+                for g, closest_genome, closest_ani, avg_ani in zip(df.columns, closest_genomes.values,
+                                                                   closest_anis.values, avg_anis.values):
+                    if avg_ani >= SGB_ASSIGNMENT_ANI and \
+                            (g not in genome_assignment or genome_assignment[g][1] < avg_ani):
+                        genome_assignment[g] = (sgb_id, avg_ani, closest_ani)  # not assigned or this is closer
 
         df_genome_assignment = pd.DataFrame.from_dict(genome_assignment, orient='index',
                                                       columns=['sgb_id', 'sgb_avg_ani', 'closest_genome_ani'])\
@@ -288,15 +294,14 @@ def cluster_unassigned_genomes(args, genomes_unassigned, input_skani_sketches_di
 
         info('  Running clustering of unassigned genomes into new SGBs')
         s_clusters = cluster_skani_pwd(pwd, SGB_ASSIGNMENT_ANI)
-        s_sgb_clustering = ('SGBX' + s_clusters.map(str)).rename('sgb_id').rename_axis('genome')
+        s_sgb_clustering = (NOVEL_SGB_PREFIX + s_clusters.map(str)).rename('sgb_id').rename_axis('genome')
 
         clustering_tmp_file_lock = path_get_lock(clustering_tmp_file)
         clustering_tmp_file_lock.touch()
         s_sgb_clustering.to_csv(clustering_tmp_file, sep='\t')
         clustering_tmp_file_lock.unlink()
 
-    sgbs_created = set(s_sgb_clustering.unique())
-    info(f'  There are {len(sgbs_created)} SGBs created by {len(s_sgb_clustering)} genomes')
+    info(f'  There are {len(s_sgb_clustering.unique())} SGBs created by {len(s_sgb_clustering)} genomes')
 
     return s_sgb_clustering
 
@@ -318,10 +323,10 @@ def assign_ggb_fgb(args, s_sgb_clustering, dist_files_centroids, centroid_to_sgb
     idx_ggbs = df_sgb_centroid.columns.map(centroid_to_sgb).map(sgb_to_ggb)
     idx_fgbs = idx_ggbs.map(ggb_to_fgb)
 
-    df_sgb_ggb = df_sgb_centroid.T.groupby(idx_ggbs).mean()
-    df_sgb_fgb = df_sgb_centroid.T.groupby(idx_fgbs).mean()
-    assignment_sgb_to_ggb = df_sgb_ggb.idxmin()
-    assignment_sgb_to_ggb_d = df_sgb_ggb.min()
+    df_sgb_ggb = df_sgb_centroid.T.groupby(idx_ggbs).mean().T
+    df_sgb_fgb = df_sgb_centroid.T.groupby(idx_fgbs).mean().T
+    assignment_sgb_to_ggb = df_sgb_ggb.idxmin(axis=1)
+    assignment_sgb_to_ggb_d = df_sgb_ggb.min(axis=1)
 
 
     assignment_sgb_to_ggb = assignment_sgb_to_ggb[assignment_sgb_to_ggb_d <= GGB_ASSIGNMENT_DIST]
@@ -329,12 +334,17 @@ def assign_ggb_fgb(args, s_sgb_clustering, dist_files_centroids, centroid_to_sgb
     assignment_sgb_to_fgb_1 = assignment_sgb_to_ggb.map(ggb_to_fgb)  # assigned GGB: use existing FGB
 
     # Unassigned GGB: get the closest FGB and assign if <= 0.3 MASH
-    df_sgb_fgb_u = df_sgb_fgb.loc[df_sgb_fgb.index.difference(assignment_sgb_to_ggb.index)]
-    assignment_sgb_to_fgb_2 = df_sgb_fgb_u.idxmin()
-    assignment_sgb_to_fgb_d = df_sgb_fgb_u.min()
-    assignment_sgb_to_fgb_2 = assignment_sgb_to_fgb_2[assignment_sgb_to_fgb_d <= FGB_ASSIGNMENT_DIST]
 
-    assignment_sgb_to_fgb = pd.concat([assignment_sgb_to_fgb_1, assignment_sgb_to_fgb_2])
+    df_sgb_fgb_u = df_sgb_fgb.loc[df_sgb_fgb.index.difference(assignment_sgb_to_ggb.index)]
+    if len(df_sgb_fgb_u) > 0:
+        assignment_sgb_to_fgb_2 = df_sgb_fgb_u.idxmin()
+        assignment_sgb_to_fgb_d = df_sgb_fgb_u.min()
+        assignment_sgb_to_fgb_2 = assignment_sgb_to_fgb_2[assignment_sgb_to_fgb_d <= FGB_ASSIGNMENT_DIST]
+
+
+        assignment_sgb_to_fgb = pd.concat([assignment_sgb_to_fgb_1, assignment_sgb_to_fgb_2])
+    else:
+        assignment_sgb_to_fgb = assignment_sgb_to_fgb_1
 
     return assignment_sgb_to_ggb, assignment_sgb_to_fgb
 
@@ -343,8 +353,7 @@ def assign_phyla(args, database_path, genomes_without_family, centroid_to_sgb, d
     centroids_k = df_sgb_sgb.loc[
         (df_sgb_sgb['Unknown'] == "kSGB") &
         (df_sgb_sgb['Assigned taxonomic ID'].map(lambda x: not pd.isna(x) and (x.split('|')[1] != ""))),
-        'SGB centroid'
-        ]
+        'SGB centroid']
 
     prokka_input_dir = args.output_directory / 'prokka_input'
     prokka_output_dir = args.output_directory / 'prokka_output'
@@ -505,9 +514,11 @@ def download_db(args):
 
 def phylophlan_assign_sgbs(args):
     info('Checking deps')
-    # prevent OpenBLAS inside mash from creating multiple threads https://pythonspeed.com/articles/concurrency-control/
+    # prevent OpenBLAS inside MASH from creating multiple threads https://pythonspeed.com/articles/concurrency-control/
     # we parallelize it ourselves
     os.environ['OPENBLAS_NUM_THREADS'] = '1'
+    os.environ['GOTO_NUM_THREADS'] = '1'
+    os.environ['OMP_NUM_THREADS'] = '1'
 
     check_dependencies()
 
@@ -589,8 +600,8 @@ def phylophlan_assign_sgbs(args):
 
     ## Prefiltering ##
     info('Prefiltering SGBs')
-    df_genome_centroid_pairs, dist_files_centroids = prefiltering(args, database_path, centroids, input_mash_sketches,
-                                                                  genome_names)
+    df_genome_centroid_pairs, dist_files_centroids = prefiltering(args, database_path, centroids, centroid_to_sgb,
+                                                                  input_mash_sketches, genome_names)
     genomes_near = df_genome_centroid_pairs['genome'].unique()
     genomes_far = set(genome_names).difference(set(genomes_near))
 
@@ -598,10 +609,9 @@ def phylophlan_assign_sgbs(args):
     info(f'  There are {len(genomes_far)} genomes far and {len(genomes_near)} genomes '
          f'near {len(all_centroid_hits)} centroids')
 
-    df_genome_centroid_pairs['sgb_id'] = df_genome_centroid_pairs['centroid'].map(centroid_to_sgb)
     sgb_to_genomes_in = df_genome_centroid_pairs.set_index('genome').groupby('sgb_id').groups
     sgb_to_genomes_db = (df_sgb_sgb['List of reconstructed genomes'] + ',' + df_sgb_sgb['List of reference genomes']) \
-        .map(lambda x: [y for y in x.split(',') if len(y) > 0])
+        .map(lambda x: [y for y in x.split(',') if len(y) > 0 and y != '-'])
 
     ## Disting against prefiltered SGBs ##
     df_genome_assignment = dist_against_sgbs(args, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
@@ -614,35 +624,38 @@ def phylophlan_assign_sgbs(args):
 
     genomes_unassigned = set(genome_names).difference(assigned_genomes_set)
 
-    ## Clustering unassigned genomes ##
-    assignment_genomes_to_new_sgbs = cluster_unassigned_genomes(args, genomes_unassigned, input_skani_sketches_dir)
+    if len(genomes_unassigned) > 0:
+        ## Clustering unassigned genomes ##
+        assignment_genomes_to_new_sgbs = cluster_unassigned_genomes(args, genomes_unassigned, input_skani_sketches_dir)
 
 
-    ## Assigning GGBs and SGBs of newly created SGBs ##
-    info('Assigning GGBs and FGBs to novel SGBs')
-    assignment_sgb_to_ggb, assignment_sgb_to_fgb = assign_ggb_fgb(args, assignment_genomes_to_new_sgbs,
-                                                                  dist_files_centroids, centroid_to_sgb, sgb_to_ggb,
-                                                                  ggb_to_fgb)
 
-    df_genome_assignment = df_genome_assignment \
-        .join(sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
-        .join(ggb_to_fgb.rename('fgb_id'), on='ggb_id')
+        ## Assigning GGBs and SGBs of newly created SGBs ##
+        info('Assigning GGBs and FGBs to novel SGBs')
+        assignment_sgb_to_ggb, assignment_sgb_to_fgb = assign_ggb_fgb(args, assignment_genomes_to_new_sgbs,
+                                                                      dist_files_centroids, centroid_to_sgb, sgb_to_ggb,
+                                                                      ggb_to_fgb)
 
-    df_genome_assignment_unassigned = assignment_genomes_to_new_sgbs.rename('sgb_id').to_frame() \
-        .join(assignment_sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
-        .join(assignment_sgb_to_fgb.rename('fgb_id'), on='sgb_id')
+        df_genome_assignment = df_genome_assignment \
+            .join(sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
+            .join(ggb_to_fgb.rename('fgb_id'), on='ggb_id')
 
-    df_genome_assignment = pd.concat([df_genome_assignment, df_genome_assignment_unassigned])
+        df_genome_assignment_unassigned = assignment_genomes_to_new_sgbs.rename('sgb_id').to_frame() \
+            .join(assignment_sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
+            .join(assignment_sgb_to_fgb.rename('fgb_id'), on='sgb_id')
 
-    assert set(df_genome_assignment.index) == set(genome_names)
+        df_genome_assignment = pd.concat([df_genome_assignment, df_genome_assignment_unassigned])
+
+        assert set(df_genome_assignment.index) == set(genome_names)
 
 
-    ## Assign phyla to genomes without family ##
-    genomes_without_family = df_genome_assignment.index[df_genome_assignment['fgb_id'].isna()]
-    info(f'Will assign phyla to {len(genomes_without_family)} genomes without family')
-    df_phyla = assign_phyla(args, database_path, genomes_without_family, centroid_to_sgb, df_sgb_sgb)
+        ## Assign phyla to genomes without family ##
+        genomes_without_family = df_genome_assignment.index[df_genome_assignment['fgb_id'].isna()]
+        if len(genomes_without_family) > 0:
+            info(f'Will assign phyla to {len(genomes_without_family)} genomes without family')
+            df_phyla = assign_phyla(args, database_path, genomes_without_family, centroid_to_sgb, df_sgb_sgb)
 
-    df_genome_assignment = df_genome_assignment.join(df_phyla)
+            df_genome_assignment = df_genome_assignment.join(df_phyla)
 
 
     def get_tax(row):
