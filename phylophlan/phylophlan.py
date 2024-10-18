@@ -18,6 +18,7 @@ import argparse as ap
 import configparser as cp
 import subprocess as sb
 import multiprocessing as mp
+from typing import Iterable
 from Bio import SeqIO
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from Bio.Seq import Seq
@@ -2775,11 +2776,27 @@ def refine_phylogeny(configs, key, inputt, starting_tree, output_path, output_tr
     info('Phylogeny "{}" refined in {}s\n'.format(output_tree, int(t1 - t0)))
 
 
-def compute_dists(s1, s2):
-    idd = [s for s in range(len(s1)) if (s1[s] not in ['-', 'N']) and (s2[s] not in ['-', 'N'])]
-    d = sum((a != b for a, b in zip((s1[s] for s in idd), (s2[s] for s in idd))))
+def compute_dists(aln):
+    """
+    Computes a dictionary of pair-wise distances (1-ANI) from BioPython alignment
+    :param (Iterable[SeqRecord] | AlignIO.MultipleSeqAlignment) aln:
+    :return: Dictionary (seq_id_1, seq_id_2) ==> (n_mismatches, overlap)
+    """
+    Seq
+    # convert to numpy array of ints for fast comparison
+    seqs = []
+    for s in aln:
+        seqs.append((s.id, np.frombuffer(bytes(s.seq), dtype=np.uint8)))
 
-    return (d, len(idd))
+    dists = {}
+    for (id1, s1), (id2, s2) in combinations(seqs, 2):
+        m = (s1 != ord('-')) & (s1 != ord('N')) & (s2 != ord('-')) & (s2 != ord('N'))  # mask out gaps and Ns
+        overlap = np.count_nonzero(m)
+        n_mismatches = np.count_nonzero((s1 != s2)[m])
+        dists[(id1, id2)] = (n_mismatches, overlap)
+
+    return dists
+
 
 
 def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
@@ -2805,17 +2822,15 @@ def mutation_rates(input_folder, output_folder, nproc=1, verbose=False):
 
 def mutation_rates_rec(x):
     if not terminating.is_set():
+        inp_aln, out_fld, fn, verbose = x
+        out_tsv = os.path.join(out_fld, fn + '.tsv.bz2')
+        out_pkl = os.path.join(out_fld, fn + '.pkl.bz2')
+        if verbose:
+            info('Computing mutation rates of "{}"\n'.format(inp_aln))
         try:
-            inp_aln, out_fld, fn, verbose = x
-            out_tsv = os.path.join(out_fld, fn + '.tsv.bz2')
-            out_pkl = os.path.join(out_fld, fn + '.pkl.bz2')
-
-            if verbose:
-                info('Computing mutation rates of "{}"\n'.format(inp_aln))
-
             inp = AlignIO.read(inp_aln, "fasta")
-            dists = dict([((inp[i].id, inp[j].id), compute_dists(inp[i], inp[j]))
-                          for i in range(len(inp)) for j in range(i + 1, len(inp))])
+
+            dists = compute_dists(inp)
 
             if verbose:
                 info('Serializing to "{}"\n'.format(out_pkl))
