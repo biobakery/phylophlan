@@ -2782,7 +2782,6 @@ def compute_dists(aln):
     :param (Iterable[SeqRecord] | AlignIO.MultipleSeqAlignment) aln:
     :return: Dictionary (seq_id_1, seq_id_2) ==> (n_mismatches, overlap)
     """
-    Seq
     # convert to numpy array of ints for fast comparison
     seqs = []
     for s in aln:

@@ -22,6 +22,8 @@ __date__ = '8 October 2024'
 
 
 import argparse as ap
+import bz2
+import gzip
 import os
 import pathlib
 import shlex
@@ -34,11 +36,11 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
-from utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, mash_paste, mash_dist_block, \
+from .utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, mash_paste, mash_dist_block, \
     run_parallel, load_pwd_pandas, load_pandas_series, skani_paste, skani_dist_block, tqdm, load_skani_as_pwd, \
     skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, path_get_lock, \
     run_command_with_lock, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock, \
-    get_threads_per_run, warning
+    get_threads_per_run, warning, decompress_file
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
@@ -77,7 +79,7 @@ def read_params():
                         "use all files in the directory")
     p.add_argument('-o', '--output_directory', type=ArgumentType.creatable_dir, default=None,
                    help="Output directory")
-    p.add_argument('--database_folder', type=ArgumentType.creatable_dir, default=DEFAULT_DATABASE_FOLDER,
+    p.add_argument('--database_folder', type=ArgumentType.existing_dir, default=DEFAULT_DATABASE_FOLDER,
                    help="Path to the folder that contains the database file")
     p.add_argument('-d', '--database', type=str, default=None,
                    help="Database name, available options can be listed using the --database_list parameter")
@@ -107,6 +109,8 @@ def check_params(argp):
     if not args.list_databases and (args.input_directory is None or args.output_directory is None):
         argp.error('input_directory and output_directory required')
 
+    args.output_directory.mkdir(exist_ok=True)
+
     return args
 
 
@@ -117,8 +121,66 @@ def check_dependencies():
             error(f"{program} is not installed or not present in the system path", do_exit=True)
 
 
-def prefiltering(args, work_dir, database_path, centroids, centroid_to_sgb, input_mash_sketches, genome_names):
-    genome_centroid_pairs_file = args.output_directory / 'genome_centroid_pairs.tsv'
+def process_input(input_directory, input_extension, work_dir, nproc_io):
+    genome_files = list(input_directory.iterdir())
+    if len(genome_files) == 0:
+        error('Empty input directory', do_exit=True)
+
+    if input_extension is None:
+        assert len(genome_files) > 0
+        one_genome_name = genome_files[0].name
+        if one_genome_name.endswith('.gz'):
+            extension = '.gz'
+        elif one_genome_name.endswith('.bz2'):
+            extension = '.bz2'
+        else:
+            extension = ''
+        if len(extension) > 0:
+            one_genome_name = one_genome_name[:-len(extension)]
+        input_extension = '.' + one_genome_name.rsplit('.', maxsplit=1)[-1] + extension
+        info(f'Using inferred genome extension: {input_extension}')
+
+    genome_names = [x.name[:-len(input_extension)] for x in genome_files if x.name.endswith(input_extension)]
+    files_ignored = [x for x in genome_files if x.is_file() and not x.name.endswith(input_extension)]
+    info(f'Found {len(genome_names)} genomes in the input directory')
+    if len(files_ignored) > 0:
+        warning(f'  Ignoring {len(files_ignored)} files in the input directory '
+                f'not having {input_extension} extension')
+
+    if input_extension.endswith('.gz') or input_extension.endswith('.bz2'):
+        info('Detected compressed files in the input, will decompress temporarily')
+        input_decompressed_dir = work_dir / 'input_decompressed'
+        input_decompressed_dir.mkdir(exist_ok=True)
+
+        if input_extension.endswith('.gz'):
+            open_f = gzip.open
+            new_ext = input_extension[:-len('.gz')]
+        elif input_extension.endswith('.bz2'):
+            open_f = bz2.open
+            new_ext = input_extension[:-len('.bz2')]
+        else:
+            assert False, "extension must be .gz or .bz2"
+
+
+        f_args = [(input_directory / f'{g}{input_extension}',
+                   input_decompressed_dir / f'{g}{new_ext}',
+                   open_f) for g in genome_names]
+
+
+        run_parallel(decompress_file, f_args, nproc_io, star=True, processes=True)
+
+        input_directory = input_decompressed_dir
+        input_extension = new_ext
+    else:
+        input_directory = input_directory
+        input_extension = input_extension
+
+    return genome_names, input_directory, input_extension
+
+
+def prefiltering(work_dir, output_directory, nproc_io, nproc_cpu, database_path, centroids, centroid_to_sgb,
+                 input_mash_sketches, genome_names):
+    genome_centroid_pairs_file = output_directory / 'genome_centroid_pairs.tsv'
     dists_dir_centroids = work_dir / 'mash_dists_input_centroids'
     if genome_centroid_pairs_file.exists():
         info('  Loading existing genomes-to-closest-centroids file')
@@ -132,17 +194,16 @@ def prefiltering(args, work_dir, database_path, centroids, centroid_to_sgb, inpu
         mash_pastes_centroids = list(centroid_pastes_dir.iterdir())
         info('  Pasting input MASH sketches')
         input_pastes_dir.mkdir(exist_ok=True)
-        mash_pastes_in = mash_paste(input_mash_sketches, input_pastes_dir, args.nproc_io, chunk_size=CHUNK_SIZE_IN)
+        mash_pastes_in = mash_paste(input_mash_sketches, input_pastes_dir, nproc_io, chunk_size=CHUNK_SIZE_IN)
 
         info('  Calculating distances from input genomes to SGB centroids')
         dists_dir_centroids.mkdir(exist_ok=True)
-        dist_files_centroids = mash_dist_block(mash_pastes_in, mash_pastes_centroids, dists_dir_centroids,
-                                               args.nproc_cpu)
+        dist_files_centroids = mash_dist_block(mash_pastes_in, mash_pastes_centroids, dists_dir_centroids, nproc_cpu)
 
         info('  Processing distance files')
         genome_centroid_pairs = []
         processed_genomes = []
-        for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=args.nproc_io,
+        for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=nproc_io,
                                ordered=False, return_gen=True):
 
             df.index = df.index.map(fix_mash_id)
@@ -166,7 +227,8 @@ def prefiltering(args, work_dir, database_path, centroids, centroid_to_sgb, inpu
     return df_genome_centroid_pairs, dist_files_centroids
 
 
-def dist_against_sgbs(args, work_dir, database_path, sgb_to_genomes_in, sgb_to_genomes_db, input_skani_sketches_dir):
+def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
+                      input_skani_sketches_dir):
     genome_assignment_file = work_dir / 'genome_assignment_existing_sgbs.tsv'
     input_per_sgb_pastes_dir = work_dir / 'skani_pastes_input_per_sgb'
     db_per_sgb_pastes_dir = work_dir / 'skani_pastes_db_per_sgb'
@@ -214,11 +276,11 @@ def dist_against_sgbs(args, work_dir, database_path, sgb_to_genomes_in, sgb_to_g
             return sgb_id_, r
 
         info('  Running small SGBs')
-        nproc_per_run = get_threads_per_run(args.nproc_cpu, args.nproc_io)
-        results_small = run_parallel(f, small_sgbs, nproc=args.nproc_io, ordered=False)
+        nproc_per_run = get_threads_per_run(nproc_cpu, nproc_io)
+        results_small = run_parallel(f, small_sgbs, nproc=nproc_io, ordered=False)
 
         info('  Running big SGBs')
-        nproc_per_run = args.nproc_cpu
+        nproc_per_run = nproc_cpu
         results_big = run_parallel(f, big_sgbs, nproc=1, ordered=False)
 
         sgb_to_dist_files_db = dict(results_small + results_big)
@@ -251,7 +313,7 @@ def dist_against_sgbs(args, work_dir, database_path, sgb_to_genomes_in, sgb_to_g
     return df_genome_assignment
 
 
-def cluster_unassigned_genomes(args, work_dir, genomes_unassigned, input_skani_sketches_dir):
+def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_skani_sketches_dir):
     clustering_tmp_file = work_dir / 'clustering_tmp1.tsv'
     if exists_with_lock(clustering_tmp_file):
         info('Reusing clustering file of unassigned genomes')
@@ -270,7 +332,7 @@ def cluster_unassigned_genomes(args, work_dir, genomes_unassigned, input_skani_s
 
         info('  Calculating the big input-vs-input distance matrix')
         dists_dir_in.mkdir(exist_ok=True)
-        skani_triangle_big(input_unassigned_pastes, dists_dir_in, args.nproc_cpu)
+        skani_triangle_big(input_unassigned_pastes, dists_dir_in, nproc_cpu)
 
         info('  Loading the big input-vs-input distance matrix')
         pwd = load_big_triangle_skani(input_unassigned_pastes, dists_dir_in)
@@ -288,10 +350,10 @@ def cluster_unassigned_genomes(args, work_dir, genomes_unassigned, input_skani_s
     return s_sgb_clustering
 
 
-def assign_ggb_fgb(args, s_sgb_clustering, dist_files_centroids, centroid_to_sgb, sgb_to_ggb, ggb_to_fgb):
+def assign_ggb_fgb(nproc_io, s_sgb_clustering, dist_files_centroids, centroid_to_sgb, sgb_to_ggb, ggb_to_fgb):
     dfs = []
-    for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=args.nproc_io,
-                           ordered=False, return_gen=True):
+    for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=nproc_io, ordered=False,
+                           return_gen=True):
         df.index = df.index.map(fix_mash_id)
         dfs.append(df.loc[:, df.columns.intersection(s_sgb_clustering.index)])
 
@@ -331,7 +393,8 @@ def assign_ggb_fgb(args, s_sgb_clustering, dist_files_centroids, centroid_to_sgb
     return assignment_sgb_to_ggb, assignment_sgb_to_fgb
 
 
-def assign_phyla(args, work_dir, database_path, genomes_without_family, centroid_to_sgb, df_sgb_sgb):
+def assign_phyla(nproc_io, nproc_cpu, input_directory, input_extension, work_dir, database_path, genomes_without_family,
+                 centroid_to_sgb, df_sgb_sgb):
     centroids_k = df_sgb_sgb.loc[
         (df_sgb_sgb['Unknown'] == "kSGB") &
         (df_sgb_sgb['Assigned taxonomic ID'].map(lambda x: not pd.isna(x) and (x.split('|')[1] != ""))),
@@ -346,28 +409,12 @@ def assign_phyla(args, work_dir, database_path, genomes_without_family, centroid
 
     def run_prodigal(g):
         prodigal_output_file = prodigal_output_dir / f'{g}.faa'
-
-        fna_file_compressed = args.input_directory / f'{g}{args.input_extension}'
-
-        # TODO: either decompress as a global step also for skani or use *cat functions to pass to stdin
-        if fna_file_compressed.suffix in ['.bz2', '.gz']:
-            fna_file_decompressed = prodigal_input_dir / f'{g}.fna'
-            if fna_file_compressed.suffix == '.bz2':
-                c_ = f"bzip2 -dkc {fna_file_compressed} > {fna_file_decompressed}"
-            elif fna_file_compressed.suffix == '.gz':
-                c_ = f"gzip -dkc {fna_file_compressed} > {fna_file_decompressed}"
-            else:
-                assert False
-            run_command_with_lock(c_, fna_file_decompressed)
-        else:
-            # assuming it's an uncompressed fasta (e.g. .fna)
-            fna_file_decompressed = fna_file_compressed
-
-        c_ = f'prodigal -c -m -p meta -i {fna_file_decompressed} -a {prodigal_output_file}'
+        fna_file = input_directory / f'{g}{input_extension}'
+        c_ = f'prodigal -c -m -p meta -i {fna_file} -a {prodigal_output_file}'
 
         run_command_with_lock(c_, prodigal_output_file, shell=False)
 
-    run_parallel(run_prodigal, genomes_without_family, args.nproc_cpu, ordered=False)
+    run_parallel(run_prodigal, genomes_without_family, nproc_cpu, ordered=False)
 
     genome_to_faa = {}
     for genome in genomes_without_family:
@@ -384,7 +431,7 @@ def assign_phyla(args, work_dir, database_path, genomes_without_family, centroid
 
     genome_to_faa = pd.Series(genome_to_faa).map(pathlib.Path)
     assert set(genome_to_faa.index).issubset(set(genomes_without_family))
-    mash_sketch_aa(genome_to_faa, sketch_dir, args.nproc_cpu, args.nproc_io)
+    mash_sketch_aa(genome_to_faa, sketch_dir, nproc_cpu, nproc_io)
 
     genomes_u = genome_to_faa.index
 
@@ -396,12 +443,12 @@ def assign_phyla(args, work_dir, database_path, genomes_without_family, centroid
     dists_dir = work_dir / 'aa_dists'
     pastes_dir_u.mkdir(exist_ok=True)
     dists_dir.mkdir(exist_ok=True)
-    pastes_u = mash_paste(sketches_u, pastes_dir_u, args.nproc_io, chunk_size=CHUNK_SIZE_AA)
+    pastes_u = mash_paste(sketches_u, pastes_dir_u, nproc_io, chunk_size=CHUNK_SIZE_AA)
 
     pastes_k = sorted((database_path / 'centroid_mash_aa_pastes').iterdir())
 
     info('  Building the pwd genomes without family VS. SGBs centroids with phyla')
-    dist_files = mash_dist_block(pastes_k, pastes_u, dists_dir, args.nproc_cpu)
+    dist_files = mash_dist_block(pastes_k, pastes_u, dists_dir, nproc_cpu)
 
     info('  Loading the big pwd')
     df_big_pwd = load_mash_dist_block(dist_files, n_rows=len(genomes_u), n_columns=len(centroids_k))
@@ -428,7 +475,7 @@ def assign_phyla(args, work_dir, database_path, genomes_without_family, centroid
 
 
 def get_remote_dbs():
-    db_list_path = os.path.basename(urllib.parse.urlparse(DB_LIST_URL))
+    db_list_path = os.path.basename(urllib.parse.urlparse(DB_LIST_URL).path)  # TODO: figure out where to download this
     download(DB_LIST_URL, db_list_path, overwrite=True, quiet=True)
     return pd.read_csv(db_list_path, sep='\t', index_col=0)
 
@@ -452,7 +499,7 @@ def list_databases(args, df_dbs=None):
     info('  ' + ', '.join(remote_databases_extra))
 
 
-def download_db(args):
+def download_db(args, work_dir):
     df_dbs = get_remote_dbs()
     if args.database not in df_dbs.index:
         error(f'The specified database {args.database} not found')
@@ -496,49 +543,22 @@ def phylophlan_assign_sgbs(args):
 
     info('Starting PhyloPhlAn assign SGBs')
 
+    work_dir = args.output_directory / 'work_dir'
+    work_dir.mkdir(exist_ok=True)
 
-    ## Check the input ##
-    genome_files = list(args.input_directory.iterdir())
-    if len(genome_files) == 0:
-        error('Empty input directory', do_exit=True)
+    # >>> Check the input #
+    genome_names, input_directory, input_extension = process_input(args.input_directory, args.input_extension,
+                                                                   work_dir, args.nproc_io)
 
-    if args.input_extension is None:
-        assert len(genome_files) > 0
-        one_genome_name = genome_files[0].name
-        if one_genome_name.endswith('.gz'):
-            extension = '.gz'
-        elif one_genome_name.endswith('.bz2'):
-            extension = '.bz2'
-        else:
-            extension = ''
-        if len(extension) > 0:
-            one_genome_name = one_genome_name[:-len(extension)]
-        args.input_extension = '.' + one_genome_name.rsplit('.', maxsplit=1)[-1] + extension
-        info(f'Using inferred genome extension: {args.input_extension}')
-
-
-    if args.input_extension.endswith('.gz') or args.input_extension.endswith('.bz2'):
-        # TODO: implement temporary decompression
-        error('Unfortunately compressed fasta files are not supported yet', do_exit=True)
-
-    genome_names = [x.name[:-len(args.input_extension)] for x in genome_files if x.name.endswith(args.input_extension)]
-    files_ignored = [x for x in genome_files if x.is_file() and not x.name.endswith(args.input_extension)]
-    info(f'Found {len(genome_names)} genomes in the input directory')
-    if len(files_ignored) > 0:
-        warning(f'  Ignoring {len(files_ignored)} files in the input directory '
-                f'not having {args.input_extension} extension')
-
-
-    ## Check the database ##
+    # >>> Check the database <<< #
     database_path = args.database_folder / args.database
 
     if not database_path.is_dir():
-        download_db(args)
+        download_db(args, work_dir)
 
 
     info('Loading database files')
     sgb_table_path = database_path / f'{args.database}.txt.bz2'
-    sgb_groups_path = database_path / f'{args.database}_groups.tsv.bz2'
     # TODO: take into account chocophlan killed and merged
 
     df_sgb = load_sgb_txt(sgb_table_path)
@@ -559,26 +579,23 @@ def phylophlan_assign_sgbs(args):
     centroids = centroid_to_sgb.index
 
 
-    args.output_directory.mkdir(exist_ok=True)
-    work_dir = args.output_directory / 'work_dir'
-    work_dir.mkdir(exist_ok=True)
-
-    ## Sketching ##
+    # >>> Sketching <<< #
     info('Generating MASH sketches for the input genomes')
     input_mash_sketches_dir = work_dir / 'input_sketches_mash'
     input_mash_sketches_dir.mkdir(exist_ok=True)
-    input_mash_sketches = mash_sketch(genome_names, args.input_extension, args.input_directory,
+    input_mash_sketches = mash_sketch(genome_names, input_extension, input_directory,
                                       input_mash_sketches_dir, args.nproc_cpu, args.nproc_io)
 
     info('Generating skani sketches for the input genomes')
     input_skani_sketches_dir = work_dir / 'input_sketches_skani'
     input_skani_sketches_dir.mkdir(exist_ok=True)
-    skani_sketch(genome_names, args.input_extension, args.input_directory, input_skani_sketches_dir, args.nproc_cpu,
+    skani_sketch(genome_names, input_extension, input_directory, input_skani_sketches_dir, args.nproc_cpu,
                  args.nproc_io)
 
-    ## Prefiltering ##
+    # >>> Prefiltering <<< #
     info('Prefiltering SGBs')
-    df_genome_centroid_pairs, dist_files_centroids = prefiltering(args, work_dir, database_path, centroids,
+    df_genome_centroid_pairs, dist_files_centroids = prefiltering(work_dir, args.output_directory, args.nproc_io,
+                                                                  args.nproc_cpu, database_path, centroids,
                                                                   centroid_to_sgb, input_mash_sketches, genome_names)
     genomes_near = df_genome_centroid_pairs['genome'].unique()
     genomes_far = set(genome_names).difference(set(genomes_near))
@@ -591,9 +608,9 @@ def phylophlan_assign_sgbs(args):
     sgb_to_genomes_db = (df_sgb_sgb['List of reconstructed genomes'] + ',' + df_sgb_sgb['List of reference genomes']) \
         .map(lambda x: [y for y in x.split(',') if len(y) > 0 and y != '-'])
 
-    ## Disting against prefiltered SGBs ##
-    df_genome_assignment = dist_against_sgbs(args, work_dir, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
-                                             input_skani_sketches_dir)
+    # >>> Distancing against prefiltered SGBs <<< #
+    df_genome_assignment = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
+                                             sgb_to_genomes_db, input_skani_sketches_dir)
 
     df_genome_assignment = df_genome_assignment \
         .join(sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
@@ -608,8 +625,8 @@ def phylophlan_assign_sgbs(args):
     genomes_unassigned = set(genome_names).difference(assigned_genomes_set)
 
     if len(genomes_unassigned) > 0:
-        ## Clustering unassigned genomes ##
-        assignment_genomes_to_new_sgbs = cluster_unassigned_genomes(args, work_dir, genomes_unassigned,
+        # >>> Clustering unassigned genomes <<< #
+        assignment_genomes_to_new_sgbs = cluster_unassigned_genomes(args.nproc_cpu, work_dir, genomes_unassigned,
                                                                     input_skani_sketches_dir)
         novel_sgbs = set(assignment_genomes_to_new_sgbs.unique())
         info(f'  There are {len(novel_sgbs)} SGBs '
@@ -617,9 +634,9 @@ def phylophlan_assign_sgbs(args):
 
 
 
-        ## Assigning GGBs and SGBs of newly created SGBs ##
+        # >>> Assigning GGBs and SGBs of newly created SGBs <<< #
         info('Assigning GGBs and FGBs to novel SGBs')
-        assignment_sgb_to_ggb, assignment_sgb_to_fgb = assign_ggb_fgb(args, assignment_genomes_to_new_sgbs,
+        assignment_sgb_to_ggb, assignment_sgb_to_fgb = assign_ggb_fgb(args.nproc_io, assignment_genomes_to_new_sgbs,
                                                                       dist_files_centroids, centroid_to_sgb, sgb_to_ggb,
                                                                       ggb_to_fgb)
 
@@ -632,18 +649,19 @@ def phylophlan_assign_sgbs(args):
         assert set(df_genome_assignment.index) == set(genome_names)
 
 
-        ## Assign phyla to genomes without family ##
+        # >>> Assign phyla to genomes without family <<< #
         genomes_without_family = df_genome_assignment.index[df_genome_assignment['fgb_id'].isna()]
         if len(genomes_without_family) > 0:
             info(f'Will assign phyla to {len(genomes_without_family)} genomes without family')
-            df_phyla = assign_phyla(args, work_dir, database_path, genomes_without_family, centroid_to_sgb, df_sgb_sgb)
+            df_phyla = assign_phyla(args.nproc_io, args.nproc_cpu, input_directory, input_extension, work_dir,
+                                    database_path, genomes_without_family, centroid_to_sgb, df_sgb_sgb)
 
             df_genome_assignment = df_genome_assignment.join(df_phyla)
     else:
         novel_sgbs = set()
 
 
-    ## Assign taxonomy ##
+    # >>> Assign taxonomy <<< #
 
 
     def get_tax(row):

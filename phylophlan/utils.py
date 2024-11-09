@@ -1,3 +1,4 @@
+import functools
 import os
 import sys
 from datetime import datetime
@@ -163,6 +164,19 @@ def openr(filepath, mode="rt"):
         return open(filepath, mode)
 
 
+def decompress_file(input_file, output_file, open_f):
+    """
+    Decompresses the `input_file` to `output_file` using `open_f` which will typically be gzip.open or bz2.open
+
+    :param (pathlib.Path|str) input_file:
+    :param (pathlib.Path|str) output_file:
+    :param function open_f:
+    :return:
+    """
+    with open_f(input_file, 'rb') as f_in, open(output_file, 'wb') as f_out:
+        shutil.copyfileobj(f_in, f_out)
+
+
 def download(url, download_file, overwrite=False, quiet=False):
     """
 
@@ -325,6 +339,10 @@ def run_command_with_lock(cmd, output_file, *args, **kwargs):
     return r
 
 
+def expand_star_args(args, f):
+    return f(*args)
+
+
 def run_parallel_gen(f, f_args, nproc, f_const=None, chunksize=1, ordered=True, star=False, processes=False):
     if chunksize == 'auto':
         if len(f_args) / nproc < 10:
@@ -333,8 +351,7 @@ def run_parallel_gen(f, f_args, nproc, f_const=None, chunksize=1, ordered=True, 
             chunksize = 10
 
     if star:
-        def f_starred(a):
-            return f(*a)
+        f_starred = functools.partial(expand_star_args, f=f)
     else:
         f_starred = f
 
@@ -374,8 +391,8 @@ def run_parallel(f, f_args, nproc, f_const=None, chunksize=1, ordered=True, star
     :return: list or generator of return values from f
     :rtype: list | Generator
     """
-    if processes and star:
-        raise Exception('The arguments processes and star are incompatible (for now)')
+    # if processes and star:
+    #     raise Exception('The arguments processes and star are incompatible (for now)')
 
     r = run_parallel_gen(f, f_args, nproc, f_const, chunksize, ordered, star, processes)
     if return_gen:
