@@ -27,6 +27,7 @@ import gzip
 import os
 import pathlib
 import shlex
+import shutil
 import subprocess as sp
 import sys
 import tarfile
@@ -41,6 +42,7 @@ from .utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, 
     skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, path_get_lock, \
     run_command_with_lock, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock, \
     get_threads_per_run, warning, decompress_file
+
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
@@ -60,6 +62,8 @@ PREFILTER_DIST_THRESHOLD = 0.2
 SGB_ASSIGNMENT_ANI = 95
 GGB_ASSIGNMENT_DIST = 0.15
 FGB_ASSIGNMENT_DIST = 0.3
+SGB_CLOSEST_PROFILABLE_MIN_ANI = 85
+WORK_DIR_NAME = 'phylophlan_assign_sgbs_tmp'
 NOVEL_SGB_PREFIX = 'SGBX'
 
 SMALL_SGB_THRESHOLD = 100 * 100
@@ -67,6 +71,18 @@ CHUNK_SIZE_IN = 1000
 CHUNK_SIZE_PER_SGB_IN = 10000
 CHUNK_SIZE_PER_SGB_DB = 10000
 CHUNK_SIZE_AA = 10000
+
+
+class ArgumentTypes:
+    input_directory: pathlib.Path
+    input_extension: str
+    output_directory: pathlib.Path
+    database_folder: pathlib.Path
+    database: str
+    list_databases: bool
+    nproc_cpu: int
+    nproc_io: int
+    clean: bool
 
 
 def read_params():
@@ -89,6 +105,8 @@ def read_params():
                    help="The number of threads to use for CPU intensive jobs")
     p.add_argument('--nproc_io', type=ArgumentType.positive_int, default=1,
                    help="The number of CPUs to use for I/O intensive jobs")
+    p.add_argument('--clean', action='store_true', default=False,
+                   help="Whether to clean the temporary directory (don't reuse intermediate results)")
     p.add_argument('--citation', action='version',
                    version=('Asnicar, F., Thomas, A.M., Beghini, F. et al. '
                             'Precise phylogenetic analysis of microbial isolates and genomes from metagenomes using'
@@ -103,8 +121,8 @@ def read_params():
     return p
 
 
-def check_params(argp):
-    args = argp.parse_args()
+def check_params(argp: ap.ArgumentParser):
+    args = argp.parse_args(namespace=ArgumentTypes)
 
     if not args.list_databases and (args.input_directory is None or args.output_directory is None):
         argp.error('input_directory and output_directory required')
@@ -178,9 +196,9 @@ def process_input(input_directory, input_extension, work_dir, nproc_io):
     return genome_names, input_directory, input_extension
 
 
-def prefiltering(work_dir, output_directory, nproc_io, nproc_cpu, database_path, centroids, centroid_to_sgb,
-                 input_mash_sketches, genome_names):
-    genome_centroid_pairs_file = output_directory / 'genome_centroid_pairs.tsv'
+def prefiltering(work_dir, nproc_io, nproc_cpu, database_path, centroids, centroid_to_sgb, input_mash_sketches,
+                 genome_names):
+    genome_centroid_pairs_file = work_dir / 'genome_centroid_pairs.tsv'
     dists_dir_centroids = work_dir / 'mash_dists_input_centroids'
     if genome_centroid_pairs_file.exists():
         info('  Loading existing genomes-to-closest-centroids file')
@@ -228,89 +246,97 @@ def prefiltering(work_dir, output_directory, nproc_io, nproc_cpu, database_path,
 
 
 def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
-                      input_skani_sketches_dir):
-    genome_assignment_file = work_dir / 'genome_assignment_existing_sgbs.tsv'
+                      input_skani_sketches_dir, sgb_to_mp):
     input_per_sgb_pastes_dir = work_dir / 'skani_pastes_input_per_sgb'
     db_per_sgb_pastes_dir = work_dir / 'skani_pastes_db_per_sgb'
     dists_dir_db = work_dir / 'skani_dists_input_db_per_sgb'
-    if exists_with_lock(genome_assignment_file):
-        info('Reusing existing genome assignment')
-        df_genome_assignment = pd.read_csv(genome_assignment_file, sep='\t', index_col=0)
-    else:
-        info('Calculating average distances from input genomes to prefiltered SGBs')
+    long_results_file = work_dir / 'ani_results_long.tsv'
 
-        info('  Creating per-SGB skani pastes of input sketches')
-        input_per_sgb_pastes_dir.mkdir(exist_ok=True)
-        sgb_to_pastes_in = {}
-        for sgb_id, sgb_genomes in tqdm(sgb_to_genomes_in.items()):
-            sgb_genome_sketches = [input_skani_sketches_dir / f'{g}.sketch' for g in sgb_genomes]
-            sgb_to_pastes_in[sgb_id] = skani_paste(sgb_genome_sketches, input_per_sgb_pastes_dir, CHUNK_SIZE_PER_SGB_IN,
-                                                   file_prefix=f'paste_sgb{sgb_id}')
+    if exists_with_lock(long_results_file):
+        info('Loading DB ANI long results')
+        df_long_results = pd.read_csv(long_results_file, sep='\t')
+        return df_long_results
 
-        info('  Creating per-SGB skani pastes of DB sketches')
-        db_per_sgb_pastes_dir.mkdir(exist_ok=True)
-        sgb_to_pastes_db = {}
-        for sgb_id in tqdm(sgb_to_genomes_in.keys()):
-            sgb_db_sketches = sorted((database_path / 'per_sgb_skani_pastes' / f'{sgb_id}').iterdir())
-            sgb_to_pastes_db[sgb_id] = skani_paste(sgb_db_sketches, db_per_sgb_pastes_dir, CHUNK_SIZE_PER_SGB_DB,
-                                                   file_prefix=f'paste_sgb{sgb_id}')
 
-        info('  Running skani distance calculation')
-        small_sgbs = []
-        big_sgbs = []
-        for sgb_id in sgb_to_genomes_in.keys():
-            genomes_in = sgb_to_genomes_in[sgb_id]
-            genomes_db = sgb_to_genomes_db[sgb_id]
-            size = len(genomes_in) * len(genomes_db)
-            if size < SMALL_SGB_THRESHOLD:
-                small_sgbs.append(sgb_id)
-            else:
-                big_sgbs.append(sgb_id)
+    info('Calculating average distances from input genomes to prefiltered SGBs')
 
-        info(f'  Will run {len(small_sgbs)} small and {len(big_sgbs)} big SGBs')
-        dists_dir_db.mkdir(exist_ok=True)
+    info('  Creating per-SGB skani pastes of input sketches')
+    input_per_sgb_pastes_dir.mkdir(exist_ok=True)
+    sgb_to_pastes_in = {}
+    for sgb_id, sgb_genomes in tqdm(sgb_to_genomes_in.items()):
+        sgb_genome_sketches = [input_skani_sketches_dir / f'{g}.sketch' for g in sgb_genomes]
+        sgb_to_pastes_in[sgb_id] = skani_paste(sgb_genome_sketches, input_per_sgb_pastes_dir, CHUNK_SIZE_PER_SGB_IN,
+                                               file_prefix=f'paste_sgb{sgb_id}')
 
-        def f(sgb_id_):
-            r = skani_dist_block(sgb_to_pastes_in[sgb_id_], sgb_to_pastes_db[sgb_id_], dists_dir_db,
-                                 nproc=nproc_per_run, progress_bar=False)
-            return sgb_id_, r
+    info('  Creating per-SGB skani pastes of DB sketches')
+    db_per_sgb_pastes_dir.mkdir(exist_ok=True)
+    sgb_to_pastes_db = {}
+    for sgb_id in tqdm(sgb_to_genomes_in.keys()):
+        sgb_db_sketches = sorted((database_path / 'per_sgb_skani_pastes' / f'{sgb_id}').iterdir())
+        sgb_to_pastes_db[sgb_id] = skani_paste(sgb_db_sketches, db_per_sgb_pastes_dir, CHUNK_SIZE_PER_SGB_DB,
+                                               file_prefix=f'paste_sgb{sgb_id}')
 
-        info('  Running small SGBs')
-        nproc_per_run = get_threads_per_run(nproc_cpu, nproc_io)
-        results_small = run_parallel(f, small_sgbs, nproc=nproc_io, ordered=False)
+    info('  Running skani distance calculation')
+    small_sgbs = []
+    big_sgbs = []
+    for sgb_id in sgb_to_genomes_in.keys():
+        genomes_in = sgb_to_genomes_in[sgb_id]
+        genomes_db = sgb_to_genomes_db[sgb_id]
+        size = len(genomes_in) * len(genomes_db)
+        if size < SMALL_SGB_THRESHOLD:
+            small_sgbs.append(sgb_id)
+        else:
+            big_sgbs.append(sgb_id)
 
-        info('  Running big SGBs')
-        nproc_per_run = nproc_cpu
-        results_big = run_parallel(f, big_sgbs, nproc=1, ordered=False)
+    info(f'  Will run {len(small_sgbs)} small and {len(big_sgbs)} big SGBs')
+    dists_dir_db.mkdir(exist_ok=True)
 
-        sgb_to_dist_files_db = dict(results_small + results_big)
+    def f(sgb_id_):
+        r = skani_dist_block(sgb_to_pastes_in[sgb_id_], sgb_to_pastes_db[sgb_id_], dists_dir_db,
+                             nproc=nproc_per_run, progress_bar=False)
+        return sgb_id_, r
 
-        info('  Processing distance files')
-        genome_assignment = {}
-        for sgb_id, dist_files in tqdm(sgb_to_dist_files_db.items()):
-            for dist_file in dist_files:
-                df = load_skani_as_pwd(dist_file, refs=sgb_to_genomes_db[sgb_id])
+    info('  Running small SGBs')
+    nproc_per_run = get_threads_per_run(nproc_cpu, nproc_io)
+    results_small = run_parallel(f, small_sgbs, nproc=nproc_io, ordered=False)
 
-                closest_genomes = df.idxmax()
-                closest_anis = df.max()
-                avg_anis = df.mean()
+    info('  Running big SGBs')
+    nproc_per_run = nproc_cpu
+    results_big = run_parallel(f, big_sgbs, nproc=1, ordered=False)
 
-                for g, closest_genome, closest_ani, avg_ani in zip(df.columns, closest_genomes.values,
-                                                                   closest_anis.values, avg_anis.values):
-                    if avg_ani >= SGB_ASSIGNMENT_ANI and \
-                            (g not in genome_assignment or genome_assignment[g][1] < avg_ani):
-                        genome_assignment[g] = (sgb_id, avg_ani, closest_ani)  # not assigned or this is closer
+    sgb_to_dist_files_db = dict(results_small + results_big)
 
-        df_genome_assignment = pd.DataFrame.from_dict(genome_assignment, orient='index',
-                                                      columns=['sgb_id', 'sgb_avg_ani', 'closest_genome_ani'])\
-            .rename_axis('genome')
+    info('  Processing distance files')
+    dfs_partial = []
+    for sgb_id, dist_files_matrix in sgb_to_dist_files_db.items():
+        for dist_files_row in dist_files_matrix:
+            # compose input genome batch (dist files row) from all the DB genome batches
+            # but then input genomes are columns and DB genomes are rows
+            dfs = [load_skani_as_pwd(dist_file, refs=sgb_to_genomes_db[sgb_id]) for dist_file in dist_files_row]
+            df = pd.concat(dfs, axis=0).fillna(0)
 
-        genome_assignment_file_lock = path_get_lock(genome_assignment_file)
-        genome_assignment_file_lock.touch()
-        df_genome_assignment.to_csv(genome_assignment_file, sep='\t')
-        genome_assignment_file_lock.unlink()
+            closest_anis = df.max().rename('closest_genome_ani')
+            avg_anis = df.mean().rename('sgb_avg_ani')
 
-    return df_genome_assignment
+            df_partial_results = pd.concat([closest_anis, avg_anis], axis=1).rename_axis('genome').reset_index()
+            df_partial_results['sgb_id'] = sgb_id
+            df_partial_results = df_partial_results.loc[df_partial_results['closest_genome_ani'] > 0]
+            df_partial_results = df_partial_results[['genome', 'sgb_id', 'closest_genome_ani', 'sgb_avg_ani']]
+
+            dfs_partial.append(df_partial_results)
+
+    df_long_results = pd.concat(dfs_partial, axis=0)
+
+    if sgb_to_mp is not None:
+        df_long_results['sgb_is_profilable'] = df_long_results['sgb_id'].isin(set(sgb_to_mp.keys()))
+    df_long_results = df_long_results.sort_values('sgb_avg_ani', ascending=False)
+
+    long_results_file_lock = path_get_lock(long_results_file)
+    long_results_file_lock.touch()
+    df_long_results.to_csv(long_results_file, sep='\t', index=False)
+    long_results_file_lock.unlink()
+
+    return df_long_results
 
 
 def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_skani_sketches_dir):
@@ -456,7 +482,7 @@ def assign_phyla(nproc_io, nproc_cpu, input_directory, input_extension, work_dir
     assert set(df_big_pwd.columns) == set(centroids_k)
 
     info('  Getting the taxonomy assignments by the minimum distance')
-    min_dists = df_big_pwd.T.min()
+    min_dists: pd.Series = df_big_pwd.T.min()
     df_big_mask = (df_big_pwd.T == min_dists).T
     u_taxonomies = df_sgb_sgb.loc[df_big_mask.columns.map(centroid_to_sgb), 'Assigned taxonomy']
     all_taxs = df_big_mask.apply(lambda row_: list(u_taxonomies.values[row_.values]), axis=1).rename('all_taxs')
@@ -475,7 +501,9 @@ def assign_phyla(nproc_io, nproc_cpu, input_directory, input_extension, work_dir
 
 
 def get_remote_dbs():
-    db_list_path = os.path.basename(urllib.parse.urlparse(DB_LIST_URL).path)  # TODO: figure out where to download this
+    # TODO: figure out where to download the DB list file
+    #  if running with --list_databases, work_dir is not required ==> use some local tmp file and then remove it later?
+    db_list_path = os.path.basename(urllib.parse.urlparse(DB_LIST_URL).path)
     download(DB_LIST_URL, db_list_path, overwrite=True, quiet=True)
     return pd.read_csv(db_list_path, sep='\t', index_col=0)
 
@@ -499,7 +527,7 @@ def list_databases(args, df_dbs=None):
     info('  ' + ', '.join(remote_databases_extra))
 
 
-def download_db(args, work_dir):
+def download_db(args):
     df_dbs = get_remote_dbs()
     if args.database not in df_dbs.index:
         error(f'The specified database {args.database} not found')
@@ -543,7 +571,12 @@ def phylophlan_assign_sgbs(args):
 
     info('Starting PhyloPhlAn assign SGBs')
 
-    work_dir = args.output_directory / 'work_dir'
+    work_dir = args.output_directory / WORK_DIR_NAME
+
+    if work_dir.exists() and args.clean:
+        info('Cleaning the temporary directory')
+        shutil.rmtree(work_dir)
+
     work_dir.mkdir(exist_ok=True)
 
     # >>> Check the input #
@@ -554,12 +587,12 @@ def phylophlan_assign_sgbs(args):
     database_path = args.database_folder / args.database
 
     if not database_path.is_dir():
-        download_db(args, work_dir)
+        download_db(args)
 
 
     info('Loading database files')
     sgb_table_path = database_path / f'{args.database}.txt.bz2'
-    # TODO: take into account chocophlan killed and merged
+    profilable_sgbs_file = database_path / 'profilable_sgbs.tsv'
 
     df_sgb = load_sgb_txt(sgb_table_path)
 
@@ -578,6 +611,12 @@ def phylophlan_assign_sgbs(args):
     centroid_to_sgb = pd.Series(dict(zip(df_sgb_sgb['SGB centroid'], df_sgb_sgb.index)))
     centroids = centroid_to_sgb.index
 
+    if profilable_sgbs_file.exists():
+        sgb_to_mp = load_pandas_series(profilable_sgbs_file).to_dict()
+    else:
+        sgb_to_mp = None
+
+
 
     # >>> Sketching <<< #
     info('Generating MASH sketches for the input genomes')
@@ -594,9 +633,9 @@ def phylophlan_assign_sgbs(args):
 
     # >>> Prefiltering <<< #
     info('Prefiltering SGBs')
-    df_genome_centroid_pairs, dist_files_centroids = prefiltering(work_dir, args.output_directory, args.nproc_io,
-                                                                  args.nproc_cpu, database_path, centroids,
-                                                                  centroid_to_sgb, input_mash_sketches, genome_names)
+    df_genome_centroid_pairs, dist_files_centroids = prefiltering(work_dir, args.nproc_io, args.nproc_cpu,
+                                                                  database_path, centroids, centroid_to_sgb,
+                                                                  input_mash_sketches, genome_names)
     genomes_near = df_genome_centroid_pairs['genome'].unique()
     genomes_far = set(genome_names).difference(set(genomes_near))
 
@@ -609,8 +648,22 @@ def phylophlan_assign_sgbs(args):
         .map(lambda x: [y for y in x.split(',') if len(y) > 0 and y != '-'])
 
     # >>> Distancing against prefiltered SGBs <<< #
-    df_genome_assignment = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
-                                             sgb_to_genomes_db, input_skani_sketches_dir)
+    df_long_results = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
+                                        sgb_to_genomes_db, input_skani_sketches_dir, sgb_to_mp)
+
+
+    df_top_results_single = df_long_results.drop_duplicates(subset=['genome'])
+    df_genome_assignment = df_top_results_single[df_top_results_single['sgb_avg_ani'] >= SGB_ASSIGNMENT_ANI]\
+        .set_index('genome')
+
+    if sgb_to_mp is not None:
+        df_closest_profilable = df_long_results[df_long_results['sgb_is_profilable']]\
+            .drop_duplicates(subset=['genome']).set_index('genome')
+        df_closest_profilable = df_closest_profilable[df_closest_profilable['sgb_avg_ani']
+                                                      >= SGB_CLOSEST_PROFILABLE_MIN_ANI]
+    else:
+        df_closest_profilable = None
+
 
     df_genome_assignment = df_genome_assignment \
         .join(sgb_to_ggb.rename('ggb_id'), on='sgb_id') \
@@ -674,6 +727,11 @@ def phylophlan_assign_sgbs(args):
         return row['closest_phylum']
 
     df_genome_assignment['taxonomy'] = df_genome_assignment.apply(get_tax, axis='columns')
+
+    if df_closest_profilable is not None:
+        df_genome_assignment = df_genome_assignment.join(df_closest_profilable[['sgb_id', 'sgb_avg_ani']],
+                                                         rsuffix='_metaphlan')
+        df_genome_assignment['sgb_id_metaphlan'] = df_genome_assignment['sgb_id_metaphlan'].map(sgb_to_mp)
 
     df_genome_assignment.to_csv(args.output_directory / 'genome_assignment.tsv', sep='\t')
     info(f"Output table written to {args.output_directory / 'genome_assignment.tsv'}")

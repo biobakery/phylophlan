@@ -210,14 +210,20 @@ def download(url, download_file, overwrite=False, quiet=False):
         lock_file.unlink()
 
 
-def load_pandas_series(file_path, sep='\t', index_col=0, **kwargs):
+def load_pandas_series(file_path, sep='\t', index_col=0, **kwargs) -> pd.Series:
     """
     Load a two-column file as pandas.Series
+
+    :param file_path:
+    :param sep:
+    :param index_col:
+    :param kwargs:
+    :return:
     """
     return pd.read_csv(file_path, sep=sep, index_col=index_col, **kwargs).squeeze('columns')
 
 
-def load_pandas_tsv(file_path, header=0, index_col=False, **kwargs):
+def load_pandas_tsv(file_path, header=0, index_col=False, **kwargs) -> pd.DataFrame:
     """
     Skips the lines starting with "#" except the last one which is used as a header
 
@@ -225,7 +231,7 @@ def load_pandas_tsv(file_path, header=0, index_col=False, **kwargs):
     :param header:
     :param bool|Sequence[int]|int index_col:
     :param kwargs: Additional arguments passed to pd.read_csv
-    :return pd.DataFrame:
+    :return:
     """
     with openr(file_path, 'rt') as f:
         nl_positions = [f.tell()]
@@ -238,7 +244,7 @@ def load_pandas_tsv(file_path, header=0, index_col=False, **kwargs):
             line = f.readline().strip()
         else:
             print('Warning: EOL encountered')
-            return None
+            return pd.DataFrame()
 
         return pd.read_csv(f, sep='\t', skiprows=0, header=header, index_col=index_col, **kwargs)
 
@@ -615,16 +621,18 @@ def skani_dist_block(skani_pastes_1, skani_pastes_2, dists_dir, nproc, progress_
     if progress_bar:
         skani_pastes_1 = tqdm(skani_pastes_1)
 
-    dist_files = []
+    dist_files_matrix = []
     for p1 in skani_pastes_1:
+        dist_files_row = []
         for p2 in skani_pastes_2:
             dist_filename = p1.stem + '__' + p2.stem + '.tsv.gz'
             dist_file = dists_dir / dist_filename
             cmd = f"skani dist -t {nproc} --ql {p1} --rl {p2} | gzip > {dist_file}"
             run_command_with_lock(cmd, output_file=dist_file, shell=True)
-            dist_files.append(dist_file)
+            dist_files_row.append(dist_file)
+        dist_files_matrix.append(dist_files_row)
 
-    return dist_files
+    return dist_files_matrix
 
 
 def skani_triangle_big(skani_pastes, dists_dir, nproc):
