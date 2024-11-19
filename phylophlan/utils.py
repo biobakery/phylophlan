@@ -260,8 +260,20 @@ def fix_mash_id(x):
     :param x: The original id (full path)
     :return: The metaref id
     """
-    return x.split('/')[-1].rsplit('.', maxsplit=1)[0]
+    x = x.split('/')[-1]
+    assert x.startswith('M1')
+    x = x.rsplit('.', maxsplit=1)[0]
+    return x
     # return os.path.splitext(os.path.basename(x))[0]
+
+
+def fix_skani_id(genome_extension):
+    def fix_skani_id_inner(x):
+        x = x.split('/')[-1]
+        assert x.endswith(genome_extension)
+        return x[:-len(genome_extension)]
+
+    return fix_skani_id_inner
 
 
 def run_command(cmd, shell=True, **kwargs):
@@ -655,16 +667,11 @@ def skani_triangle_big(skani_pastes, dists_dir, nproc):
         run_command_with_lock(cmd, dist_file)
 
 
-def load_pwd_pandas(file_path, fix_index=False, **kwargs):
-    df = pd.read_csv(file_path, sep='\t', index_col=0, header=0, **kwargs)
-    if fix_index:
-        df.index = df.index.map(fix_mash_id)
-        df.columns = df.columns.map(fix_mash_id)
-
-    return df
+def load_pwd_pandas(file_path, **kwargs):
+    return pd.read_csv(file_path, sep='\t', index_col=0, header=0, **kwargs)
 
 
-def load_skani_as_pwd(path, queries=None, refs=None):
+def load_skani_as_pwd(path, fix_queries=None, fix_refs=None, queries=None, refs=None):
     """
     Loads skani dist output as distance matrix. You should pass the queries and references you used for the distancing
     as the skani output contains only hits above certain allelic fraction threshold, otherwise they might be missing in
@@ -686,14 +693,16 @@ def load_skani_as_pwd(path, queries=None, refs=None):
             rows.append([r, q, a])
     df = pd.DataFrame(rows, columns=header)
     df = df.pivot(index='Ref_file', columns='Query_file', values='ANI')
-    df.index = df.index.map(fix_mash_id)
-    df.columns = df.columns.map(fix_mash_id)
+    if fix_refs is not None:
+        df.index = df.index.map(fix_refs)
+    if fix_queries is not None:
+        df.columns = df.columns.map(fix_queries)
     df = df.reindex(index=refs, columns=queries).fillna(0)
     return df
 
 
 
-def load_big_triangle_common(index_pastes, parse_values, pastes, dists_dir, paste_to_offset):
+def load_big_triangle_common(index_pastes, parse_values, pastes, dists_dir, paste_to_offset, fix_f):
     total_n = len(index_pastes)
     if parse_values:
         matrix = np.zeros((total_n, total_n), dtype=float)
@@ -733,20 +742,21 @@ def load_big_triangle_common(index_pastes, parse_values, pastes, dists_dir, past
 
             offset += n_lines
 
-    index_diagonal = [fix_mash_id(x) for x in index_diagonal]
+    index_diagonal = [fix_f(x) for x in index_diagonal]
 
     assert set(index_pastes) == set(index_diagonal)
 
     return matrix, index_diagonal
 
 
-def load_big_triangle_skani(skani_pastes, dists_dir, parse_values=True):
+def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, parse_values=True):
     """
     Loads a big skani triangle into a pandas DataFrame. It takes the paste files and assumes you ran the big triangle
     distancing
 
     :param Iterable[pathlib.Path] skani_pastes:
     :param pathlib.Path dists_dir:
+    :param str genome_extension:
     :param bool parse_values:
     :return:
     """
@@ -764,9 +774,10 @@ def load_big_triangle_skani(skani_pastes, dists_dir, parse_values=True):
         paste_to_offset[mp] = offset
         offset += len(mp_index)
 
-    index_pastes = [fix_mash_id(x) for x in index_pastes]
+    index_pastes = [fix_skani_id('.sketch')(x) for x in index_pastes]
 
-    matrix, _ = load_big_triangle_common(index_pastes, parse_values, skani_pastes, dists_dir, paste_to_offset)
+    matrix, _ = load_big_triangle_common(index_pastes, parse_values, skani_pastes, dists_dir, paste_to_offset,
+                                         fix_skani_id(genome_extension))
 
     idx_to_offset = dict(zip(index_pastes, range(len(index_pastes))))
 
@@ -778,8 +789,8 @@ def load_big_triangle_skani(skani_pastes, dists_dir, parse_values=True):
             next(f)
             for line in f:
                 r, q, a, _ = line.split('\t', maxsplit=3)
-                r = fix_mash_id(r)
-                q = fix_mash_id(q)
+                r = fix_skani_id(genome_extension)(r)
+                q = fix_skani_id(genome_extension)(q)
                 a = float(a)
                 i = idx_to_offset[r]
                 j = idx_to_offset[q]
@@ -839,8 +850,6 @@ def load_mash_dist_block(dist_files, n_rows, n_columns, parse_values=True, progr
             assert (index == current_index).all()
             column_offset += n_columns_current
 
-    header = pd.Index(header)
-    header = header.map(fix_mash_id)
     df = pd.DataFrame(a, index=index, columns=header)
     assert not (df < 0).any().any()  # all values were filled
     return df

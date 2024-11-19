@@ -41,8 +41,7 @@ from .utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, 
     run_parallel, load_pwd_pandas, load_pandas_series, skani_paste, skani_dist_block, tqdm, load_skani_as_pwd, \
     skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, path_get_lock, \
     run_command_with_lock, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock, \
-    get_threads_per_run, warning, decompress_file
-
+    get_threads_per_run, warning, decompress_file, fix_skani_id
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
@@ -127,7 +126,8 @@ def check_params(argp: ap.ArgumentParser):
     if not args.list_databases and (args.input_directory is None or args.output_directory is None):
         argp.error('input_directory and output_directory required')
 
-    args.output_directory.mkdir(exist_ok=True)
+    if args.output_directory is not None:
+        args.output_directory.mkdir(exist_ok=True)
 
     return args
 
@@ -157,6 +157,8 @@ def process_input(input_directory, input_extension, work_dir, nproc_io):
             one_genome_name = one_genome_name[:-len(extension)]
         input_extension = '.' + one_genome_name.rsplit('.', maxsplit=1)[-1] + extension
         info(f'Using inferred genome extension: {input_extension}')
+    # elif not input_extension.startswith('.'):
+    #     input_extension = '.' + input_extension
 
     genome_names = [x.name[:-len(input_extension)] for x in genome_files if x.name.endswith(input_extension)]
     files_ignored = [x for x in genome_files if x.is_file() and not x.name.endswith(input_extension)]
@@ -224,7 +226,7 @@ def prefiltering(work_dir, nproc_io, nproc_cpu, database_path, centroids, centro
         for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=nproc_io,
                                ordered=False, return_gen=True):
 
-            df.index = df.index.map(fix_mash_id)
+            df.index = df.index.map(fix_mash_id)  # centroid M-ids
 
             assert set(df.index) == set(centroids)
             processed_genomes.extend(df.columns.to_list())
@@ -246,7 +248,7 @@ def prefiltering(work_dir, nproc_io, nproc_cpu, database_path, centroids, centro
 
 
 def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genomes_in, sgb_to_genomes_db,
-                      input_skani_sketches_dir, sgb_to_mp):
+                      input_skani_sketches_dir, sgb_to_mp, input_extension):
     input_per_sgb_pastes_dir = work_dir / 'skani_pastes_input_per_sgb'
     db_per_sgb_pastes_dir = work_dir / 'skani_pastes_db_per_sgb'
     dists_dir_db = work_dir / 'skani_dists_input_db_per_sgb'
@@ -312,7 +314,9 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
         for dist_files_row in dist_files_matrix:
             # compose input genome batch (dist files row) from all the DB genome batches
             # but then input genomes are columns and DB genomes are rows
-            dfs = [load_skani_as_pwd(dist_file, refs=sgb_to_genomes_db[sgb_id]) for dist_file in dist_files_row]
+            dfs = [load_skani_as_pwd(dist_file, fix_refs=fix_mash_id, fix_queries=fix_skani_id(input_extension),
+                                     refs=sgb_to_genomes_db[sgb_id])
+                   for dist_file in dist_files_row]
             df = pd.concat(dfs, axis=0).fillna(0)
 
             closest_anis = df.max().rename('closest_genome_ani')
@@ -339,7 +343,7 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
     return df_long_results
 
 
-def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_skani_sketches_dir):
+def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_skani_sketches_dir, input_extension):
     clustering_tmp_file = work_dir / 'clustering_tmp1.tsv'
     if exists_with_lock(clustering_tmp_file):
         info('Reusing clustering file of unassigned genomes')
@@ -361,7 +365,7 @@ def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_sk
         skani_triangle_big(input_unassigned_pastes, dists_dir_in, nproc_cpu)
 
         info('  Loading the big input-vs-input distance matrix')
-        pwd = load_big_triangle_skani(input_unassigned_pastes, dists_dir_in)
+        pwd = load_big_triangle_skani(input_unassigned_pastes, dists_dir_in, input_extension)
         pwd = pwd.loc[genomes_unassigned, genomes_unassigned]
 
         info('  Running clustering of unassigned genomes into new SGBs')
@@ -380,7 +384,7 @@ def assign_ggb_fgb(nproc_io, s_sgb_clustering, dist_files_centroids, centroid_to
     dfs = []
     for df in run_parallel(lambda dist_f: load_pwd_pandas(dist_f), dist_files_centroids, nproc=nproc_io, ordered=False,
                            return_gen=True):
-        df.index = df.index.map(fix_mash_id)
+        df.index = df.index.map(fix_mash_id)  # centroids M-ids
         dfs.append(df.loc[:, df.columns.intersection(s_sgb_clustering.index)])
 
     df_genomes_centroid = pd.concat(dfs, axis=1).T
@@ -478,6 +482,7 @@ def assign_phyla(nproc_io, nproc_cpu, input_directory, input_extension, work_dir
 
     info('  Loading the big pwd')
     df_big_pwd = load_mash_dist_block(dist_files, n_rows=len(genomes_u), n_columns=len(centroids_k))
+    df_big_pwd.columns = df_big_pwd.columns.map(fix_mash_id)  # centroid M-ids
     assert set(df_big_pwd.index) == set(genomes_u)
     assert set(df_big_pwd.columns) == set(centroids_k)
 
@@ -649,7 +654,7 @@ def phylophlan_assign_sgbs(args):
 
     # >>> Distancing against prefiltered SGBs <<< #
     df_long_results = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
-                                        sgb_to_genomes_db, input_skani_sketches_dir, sgb_to_mp)
+                                        sgb_to_genomes_db, input_skani_sketches_dir, sgb_to_mp, input_extension)
 
 
     df_top_results_single = df_long_results.drop_duplicates(subset=['genome'])
@@ -680,7 +685,7 @@ def phylophlan_assign_sgbs(args):
     if len(genomes_unassigned) > 0:
         # >>> Clustering unassigned genomes <<< #
         assignment_genomes_to_new_sgbs = cluster_unassigned_genomes(args.nproc_cpu, work_dir, genomes_unassigned,
-                                                                    input_skani_sketches_dir)
+                                                                    input_skani_sketches_dir, input_extension)
         novel_sgbs = set(assignment_genomes_to_new_sgbs.unique())
         info(f'  There are {len(novel_sgbs)} SGBs '
              f'created by {len(assignment_genomes_to_new_sgbs)} genomes')
