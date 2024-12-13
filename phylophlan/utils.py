@@ -11,7 +11,7 @@ import shutil
 import subprocess as sp
 import urllib.request
 from multiprocessing.pool import ThreadPool, Pool
-from typing import Sequence, Generator, IO, TextIO
+from typing import Sequence, Generator, IO
 import itertools as it
 
 import numpy as np
@@ -559,7 +559,7 @@ def mash_paste(genome_sketches, pastes_dir, nproc, chunk_size, file_prefix='past
     :param int nproc:
     :param int chunk_size:
     :param str file_prefix:
-    :returns: List of mash pastes created
+    :return: List of mash pastes created
     """
 
     commands, paste_files, reused = mash_paste_prepare(genome_sketches, pastes_dir, chunk_size, file_prefix)
@@ -671,15 +671,18 @@ def load_pwd_pandas(file_path, **kwargs):
     return pd.read_csv(file_path, sep='\t', index_col=0, header=0, **kwargs)
 
 
-def load_skani_as_pwd(path, fix_queries=None, fix_refs=None, queries=None, refs=None):
+def load_skani_as_pwd(path, fix_queries=None, fix_refs=None, queries=None, refs=None, dtype=np.float32):
     """
     Loads skani dist output as distance matrix. You should pass the queries and references you used for the distancing
     as the skani output contains only hits above certain allelic fraction threshold, otherwise they might be missing in
     the output matrix.
 
     :param pathlib.Path|str path:
+    :param fix_queries:
+    :param fix_refs:
     :param Sequence[str] queries:
     :param Sequence[str] refs:
+    :param dtype:
     :return: DataFrame with references as index and queries as columns
     """
 
@@ -689,67 +692,19 @@ def load_skani_as_pwd(path, fix_queries=None, fix_refs=None, queries=None, refs=
         header = header.split('\t', maxsplit=3)[:3]
         for line in f:
             r, q, a, _ = line.split('\t', maxsplit=3)
-            a = float(a)
+            a = dtype(a)
             rows.append([r, q, a])
     df = pd.DataFrame(rows, columns=header)
-    df = df.pivot(index='Ref_file', columns='Query_file', values='ANI')
+    df = df.pivot(index='Ref_file', columns='Query_file', values='ANI').astype(dtype)
     if fix_refs is not None:
         df.index = df.index.map(fix_refs)
     if fix_queries is not None:
         df.columns = df.columns.map(fix_queries)
-    df = df.reindex(index=refs, columns=queries).fillna(0)
+    df = df.reindex(index=refs, columns=queries).fillna(0).astype(dtype)
     return df
 
 
-
-def load_big_triangle_common(index_pastes, parse_values, pastes, dists_dir, paste_to_offset, fix_f):
-    total_n = len(index_pastes)
-    if parse_values:
-        matrix = np.zeros((total_n, total_n), dtype=float)
-    else:
-        matrix = np.zeros((total_n, total_n), dtype=object)
-
-    # load the diagonal
-    index_diagonal = []
-    for p_i, paste in enumerate(pastes):
-        dist_file = dists_dir / (paste.stem + '.tri.gz')
-        offset = paste_to_offset[paste]
-        f: TextIO  # for PyCharm to stop highlighting as type error
-        with gzip.open(dist_file, 'rt') as f:
-            first_line = next(f)
-            n_lines = int(first_line.strip())
-
-            for i, line in enumerate(f):
-                if i == 0:  # first line does not have any numbers
-                    # index_pastes.append(line.rstrip('\n'))
-                    idx = line.rstrip('\n')
-                    index_diagonal.append(idx)
-                    # assert idx == index_pastes[offset + i], f"{idx} != {index_pastes[offset + i]}, {mash_pastes}"
-                    continue
-
-                ix = line.index('\t')
-                idx = line[:ix]
-                index_diagonal.append(idx)
-                # assert index_pastes[offset + i] == idx, f"{idx} != {index_pastes[offset + i]}"
-
-                if parse_values:
-                    values = np.fromstring(line[ix + 1:], sep='\t', dtype=float)
-                else:
-                    values = line[ix + 1:].rstrip('\n').split('\t')
-
-                matrix[offset + i, offset: offset + i] = values
-                matrix[offset: offset + i, offset + i] = values
-
-            offset += n_lines
-
-    index_diagonal = [fix_f(x) for x in index_diagonal]
-
-    assert set(index_pastes) == set(index_diagonal)
-
-    return matrix, index_diagonal
-
-
-def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, parse_values=True):
+def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, dtype=np.float32):
     """
     Loads a big skani triangle into a pandas DataFrame. It takes the paste files and assumes you ran the big triangle
     distancing
@@ -757,29 +712,59 @@ def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, parse_val
     :param Iterable[pathlib.Path] skani_pastes:
     :param pathlib.Path dists_dir:
     :param str genome_extension:
-    :param bool parse_values:
+    :param dtype:
     :return:
     """
     skani_pastes = list(skani_pastes)  # fix the ordering
 
-    index_pastes = []
-    paste_to_offset = {}
+    paste_indexes_orig = []
+    for paste in skani_pastes:
+        assert str(paste).endswith('.txt')
+        with open(paste) as f:
+            paste_index = f.read().strip().split('\n')
+            paste_index = list(map(fix_skani_id('.sketch'), paste_index))
+        paste_indexes_orig.append(paste_index)
+
+    n = sum(map(len, paste_indexes_orig))
+
+    matrix = np.zeros(shape=(n, n), dtype=dtype)
+
+    # Load the diagonal
+    index_all = []
     offset = 0
-    for mp in skani_pastes:
-        assert mp.name.endswith('.txt')
-        with open(mp) as f:
-            mp_index = f.read().strip().split('\n')
+    for paste, paste_index_orig in zip(skani_pastes, paste_indexes_orig):
+        dist_file = dists_dir / (paste.stem + '.tri.gz')
 
-        index_pastes.extend(mp_index)
-        paste_to_offset[mp] = offset
-        offset += len(mp_index)
+        paste_index = []
+        with openr(dist_file) as f:
+            first_line = next(f)
+            n_lines = int(first_line.strip())
+            assert n_lines == len(paste_index_orig)
 
-    index_pastes = [fix_skani_id('.sketch')(x) for x in index_pastes]
+            for i, line in enumerate(f):
+                if i == 0:  # first line does not have any numbers in triangle
+                    paste_index.append(fix_skani_id(genome_extension)(line.rstrip('\n')))
+                    continue
 
-    matrix, _ = load_big_triangle_common(index_pastes, parse_values, skani_pastes, dists_dir, paste_to_offset,
-                                         fix_skani_id(genome_extension))
+                ix = line.index('\t')
+                idx = fix_skani_id(genome_extension)(line[:ix])
+                paste_index.append(idx)
 
-    idx_to_offset = dict(zip(index_pastes, range(len(index_pastes))))
+                values = np.fromstring(line[ix + 1:], sep='\t', dtype=dtype)
+
+                assert len(values) == i
+                matrix[offset + i, offset:offset + i] = values
+                matrix[offset:offset + i, offset + i] = values
+
+            assert len(paste_index) == n_lines
+            assert sorted(paste_index) == sorted(paste_index_orig)
+            offset += n_lines
+
+        index_all.extend(paste_index)
+
+    assert len(index_all) == len(set(index_all))
+    assert len(index_all) == n
+    idx_to_pos = dict(zip(index_all, range(len(index_all))))
 
     # load the blocks
     for mp1, mp2 in it.combinations(skani_pastes, 2):  # pairwise blocks
@@ -791,18 +776,21 @@ def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, parse_val
                 r, q, a, _ = line.split('\t', maxsplit=3)
                 r = fix_skani_id(genome_extension)(r)
                 q = fix_skani_id(genome_extension)(q)
-                a = float(a)
-                i = idx_to_offset[r]
-                j = idx_to_offset[q]
+                a = dtype(a)
+                i = idx_to_pos[r]
+                j = idx_to_pos[q]
+                assert matrix[i, j] == 0
+                assert matrix[j, i] == 0
                 matrix[i, j] = a
                 matrix[j, i] = a
 
     np.fill_diagonal(matrix, 100.0)
-    df = pd.DataFrame(matrix, index=index_pastes, columns=index_pastes)
+    df = pd.DataFrame(matrix, index=index_all, columns=index_all)
+
     return df
 
 
-def load_mash_dist_block(dist_files, n_rows, n_columns, parse_values=True, progress_bar=False):
+def load_mash_dist_block(dist_files, n_rows, n_columns, progress_bar=False, dtype=np.float32):
     """
     Loads a big MASH distance rectangle into a pandas DataFrame. You need to remember the size of the block from when
      you were distancing.
@@ -810,14 +798,11 @@ def load_mash_dist_block(dist_files, n_rows, n_columns, parse_values=True, progr
     :param Iterable[pathlib.Path|str] dist_files:
     :param int n_rows:
     :param int n_columns:
-    :param bool parse_values:
     :param bool progress_bar:
+    :param dtype:
     :return:
     """
-    if parse_values:
-        a = np.full((n_rows, n_columns), fill_value=-1, dtype=float)
-    else:
-        a = np.full((n_rows, n_columns), fill_value=-1, dtype=object)
+    matrix = np.full((n_rows, n_columns), fill_value=-1, dtype=dtype)
 
     if progress_bar:
         dist_files = tqdm(dist_files)
@@ -837,25 +822,27 @@ def load_mash_dist_block(dist_files, n_rows, n_columns, parse_values=True, progr
                 i = line.index('\t')
                 idx = line[:i]
                 current_index.append(idx)
-                if parse_values:
-                    values = np.fromstring(line[i + 1:], sep='\t', dtype=float)
-                else:
-                    values = line[i + 1:].rstrip('\n').split('\t')
+                values = np.fromstring(line[i + 1:], sep='\t', dtype=dtype)
                 assert len(values) == n_columns_current
-                a[row_i, column_offset:(column_offset+n_columns_current)] = values
+                matrix[row_i, column_offset:(column_offset+n_columns_current)] = values
             current_index = pd.Index(current_index)
-            # current_index = current_index.map(fix_mash_id)
             if index is None:
                 index = current_index
             assert (index == current_index).all()
             column_offset += n_columns_current
 
-    df = pd.DataFrame(a, index=index, columns=header)
+    df = pd.DataFrame(matrix, index=index, columns=header)
     assert not (df < 0).any().any()  # all values were filled
     return df
 
 
 def cluster_skani_pwd(pwd, t_ani):
+    """
+
+    :param pd.DataFrame pwd:
+    :param float t_ani:
+    :return: pd.Series mapping genomes (index of pwd) to the cluster numbers
+    """
     assert (pwd.index == pwd.columns).all(), "The matrix is not a pair-wise matrix"
 
     genomes_to_be_clustered = pwd.index
