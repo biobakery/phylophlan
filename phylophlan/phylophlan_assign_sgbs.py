@@ -598,6 +598,7 @@ def phylophlan_assign_sgbs(args):
     info('Loading database files')
     sgb_table_path = database_path / f'{args.database}.txt.bz2'
     profilable_sgbs_file = database_path / 'profilable_sgbs.tsv'
+    sgb_to_genomes_path = database_path / 'sgb_to_genomes.tsv'
 
     df_sgb = load_sgb_txt(sgb_table_path)
 
@@ -621,6 +622,7 @@ def phylophlan_assign_sgbs(args):
     else:
         sgb_to_mp = None
 
+    sgb_to_genomes_db = pd.read_csv(sgb_to_genomes_path, sep='\t', index_col=0).squeeze('columns').str.split(',')
 
 
     # >>> Sketching <<< #
@@ -649,8 +651,7 @@ def phylophlan_assign_sgbs(args):
          f'near {len(all_centroid_hits)} centroids')
 
     sgb_to_genomes_in = df_genome_centroid_pairs.set_index('genome').groupby('sgb_id').groups
-    sgb_to_genomes_db = (df_sgb_sgb['List of reconstructed genomes'] + ',' + df_sgb_sgb['List of reference genomes']) \
-        .map(lambda x: [y for y in x.split(',') if len(y) > 0 and y != '-'])
+
 
     # >>> Distancing against prefiltered SGBs <<< #
     df_long_results = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
