@@ -161,7 +161,9 @@ def process_input(input_directory, input_extension, work_dir, nproc_io):
     # elif not input_extension.startswith('.'):
     #     input_extension = '.' + input_extension
 
-    genome_names = [x.name[:-len(input_extension)] for x in genome_files if x.name.endswith(input_extension)]
+    assert len(input_extension) > 0
+    genome_names = [x.name[:-len(input_extension)] if len(input_extension) > 0 else x.name
+                    for x in genome_files if x.name.endswith(input_extension)]
     files_ignored = [x for x in genome_files if x.is_file() and not x.name.endswith(input_extension)]
     info(f'Found {len(genome_names)} genomes in the input directory')
     if len(files_ignored) > 0:

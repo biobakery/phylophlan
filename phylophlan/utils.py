@@ -270,8 +270,11 @@ def fix_mash_id(x):
 def fix_skani_id(genome_extension):
     def fix_skani_id_inner(x):
         x = x.split('/')[-1]
-        assert x.endswith(genome_extension)
-        return x[:-len(genome_extension)]
+        if len(genome_extension) > 0:
+            assert x.endswith(genome_extension)
+            return x[:-len(genome_extension)]
+        else:
+            return x
 
     return fix_skani_id_inner
 
