@@ -64,6 +64,7 @@ FGB_ASSIGNMENT_DIST = 0.3
 SGB_CLOSEST_PROFILABLE_MIN_ANI = 85
 WORK_DIR_NAME = 'phylophlan_assign_sgbs_tmp'
 NOVEL_SGB_PREFIX = 'SGBX'
+MAX_OVERLAP_WARNING = 30
 
 SMALL_SGB_THRESHOLD = 100 * 100
 CHUNK_SIZE_IN = 1000
@@ -302,9 +303,12 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
     nproc_per_run = get_threads_per_run(nproc_cpu, nproc_io)
     results_small = run_parallel(f, small_sgbs, nproc=nproc_io, ordered=False)
 
-    info('  Running big SGBs')
-    nproc_per_run = nproc_cpu
-    results_big = run_parallel(f, big_sgbs, nproc=1, ordered=False)
+    if len(big_sgbs) > 0:
+        info('  Running big SGBs')
+        nproc_per_run = nproc_cpu
+        results_big = run_parallel(f, big_sgbs, nproc=1, ordered=False)
+    else:
+        results_big = []
 
     sgb_to_dist_files_db = dict(results_small + results_big)
 
@@ -317,15 +321,21 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
             dfs = [load_skani_as_pwd(dist_file, fix_refs=fix_mash_id, fix_queries=fix_skani_id(input_extension),
                                      refs=sgb_to_genomes_db[sgb_id])
                    for dist_file in dist_files_row]
-            df = pd.concat(dfs, axis=0).fillna(0)
 
-            closest_anis = df.max().rename('closest_genome_ani')
-            avg_anis = df.mean().rename('sgb_avg_ani')
+            dfs_ani, dfs_afr = zip(*dfs)
+            df_ani = pd.concat(dfs_ani, axis=0).fillna(0)
+            df_afr = pd.concat(dfs_afr, axis=0).fillna(0)
 
-            df_partial_results = pd.concat([closest_anis, avg_anis], axis=1).rename_axis('genome').reset_index()
+            closest_anis = df_ani.max().rename('closest_genome_ani')
+            avg_anis = df_ani.mean().rename('sgb_avg_ani')
+            max_afrs = df_afr.max().rename('max_afr')
+
+            df_partial_results = pd.concat([closest_anis, avg_anis, max_afrs], axis=1).rename_axis('genome')\
+                .reset_index()
             df_partial_results['sgb_id'] = sgb_id
             df_partial_results = df_partial_results.loc[df_partial_results['closest_genome_ani'] > 0]
-            df_partial_results = df_partial_results[['genome', 'sgb_id', 'closest_genome_ani', 'sgb_avg_ani']]
+            df_partial_results = df_partial_results[['genome', 'sgb_id', 'closest_genome_ani', 'sgb_avg_ani',
+                                                     'max_afr']]
 
             dfs_partial.append(df_partial_results)
 
@@ -657,8 +667,10 @@ def phylophlan_assign_sgbs(args):
     df_long_results = dist_against_sgbs(args.nproc_io, args.nproc_cpu, work_dir, database_path, sgb_to_genomes_in,
                                         sgb_to_genomes_db, input_skani_sketches_dir, sgb_to_mp, input_extension)
 
+    genome_to_max_overlap = df_long_results.groupby('genome').agg({'max_afr': 'max'})['max_afr']
 
-    df_top_results_single = df_long_results.drop_duplicates(subset=['genome'])
+
+    df_top_results_single = df_long_results.drop_duplicates(subset=['genome'])  # the df is sorted by decreasing avg ANI
     df_genome_assignment = df_top_results_single[df_top_results_single['sgb_avg_ani'] >= SGB_ASSIGNMENT_ANI]\
         .set_index('genome')
 
@@ -738,6 +750,14 @@ def phylophlan_assign_sgbs(args):
         df_genome_assignment = df_genome_assignment.join(df_closest_profilable[['sgb_id', 'sgb_avg_ani']],
                                                          rsuffix='_metaphlan')
         df_genome_assignment['sgb_id_metaphlan'] = df_genome_assignment['sgb_id_metaphlan'].map(sgb_to_mp)
+
+    df_genome_assignment = df_genome_assignment.join(genome_to_max_overlap.rename('max_overlap'))
+    genomes_with_low_overlap = genome_to_max_overlap.index[genome_to_max_overlap < MAX_OVERLAP_WARNING]
+    if len(genomes_with_low_overlap) > 0:
+        warning(f'There are {len(genomes_with_low_overlap)} genomes that have low maximum overlap'
+                f' (< {MAX_OVERLAP_WARNING}).'
+                f' This could indicate low completeness of the genomes and their assignment might be incorrect.'
+                f' We recommend running the assignment on genomes at least 50% complete.')
 
     df_genome_assignment.to_csv(args.output_directory / 'genome_assignment.tsv', sep='\t')
     info(f"Output table written to {args.output_directory / 'genome_assignment.tsv'}")

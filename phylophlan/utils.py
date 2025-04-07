@@ -683,25 +683,31 @@ def load_skani_as_pwd(path, fix_queries=None, fix_refs=None, queries=None, refs=
     :param Sequence[str] queries:
     :param Sequence[str] refs:
     :param dtype:
-    :return: DataFrame with references as index and queries as columns
+    :return: two DataFrames with references as index and queries as columns, one for ANI one for ref. AF
     """
 
+    column_names = ['ref', 'query', 'ani', 'af_ref']
     rows = []
     with openr(path) as f:
-        header = next(f)
-        header = header.split('\t', maxsplit=3)[:3]
+        next(f)  # header row
         for line in f:
-            r, q, a, _ = line.split('\t', maxsplit=3)
-            a = dtype(a)
-            rows.append([r, q, a])
-    df = pd.DataFrame(rows, columns=header)
-    df = df.pivot(index='Ref_file', columns='Query_file', values='ANI').astype(dtype)
-    if fix_refs is not None:
-        df.index = df.index.map(fix_refs)
-    if fix_queries is not None:
-        df.columns = df.columns.map(fix_queries)
-    df = df.reindex(index=refs, columns=queries).fillna(0).astype(dtype)
-    return df
+            r, q, ani, af_r, _ = line.split('\t', maxsplit=4)
+            ani = dtype(ani)
+            rows.append([r, q, ani, af_r])
+    df = pd.DataFrame(rows, columns=column_names)
+    df_ani = df.pivot(index='ref', columns='query', values='ani').astype(dtype)
+    df_afr = df.pivot(index='ref', columns='query', values='af_ref').astype(dtype)
+
+    result = []
+    for df_a in [df_ani, df_afr]:
+        if fix_refs is not None:
+            df_a.index = df_a.index.map(fix_refs)
+        if fix_queries is not None:
+            df_a.columns = df_a.columns.map(fix_queries)
+        df_a = df_a.reindex(index=refs, columns=queries).fillna(0).astype(dtype)
+        result.append(df_a)
+
+    return result
 
 
 def load_big_triangle_skani(skani_pastes, dists_dir, genome_extension, dtype=np.float32):
