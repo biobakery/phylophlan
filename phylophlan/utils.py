@@ -170,7 +170,7 @@ class FileInProgress(contextlib.AbstractContextManager):
         :param pathlib.Path|str path_target:
         """
         self.path_target = pathlib.Path(path_target)
-        self.path_tmp = self.path_target.with_name(self.path_target.name + '~')
+        self.path_tmp = self.path_target.with_name('~' + self.path_target.name)
 
     def __enter__(self):
         self.clean()

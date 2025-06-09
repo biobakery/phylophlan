@@ -549,7 +549,7 @@ def download_db(args):
              'phylophlan_assign_sgb_legacy.py')
         exit(1)
 
-    error(f'Downloading the database {args.database} from the remote server')
+    info(f'Downloading the database {args.database} from the remote server')
     url_db_tar = df_dbs.loc[args.database, 'url_db']
     url_md5 = df_dbs.loc[args.database, 'url_md5']
 
