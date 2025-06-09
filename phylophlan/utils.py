@@ -1,6 +1,9 @@
+import contextlib
 import functools
+import hashlib
 import os
 import sys
+import tarfile
 from datetime import datetime
 import gzip
 import bz2
@@ -19,6 +22,9 @@ import pandas as pd
 import scipy.spatial.distance as spd
 import scipy.cluster.hierarchy as spch
 from tqdm.auto import tqdm as tqdm_orig
+
+
+MD5_CHUNK_SIZE = 4096
 
 
 def message(*args, f, new_line=True):
@@ -58,13 +64,17 @@ class tqdm(tqdm_orig):
         return tqdm_orig.__iter__(self)
 
 
+def tqdm_bytes(*args, **kwargs):
+    return tqdm(*args, unit='B', unit_scale=True, unit_divisor=1024, **kwargs)
+
+
 class TqdmDownload:
     """
     To use as progress bar when downloading a file
     Modified from https://github.com/tqdm/tqdm#hooks-and-callbacks
     """
     def __init__(self):
-        self.pb = tqdm(unit='B', unit_scale=True, unit_divisor=1024, miniters=1)
+        self.pb = tqdm_bytes(miniters=1)
 
 
     def __call__(self, n_blocks, block_size, tot_size):
@@ -138,6 +148,49 @@ class ArgumentType:
         return x
 
 
+def delete_file_or_dir(path):
+    """
+
+    :param pathlib.Path path:
+    :return:
+    """
+    if path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+    else:
+        raise Exception(f"Not a file neither directory {path}")
+
+
+
+class FileInProgress(contextlib.AbstractContextManager):
+    def __init__(self, path_target):
+        """
+
+        :param pathlib.Path|str path_target:
+        """
+        self.path_target = pathlib.Path(path_target)
+        self.path_tmp = self.path_target.with_name(self.path_target.name + '~')
+
+    def __enter__(self):
+        self.clean()
+        return self.path_tmp
+
+    def __exit__(self, exception_type, exception_value, exception_traceback):
+        if exception_type is None:
+            self.path_tmp.rename(self.path_target)
+        else:
+            self.clean()
+
+
+    def clean(self):
+        if self.path_target.exists():
+            delete_file_or_dir(self.path_target)
+
+        if self.path_tmp.exists():
+            delete_file_or_dir(self.path_tmp)
+
+
 def get_threads_per_run(nproc_cpu, nproc_io):
     """
     Assuming we run a program nproc_io times in parallel, how many threads we should give to each call not to exceed
@@ -177,37 +230,85 @@ def decompress_file(input_file, output_file, open_f):
         shutil.copyfileobj(f_in, f_out)
 
 
-def download(url, download_file, overwrite=False, quiet=False):
+def download(url, target_path, overwrite=False, quiet=False):
     """
 
     :param str url: URL to download from
-    :param pathlib.Path|str download_file: the target file path to download to
+    :param pathlib.Path|str target_path: the target file path to download to
     :param bool overwrite: If set to False and the file is already present, it will skip the download
     :param bool quiet: If set to True it will not show progress bar or messages unless there's an error
     :return:
     """
-    if exists_with_lock(download_file) and not overwrite:
+
+
+    if os.path.exists(target_path) and not overwrite:
         if not quiet:
-            info(f'Skipping already downloaded file {download_file}')
+            info(f'Skipping already downloaded file {target_path}')
         return
-    else:
+
+    if not quiet:
+        info(f'Downloading {target_path}')
+        if os.path.exists(target_path):
+            info(f'Will overwrite existing file {target_path}')
+
+    try:
         if not quiet:
-            info(f'Downloading {download_file}')
+            rh = TqdmDownload()
+        else:
+            rh = None
 
-        if not quiet and os.path.exists(download_file):
-            info(f'Will overwrite existing file {download_file}')
+        with FileInProgress(target_path) as target_path_tmp:
+            urllib.request.urlretrieve(url, target_path_tmp, reporthook=rh)
 
-        lock_file = path_get_lock(download_file)
-        lock_file.touch()
-        try:
-            if not quiet:
-                rh = TqdmDownload()
-            else:
-                rh = None
-            urllib.request.urlretrieve(url, download_file, reporthook=rh)
-        except EnvironmentError:
-            error(f'Error downloading {download_file} from "{url}"', do_exit=True)
-        lock_file.unlink()
+    except EnvironmentError:
+        error(f'Error downloading {target_path} from "{url}"', do_exit=True)
+
+
+def check_md5(target_file, md5_file):
+    """
+
+    :param pathlib.Path target_file:
+    :param pathlib.Path md5_file:
+    :return:
+    """
+    with open(md5_file) as f:
+        md5_md5, fname = f.read().strip().split()
+
+    if target_file.name != fname:
+        error(f'The file name {target_file.name} does not correspond to the name in the md5 file {fname}')
+        return False
+
+    target_file_size = target_file.stat().st_size
+    n_chunks = (target_file_size - 1) // MD5_CHUNK_SIZE + 1
+
+    # compute MD5 of .tar
+    hash_md5 = hashlib.md5()
+    with open(target_file, "rb") as f:
+        for chunk in tqdm_bytes(iter(lambda: f.read(MD5_CHUNK_SIZE), b""), total=n_chunks):
+            hash_md5.update(chunk)
+
+    md5_target = hash_md5.hexdigest()
+    assert len(md5_target) == 32
+
+    return md5_target == md5_md5
+
+
+def extract_tar(tar_path, target_path):
+    """
+
+    :param pathlib.Path tar_path:
+    :param pathlib.Path target_path:
+    :return:
+    """
+    tar_file_size = tar_path.stat().st_size
+
+    with FileInProgress(target_path) as target_path_tmp, \
+            tarfile.open(tar_path) as tf, \
+            tqdm_bytes(total=tar_file_size) as pb:
+        target_path_tmp.mkdir(exist_ok=True)
+        for m in tf:
+            tf.extract(m, target_path_tmp)
+            pb.update(m.size)
 
 
 def load_pandas_series(file_path, sep='\t', index_col=0, **kwargs) -> pd.Series:
@@ -317,31 +418,7 @@ def run_command(cmd, shell=True, **kwargs):
     return r
 
 
-def path_get_lock(path):
-    path = pathlib.Path(path)
-    return path.with_suffix(path.suffix + '.lock')
-
-
-def exists_with_lock(path):
-    """
-    Checks whether the path exists, checking for lock file. If the lock file is found, both the file and the lock file
-    are removed and False is returned as if the file hadn't existed.
-
-    :param pathlib.Path|str path:
-    :return: True if the file exists and is complete, i.e. the lock is not present
-    """
-    path = pathlib.Path(path)
-    lock_file = path_get_lock(path)
-    if lock_file.exists():  # unfinished file => remove
-        info(f'Removing unfinished file {path}')
-        path.unlink(missing_ok=True)
-        lock_file.unlink()
-    elif path.exists():
-        return True
-    return False
-
-
-def run_command_with_lock(cmd, output_file, *args, **kwargs):
+def run_command_with_output_file(cmd, output_file, *args, **kwargs):
     """
     Runs a command, but checks for tries to skip if the output file is already present, checking for lock files.
 
@@ -351,13 +428,10 @@ def run_command_with_lock(cmd, output_file, *args, **kwargs):
     :param kwargs:
     :return:
     """
-    lock_file = path_get_lock(output_file)
-    if exists_with_lock(output_file):
-        return
-    lock_file.touch()
-    r = run_command(cmd, *args, **kwargs)
-    lock_file.unlink()
-    return r
+    with FileInProgress(output_file) as output_file_tmp:
+        cmd_filled = cmd.format(output_file_tmp)
+        return run_command(cmd_filled, *args, **kwargs)
+
 
 
 def expand_star_args(args, f):
@@ -439,19 +513,19 @@ def mash_sketch(genome_names, genome_extension, genomes_dir, sketch_dir, nproc_c
         genome_file = genomes_dir / f'{g}{genome_extension}'
         sketch_file = sketch_dir / f'{g}.msh'
         sketch_files.append(sketch_file)
-        if exists_with_lock(sketch_file):
+        if sketch_file.exists():
             reused.append(sketch_file)
             continue
 
         assert genome_file.exists()
 
         commands.append((f"{cat_f} {genome_file} | mash sketch -p {threads_per_run} -k 21 -s {sketch_size} "
-                        f"-o {sketch_file} -I {g} -", sketch_file))
+                        f"-o {{}} -I {g} -", sketch_file))
 
     if reused:
         info(f'  Reused {len(reused)} existing sketch files')
 
-    run_parallel(run_command_with_lock, commands, nproc_io, chunksize='auto', ordered=False, star=True)
+    run_parallel(run_command_with_output_file, commands, nproc_io, chunksize='auto', ordered=False, star=True)
     return sketch_files
 
 
@@ -471,19 +545,19 @@ def mash_sketch_aa(genome_to_faa, sketch_dir, nproc_cpu, nproc_io, sketch_size=1
 
         sketch_file = sketch_dir / f'{g}.msh'
         sketch_files.append(sketch_file)
-        if exists_with_lock(sketch_file):
+        if sketch_file.exists():
             reused.append(sketch_file)
             continue
 
         assert faa_path.exists()
 
         commands.append((f"{cat_f} {faa_path} | mash sketch -p {threads_per_run} -a -k 9 -s {sketch_size} "
-                        f"-o {sketch_file} -I {g} -", sketch_file))
+                         f"-o {{}} -I {g} -", sketch_file))
 
     if reused:
         info(f'  Reused {len(reused)} existing sketch files')
 
-    run_parallel(run_command_with_lock, commands, nproc_io, chunksize='auto', ordered=False, star=True)
+    run_parallel(run_command_with_output_file, commands, nproc_io, chunksize='auto', ordered=False, star=True)
     return sketch_files
 
 
@@ -614,8 +688,8 @@ def mash_dist_block(mash_pastes_1, mash_pastes_2, dists_dir, nproc, progress_bar
     for mp1 in mash_pastes_1:
         dist_filename = mp1.stem + '.tsv.gz'
         dist_file = dists_dir / dist_filename
-        cmd = f"mash dist -p {nproc} -t {mp1} {' '.join(map(str, mash_pastes_2))} | gzip > {dist_file}"
-        run_command_with_lock(cmd, output_file=dist_file, shell=True)
+        cmd = f"mash dist -p {nproc} -t {mp1} {' '.join(map(str, mash_pastes_2))} | gzip > {{}}"
+        run_command_with_output_file(cmd, dist_file, shell=True)
         dist_files.append(dist_file)
 
     return dist_files
@@ -642,8 +716,8 @@ def skani_dist_block(skani_pastes_1, skani_pastes_2, dists_dir, nproc, progress_
         for p2 in skani_pastes_2:
             dist_filename = p1.stem + '__' + p2.stem + '.tsv.gz'
             dist_file = dists_dir / dist_filename
-            cmd = f"skani dist -t {nproc} --ql {p1} --rl {p2} | gzip > {dist_file}"
-            run_command_with_lock(cmd, output_file=dist_file, shell=True)
+            cmd = f"skani dist -t {nproc} --ql {p1} --rl {p2} | gzip > {{}}"
+            run_command_with_output_file(cmd, dist_file, shell=True)
             dist_files_row.append(dist_file)
         dist_files_matrix.append(dist_files_row)
 
@@ -661,13 +735,13 @@ def skani_triangle_big(skani_pastes, dists_dir, nproc):
     """
     for mp in skani_pastes:  # diagonal triangles
         dist_file = dists_dir / (mp.stem + '.tri.gz')
-        cmd = f'skani triangle -t {nproc} -l {mp} | gzip > {dist_file}'
-        run_command_with_lock(cmd, dist_file)
+        cmd = f'skani triangle -t {nproc} -l {mp} | gzip > {{}}'
+        run_command_with_output_file(cmd, dist_file)
 
     for mp1, mp2 in it.combinations(skani_pastes, 2):  # pairwise blocks
         dist_file = dists_dir / (mp1.stem + '__' + mp2.stem + '.tsv.gz')
-        cmd = f'skani dist -t {nproc} --ql {mp1} --rl {mp2} | gzip > {dist_file}'
-        run_command_with_lock(cmd, dist_file)
+        cmd = f'skani dist -t {nproc} --ql {mp1} --rl {mp2} | gzip > {{}}'
+        run_command_with_output_file(cmd, dist_file)
 
 
 def load_pwd_pandas(file_path, **kwargs):

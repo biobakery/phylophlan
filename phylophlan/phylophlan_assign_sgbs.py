@@ -1,15 +1,10 @@
 #!/usr/bin/env python
 
 
-# TODO: update description once the script behavior is finalized
-__description__ = "The phylophlan_assign_sgbs.py script assigns the SGB and taxonomy to a given set of input genomes." \
-                  " Outputs can be of three types: (1) for each input genomes  returns the list of the closest " \
-                  "-n/--how_many SGBs sorted by average Mash  distance; (2) for each input genomes returns the  " \
-                  "closest SGB, GGB, FGB, and  reference genomes; (3) returns a all vs. all matrix with all the " \
-                  "pairwise mash distances"
+__description__ = "The phylophlan_assign_sgbs.py script assigns the SGB and taxonomy to a given set of input genomes."
 __author__ = ", ".join((
     'Francesco Asnicar (f.asnicar@unitn.it)',
-    'Michal Puncochar',
+    'Michal Puncochar (michal.puncochar@unitn.it)',
     'Katarina Mladenovic (katarina.mladenovic@unitn.it)',
     'Francesco Beghini (francesco.beghini@unitn.it)',
     'Fabio Cumbo (fabio.cumbo@unitn.it)',
@@ -30,7 +25,6 @@ import shlex
 import shutil
 import subprocess as sp
 import sys
-import tarfile
 import urllib.parse
 from collections import Counter
 
@@ -39,9 +33,9 @@ import pandas as pd
 
 from .utils import info, ArgumentType, mash_sketch, skani_sketch, load_sgb_txt, mash_paste, mash_dist_block, \
     run_parallel, load_pwd_pandas, load_pandas_series, skani_paste, skani_dist_block, tqdm, load_skani_as_pwd, \
-    skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, path_get_lock, \
-    run_command_with_lock, mash_sketch_aa, load_mash_dist_block, download, exists_with_lock, \
-    get_threads_per_run, warning, decompress_file, fix_skani_id
+    skani_triangle_big, load_big_triangle_skani, cluster_skani_pwd, error, fix_mash_id, \
+    mash_sketch_aa, load_mash_dist_block, download, get_threads_per_run, warning, \
+    decompress_file, fix_skani_id, check_md5, FileInProgress, run_command_with_output_file, extract_tar
 
 if sys.version_info[0] < 3:
     raise Exception("PhyloPhlAn {} requires Python 3, your current Python version is {}.{}.{}"
@@ -95,7 +89,7 @@ def read_params():
                         "use all files in the directory")
     p.add_argument('-o', '--output_directory', type=ArgumentType.creatable_dir, default=None,
                    help="Output directory")
-    p.add_argument('--database_folder', type=ArgumentType.existing_dir, default=DEFAULT_DATABASE_FOLDER,
+    p.add_argument('--database_folder', type=ArgumentType.creatable_dir, default=DEFAULT_DATABASE_FOLDER,
                    help="Path to the folder that contains the database file")
     p.add_argument('-d', '--database', type=str, default=None,
                    help="Database name, available options can be listed using the --database_list parameter")
@@ -156,16 +150,16 @@ def process_input(input_directory, input_extension, work_dir, nproc_io):
             extension = ''
         if len(extension) > 0:
             one_genome_name = one_genome_name[:-len(extension)]
-        input_extension = '.' + one_genome_name.rsplit('.', maxsplit=1)[-1] + extension
-        info(f'Using inferred genome extension: {input_extension}')
+        if '.' in one_genome_name:
+            input_extension = '.' + one_genome_name.rsplit('.', maxsplit=1)[-1] + extension
+            info(f'Using inferred genome extension: {input_extension}')
     # elif not input_extension.startswith('.'):
     #     input_extension = '.' + input_extension
 
-    assert len(input_extension) > 0
     genome_names = [x.name[:-len(input_extension)] if len(input_extension) > 0 else x.name
                     for x in genome_files if x.name.endswith(input_extension)]
     files_ignored = [x for x in genome_files if x.is_file() and not x.name.endswith(input_extension)]
-    info(f'Found {len(genome_names)} genomes in the input directory')
+    info(f'Found {len(genome_names)} genomes in the input directory with the extension {input_extension}')
     if len(files_ignored) > 0:
         warning(f'  Ignoring {len(files_ignored)} files in the input directory '
                 f'not having {input_extension} extension')
@@ -257,7 +251,7 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
     dists_dir_db = work_dir / 'skani_dists_input_db_per_sgb'
     long_results_file = work_dir / 'ani_results_long.tsv'
 
-    if exists_with_lock(long_results_file):
+    if long_results_file.exists():
         info('Loading DB ANI long results')
         df_long_results = pd.read_csv(long_results_file, sep='\t')
         return df_long_results
@@ -347,17 +341,15 @@ def dist_against_sgbs(nproc_io, nproc_cpu, work_dir, database_path, sgb_to_genom
         df_long_results['sgb_is_profilable'] = df_long_results['sgb_id'].isin(set(sgb_to_mp.keys()))
     df_long_results = df_long_results.sort_values('sgb_avg_ani', ascending=False)
 
-    long_results_file_lock = path_get_lock(long_results_file)
-    long_results_file_lock.touch()
-    df_long_results.to_csv(long_results_file, sep='\t', index=False)
-    long_results_file_lock.unlink()
+    with FileInProgress(long_results_file) as long_results_file_tmp:
+        df_long_results.to_csv(long_results_file_tmp, sep='\t', index=False)
 
     return df_long_results
 
 
 def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_skani_sketches_dir, input_extension):
     clustering_tmp_file = work_dir / 'clustering_tmp1.tsv'
-    if exists_with_lock(clustering_tmp_file):
+    if clustering_tmp_file.exists():
         info('Reusing clustering file of unassigned genomes')
         s_sgb_clustering = load_pandas_series(clustering_tmp_file)
     else:
@@ -384,10 +376,8 @@ def cluster_unassigned_genomes(nproc_cpu, work_dir, genomes_unassigned, input_sk
         s_clusters = cluster_skani_pwd(pwd, SGB_ASSIGNMENT_ANI)
         s_sgb_clustering = (NOVEL_SGB_PREFIX + s_clusters.map(str)).rename('sgb_id').rename_axis('genome')
 
-        clustering_tmp_file_lock = path_get_lock(clustering_tmp_file)
-        clustering_tmp_file_lock.touch()
-        s_sgb_clustering.to_csv(clustering_tmp_file, sep='\t')
-        clustering_tmp_file_lock.unlink()
+        with FileInProgress(clustering_tmp_file) as clustering_tmp_file_tmp:
+            s_sgb_clustering.to_csv(clustering_tmp_file_tmp, sep='\t')
 
     return s_sgb_clustering
 
@@ -452,9 +442,9 @@ def assign_phyla(nproc_io, nproc_cpu, input_directory, input_extension, work_dir
     def run_prodigal(g):
         prodigal_output_file = prodigal_output_dir / f'{g}.faa'
         fna_file = input_directory / f'{g}{input_extension}'
-        c_ = f'prodigal -c -m -p meta -i {fna_file} -a {prodigal_output_file}'
 
-        run_command_with_lock(c_, prodigal_output_file, shell=False)
+        c_ = f'prodigal -c -m -p meta -i {fna_file} -a {{}}'
+        run_command_with_output_file(c_, prodigal_output_file, shell=False)
 
     run_parallel(run_prodigal, genomes_without_family, nproc_cpu, ordered=False)
 
@@ -545,36 +535,43 @@ def list_databases(args, df_dbs=None):
 
 
 def download_db(args):
+    """
+
+    :param ArgumentTypes args:
+    :return:
+    """
     df_dbs = get_remote_dbs()
     if args.database not in df_dbs.index:
         error(f'The specified database {args.database} not found')
-        error('Listing the available databases')
+        info('Listing the available databases')
         list_databases(args, df_dbs)
+        info('Note that for database versions prior to Jan25 (e.g. Jun23, Oct22, Jan21) you should use '
+             'phylophlan_assign_sgb_legacy.py')
         exit(1)
 
     error(f'Downloading the database {args.database} from the remote server')
-    url_db = df_dbs.loc[args.database, 'url_db']
+    url_db_tar = df_dbs.loc[args.database, 'url_db']
     url_md5 = df_dbs.loc[args.database, 'url_md5']
 
     args.database_folder.mkdir(exist_ok=True)
 
-    path_db = args.database_folder / os.path.basename(urllib.parse.urlparse(url_db).path)
+    path_db_tar = args.database_folder / os.path.basename(urllib.parse.urlparse(url_db_tar).path)
     path_md5 = args.database_folder / os.path.basename(urllib.parse.urlparse(url_md5).path)
 
-    if not path_db.name != f'{args.database}.tar':
-        error(f'The database file {path_db.name} is not recognized', do_exit=True)
-    if path_md5.name != f'{args.database}.md5':
+    if path_db_tar.name != f'{args.database}.tar':
+        error(f'The database file {path_db_tar.name} is not recognized', do_exit=True)
+    if path_md5.name != f'{args.database}.tar.md5':
         error(f'The database file {path_md5.name} is not recognized', do_exit=True)
 
-    download(url_db, path_db)
+    download(url_db_tar, path_db_tar)
     download(url_md5, path_md5)
+
+    info('Checking downloaded file consistency')
+    check_md5(path_db_tar, path_md5)
 
     info('Extracting the database tar file')
     database_path = args.database_folder / args.database
-    database_path.mkdir(exist_ok=True)
-    tarfile_handle = tarfile.open(path_db)
-    tarfile_handle.extractall(path=database_path)
-    tarfile_handle.close()
+    extract_tar(path_db_tar, database_path)
 
 
 def phylophlan_assign_sgbs(args):
