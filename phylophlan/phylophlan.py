@@ -166,9 +166,10 @@ def read_params():
                          '"greedy": performs all the above trimming steps; '
                          'If not specified, no trimming will be performed'))
     p.add_argument('--gap_perc_threshold', type=float, default=GAP_PERC_THRESHOLD,
-                   help='Specify the value used to consider a column not variant when "--trim not_variant" is specified')
+                   help='Fraction of gaps above which to discard a column when "--trim gap_perc" is specified. [0-1]')
     p.add_argument('--not_variant_threshold', type=float, default=NOT_VARIANT_THRESHOLD,
-                   help='Specify the value used to consider a column not variant when "--trim not_variant" is specified')
+                   help='Conservation value used above which to discard a column as not variant when '
+                        '"--trim not_variant" is specified. [0-1]')
     p.add_argument('--subsample', default='full', choices=SUBSAMPLE_CHOICES,
                    help=('The number of positions to retain from each single marker, available option are: '
                          '"phylophlan": specific number of positions for each PhyloPhlAn marker (only when "--database phylophlan"); '
@@ -191,10 +192,12 @@ def read_params():
                    help=('If specified, the markers will be ordered, when using the '
                          'PhyloPhlAn database, it will be automatically set to "True"'))
     p.add_argument('--remove_fragmentary_entries', action='store_true', default=False,
-                   help=("If specified the MSAs will be checked and cleaned from fragmentary entries. See --fragmentary_threshold "
-                         "for the threshold values above which an entry will be considered fragmentary"))
+                   help="If specified the MSAs will be checked and cleaned from fragmentary entries. See "
+                        "--fragmentary_threshold for the threshold values above which an entry will be considered "
+                        "fragmentary")
     p.add_argument('--fragmentary_threshold', type=float, default=FRAGMENTARY_THRESHOLD,
-                   help="The fraction of gaps in the MSA to be considered fragmentary and hence discarded")
+                   help="The fraction of gaps in the MSA for the sample to be considered fragmentary and hence "
+                        "discarded when --remove_fragmentary_entries is set. [0-1]")
     p.add_argument('--min_num_entries', type=int, default=MIN_NUM_ENTRIES,
                    help="The minimum number of entries to be present for each of the markers in the database")
     p.add_argument('--maas', type=str, default=None,
