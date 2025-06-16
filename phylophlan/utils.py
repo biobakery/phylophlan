@@ -23,7 +23,7 @@ import scipy.spatial.distance as spd
 import scipy.cluster.hierarchy as spch
 from tqdm.auto import tqdm as tqdm_orig
 
-
+TAR_GZ_COMPRESSION_RATIO = 2.15
 MD5_CHUNK_SIZE = 4096
 
 
@@ -284,7 +284,7 @@ def check_md5(target_file, md5_file):
     # compute MD5 of .tar
     hash_md5 = hashlib.md5()
     with open(target_file, "rb") as f:
-        for chunk in tqdm_bytes(iter(lambda: f.read(MD5_CHUNK_SIZE), b""), total=n_chunks):
+        for chunk in tqdm(iter(lambda: f.read(MD5_CHUNK_SIZE), b""), total=n_chunks):
             hash_md5.update(chunk)
 
     md5_target = hash_md5.hexdigest()
@@ -301,6 +301,8 @@ def extract_tar(tar_path, target_path):
     :return:
     """
     tar_file_size = tar_path.stat().st_size
+    if tar_path.name.endswith('.gz'):
+        tar_file_size *= TAR_GZ_COMPRESSION_RATIO
 
     with FileInProgress(target_path) as target_path_tmp, \
             tarfile.open(tar_path) as tf, \

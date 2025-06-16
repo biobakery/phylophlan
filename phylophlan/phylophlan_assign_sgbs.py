@@ -558,9 +558,9 @@ def download_db(args):
     path_db_tar = args.database_folder / os.path.basename(urllib.parse.urlparse(url_db_tar).path)
     path_md5 = args.database_folder / os.path.basename(urllib.parse.urlparse(url_md5).path)
 
-    if path_db_tar.name != f'{args.database}.tar':
+    if path_db_tar.name != f'{args.database}.tar.gz':
         error(f'The database file {path_db_tar.name} is not recognized', do_exit=True)
-    if path_md5.name != f'{args.database}.tar.md5':
+    if path_md5.name != f'{args.database}.tar.gz.md5':
         error(f'The database file {path_md5.name} is not recognized', do_exit=True)
 
     download(url_db_tar, path_db_tar)
