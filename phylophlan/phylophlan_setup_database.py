@@ -31,6 +31,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from requests.adapters import Retry
 import time
+import xmlschema
 
 
 if sys.version_info[0] < 3:
@@ -144,8 +145,12 @@ def check_params(args, verbose=False):
                 info('Setting output folder "{}"\n'.format(args.output))
 
         args.input = args.output
-        args.input_extension = PROTEOME_EXTENSION
-        args.output_extension = PROTEOME_EXTENSION
+        if args.db_type == "n" or args.output_extension == ".fna":
+            args.input_extension = GENOME_EXTENSION
+            args.output_extension = GENOME_EXTENSION
+        else:
+            args.input_extension = PROTEOME_EXTENSION
+            args.output_extension = PROTEOME_EXTENSION
 
         if not args.db_name:
             args.db_name = args.get_core_proteins
@@ -171,7 +176,7 @@ def check_params(args, verbose=False):
 
             if verbose:
                 info('Setting output extension to "{}"\n'.format(args.output_extension))
-        else:
+        elif not args.get_core_proteins:
             error("both -t/--db_type and -x/--output_extension were specified, don't know which one to use!",
                   exit=True)
 
@@ -422,6 +427,11 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
     #   # taxid   taxonomy      UniRefURL       core_list
     #   12345     k__|...|s__   http://..{}..   UP123;UP456;...
 
+
+    if output_extension == GENOME_EXTENSION:
+        # use Uniprot XML scheme to retrieve nucleotide sequences via ENA
+        schema = xmlschema.XMLSchema("https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot.xsd")
+
     for r in bz2.open(taxa2core_file, 'rt'):
         if r.startswith('#'):
             continue
@@ -451,11 +461,32 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
             info('Downloading {} core proteins for {}\n'.format(len(core_prots), lbl))
 
         for core_prot in core_prots:
-            local_prot = os.path.join(output, core_prot + output_extension)
-            download(url.format(core_prot), local_prot, verbose=verbose)
+            if output_extension == PROTEOME_EXTENSION:
+                # Download the protein sequences
+                local_prot = os.path.join(output, core_prot + output_extension)
+                download(url.format(core_prot), local_prot, verbose=verbose)
 
-            if not os.path.exists(local_prot):
-                retry2download.append(core_prot)
+                if not os.path.exists(local_prot):
+                    retry2download.append(core_prot)
+            elif output_extension == GENOME_EXTENSION:
+                # Download the nucleotide sequences
+                urlretrieve(f"https://www.uniprot.org/uniprot/{core_prot}.xml",
+                            f"{output}/{core_prot}.xml")
+                try:
+                    accid_entry = schema.to_dict(f'{output}/{core_prot}.xml')
+                    embl_accid = ""
+                    for dbentry in accid_entry['entry'][0]['dbReference']:
+                        if dbentry['@type'] == "EMBL":
+                            embl_accid = dbentry['property'][0]['@value']
+                            urlretrieve(f"https://www.ebi.ac.uk/ena/browser/api/fasta/{embl_accid}",
+                                        f"{output}/{core_prot}{output_extension}")
+                            break
+                    if embl_accid == "":
+                        not_mapped.append(core_prot)
+                except xmlschema.XMLSchemaChildrenValidationError:
+                    not_mapped.append(core_prot)
+                os.remove(f'{output}/{core_prot}.xml')
+
 
     # try to re-map the ids in case "not mapped" store in not_mapped
     if retry2download:
@@ -477,16 +508,16 @@ def get_core_proteins(taxa2core_file, taxa_label, output, output_extension, verb
                 if not os.path.exists(local_prot):
                     not_mapped_again.append(core_prot)
 
-        # really don't know what else to try... I'm sorry!
-        if not_mapped_again:
-            nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
+    # really don't know what else to try... I'm sorry!
+    if not_mapped_again:
+        nd_out = os.path.join(output, taxa_label + '_core_proteins_not_mapped.txt')
 
-            if verbose:
-                info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'
-                     .format(len(not_mapped_again), nd_out))
+        if verbose:
+            info('There are {} core proteins that could not be downloaded, writing thier IDs to "{}"\n'
+                    .format(len(not_mapped_again), nd_out))
 
-            with open(nd_out, 'w') as f:
-                f.write('\n'.join(not_mapped_again) + '\n')
+        with open(nd_out, 'w') as f:
+            f.write('\n'.join(not_mapped_again) + '\n')
 
 
 def resolve_IDs(IDs_list, verbose=False):
@@ -543,6 +574,7 @@ def create_database(db_name, inputt, input_ext, output, overwrite, verbose=False
 
 def phylophlan_setup_database():
     args = read_params()
+    print(args)
 
     if args.verbose:
         info('phylophlan_setup_database.py version {} ({})\n'.format(__version__, __date__))
