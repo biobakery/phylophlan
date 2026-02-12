@@ -1,19 +1,18 @@
 #!/usr/bin/env python
 
 
-__description__ = "The phylophlan_assign_sgbs.py script assigns the SGB and taxonomy to a given set of input genomes."
+__description__ = "The phylophlan_assign_sgbs script assigns the SGB and taxonomy to a given set of input genomes."
 __author__ = ", ".join((
-    'Francesco Asnicar (f.asnicar@unitn.it)',
     'Michal Puncochar (michal.puncochar@unitn.it)',
     'Katarina Mladenovic (katarina.mladenovic@unitn.it)',
+    'Francesco Asnicar (f.asnicar@unitn.it)',
     'Francesco Beghini (francesco.beghini@unitn.it)',
     'Fabio Cumbo (fabio.cumbo@unitn.it)',
     'Mattia Bolzan (mattia.bolzan@unitn.it)',
     'Paolo Manghi (paolo.manghi@unitn.it)',
     'Nicola Segata (nicola.segata@unitn.it)',
 ))
-__version__ = '3.2.0'
-__date__ = '8 October 2024'
+from . import __version__, __date__
 
 
 import argparse as ap

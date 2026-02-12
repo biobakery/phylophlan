@@ -1,19 +1,16 @@
 import setuptools
 from io import open
 import sys
-from subprocess import call
-from os import path
-from os import mkdir
 
 
 if sys.version_info[0] < 3:
     sys.stdout.write('PhyloPhlAn requires Python 3 or higher. Please update you Python installation')
 
 
-install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "pandas", "seaborn"]
+install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "scipy", "pandas", "seaborn", "tqdm"]
 
 setuptools.setup(name='PhyloPhlAn',
-                 version='3.1.1',
+                 version='3.2.0',
                  author='Francesco Asnicar',
                  author_email='f.asnicar@unitn.it',
                  url='http://github.com/biobakery/phylophlan',
@@ -31,6 +28,8 @@ setuptools.setup(name='PhyloPhlAn',
                          'phylophlan_draw_metagenomic = phylophlan.phylophlan_draw_metagenomic:phylophlan_draw_metagenomic',
                          'phylophlan_get_reference = phylophlan.phylophlan_get_reference:phylophlan_get_reference',
                          'phylophlan_assign_sgbs = phylophlan.phylophlan_assign_sgbs:main',
+                         'phylophlan_assign_sgbs_legacy = phylophlan.phylophlan_assign_sgbs_legacy:main',
+                         'phylophlan_patristic_distances = phylophlan.phylophlan_patristic_distances:main',
                          'phylophlan_setup_database = phylophlan.phylophlan_setup_database:phylophlan_setup_database',
                          'phylophlan_strain_finder = phylophlan.phylophlan_strain_finder:phylophlan_strain_finder',
                          'phylophlan_write_config_file = phylophlan.phylophlan_write_config_file:phylophlan_write_config_file'

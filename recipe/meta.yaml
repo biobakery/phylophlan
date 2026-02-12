@@ -18,7 +18,7 @@ build:
 
 requirements:
   host:
-    - python >=3.7
+    - python >=3.10
     - pip
     - setuptools
 
@@ -29,6 +29,7 @@ requirements:
     - matplotlib-base >=3.1.0
     - numpy >=1.15.4
     - pandas >=0.24.2
+    - scipy
     - seaborn >=0.9.0
     - blast >=2.6.0
     - diamond >=0.9
@@ -38,7 +39,9 @@ requirements:
     - fasttree >=2.1.8
     - raxml >=8.2.10
     - iqtree >=1.6.6
+    - tqdm
     - mash
+    - skani
     - requests
 
 test:

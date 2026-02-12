@@ -6,8 +6,7 @@ __description__ = "A script to calculate the pairwise patristic (leaf-to-leaft) 
 __author__ = ", ".join((
     'Michal Puncochar',
 ))
-__version__ = '3.2.0'
-__date__ = '8 October 2024'
+from . import __version__, __date__
 
 
 import argparse as ap
@@ -27,7 +26,7 @@ from .utils import info, ArgumentType, openr
 
 DTYPE = np.float64
 
-condensed_dist_array: mp.RawArray | None = None
+condensed_dist_array = None
 all_leaves: list[Node] = []
 
 
@@ -278,7 +277,7 @@ def main():
     info('Calculating the distance matrix')
 
     global all_leaves, condensed_dist_array
-    all_leaves: list[Node] = dtree.leaf_nodes()
+    all_leaves = dtree.leaf_nodes()
 
 
     n_leaves = len(all_leaves)
