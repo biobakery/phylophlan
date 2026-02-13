@@ -7,7 +7,7 @@ if sys.version_info[0] < 3:
     sys.stdout.write('PhyloPhlAn requires Python 3 or higher. Please update you Python installation')
 
 
-install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "scipy", "pandas", "seaborn", "tqdm"]
+install_reqs = ["biopython", "dendropy", "matplotlib", "numpy", "scipy", "pandas", "seaborn", "tqdm", "requests"]
 
 setuptools.setup(name='PhyloPhlAn',
                  version='3.2.0',
