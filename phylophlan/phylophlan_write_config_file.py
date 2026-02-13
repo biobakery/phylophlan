@@ -1,21 +1,19 @@
 #!/usr/bin/env python
 
-
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it),'
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-from . import __version__, __date__
-
 
 import os
 import sys
-import stat
 import time
+import shutil
 import argparse as ap
 import configparser as cp
-from distutils.spawn import find_executable
+
+from . import __version__, __date__
 
 
 if sys.version_info[0] < 3:
@@ -146,8 +144,8 @@ def check_params(args, verbose=False):
 
 
 def find_executable_wrapper(exe, absolute=False, rollback=False):
-    find1 = find_executable(exe)
-    find2 = find_executable(rollback) if rollback else None
+    find1 = shutil.which(exe)
+    find2 = shutil.which(rollback) if rollback else None
 
     if (find1 is None) and (find2 is None):
         error('could not find "{}" ("{}") executable in your PATH environment variable'.format(exe, rollback), exit=True)

@@ -1,0 +1,39 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Test PhyloPhlAn
+
+on:
+  push:
+    branches: [ "master"]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.12", "3.14"]
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install the package
+      run: |
+        pip install .
+    - name: Test
+      run: |
+        phylophlan -v
+        phylophlan_draw_metagenomic -v
+        phylophlan_get_reference -v
+        phylophlan_assign_sgbs -v
+        phylophlan_assign_sgbs_legacy -v
+        phylophlan_patristic_distances -v
+        phylophlan_setup_database -v
+        phylophlan_strain_finder -v
+        phylophlan_write_config_file -v
+        

@@ -1,14 +1,11 @@
 #!/usr/bin/env python
 
-
 __author__ = ('Francesco Asnicar (f.asnicar@unitn.it), '
               'Michal Puncochar (michal.puncochar@unitn.it), ',
               'Francesco Beghini (francesco.beghini@unitn.it), '
               'Claudia Mengoni (claudia.mengoni@studenti.unitn.it), '
               'Mattia Bolzan (mattia.bolzan@unitn.it), '
               'Nicola Segata (nicola.segata@unitn.it)')
-from . import __version__, __date__
-
 
 import os
 import sys
@@ -39,7 +36,8 @@ import hashlib
 import gzip
 import random as lib_random
 import numpy as np
-from distutils.spawn import find_executable
+
+from . import __version__, __date__
 
 
 if sys.version_info[0] < 3:
@@ -638,7 +636,7 @@ def check_dependencies(configs, nproc, verbose=False):
         if verbose:
             info('Checking "{}"\n'.format(cmd['command_line'][0]))
 
-        if find_executable(cmd['command_line'][0]) is None:
+        if shutil.which(cmd['command_line'][0]) is None:
             error('program not installed or not present in the system path\n'
                   '    {}'.format('\n    '.join(['{:>12}: {}'.format(a, ' '.join(cmd[a]) if type(cmd[a]) is list else cmd[a])
                                                  for a in ['command_line', 'stdin', 'stdout', 'env']])),
