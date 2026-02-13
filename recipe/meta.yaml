@@ -1,5 +1,5 @@
 {% set name = "phylophlan" %}
-{% set version = "3.1.1" %}
+{% set version = "3.2.1" %}
 
 package:
   name: "{{ name|lower }}"
@@ -50,9 +50,11 @@ test:
     - phylophlan_draw_metagenomic --version
     - phylophlan_get_reference --version
     - phylophlan_assign_sgbs --version
+    - phylophlan_assign_sgbs_legacy --version
     - phylophlan_setup_database --version
     - phylophlan_strain_finder --version
     - phylophlan_write_config_file --version
+    - phylophlan_patristic_distances --version
 
 about:
   home: https://github.com/biobakery/phylophlan
