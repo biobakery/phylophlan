@@ -1,6 +1,9 @@
 {% set name = "phylophlan" %}
 {% set version = "3.2.1" %}
 
+# TODO
+## 1. add prodigal as a dependency
+
 package:
   name: "{{ name|lower }}"
   version: "{{ version }}"
